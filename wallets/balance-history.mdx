@@ -17,12 +17,14 @@ Fetch wallet balance history for a specific currency programmatically:
 
 ```bash
 curl --request GET \
-  --url 'https://api.fincra.com/wallets/balance-history' \
+  --url 'https://api.fincra.com/wallets/logs?currency=NGN&page=1&perPage=20' \
   --header 'api-key: YOUR_API_KEY'
 ```
 
 <Info>
-  Balance history endpoint path, query parameters (currency, date range, pagination), and response fields will be documented here once confirmed.
+  Wallet logs endpoint: `GET /wallets/logs`. Query parameters: `currency`, `page`,
+  `perPage`, `reference`, `dateFrom`, `dateTo`, `action`, `transactionType`. Returns a
+  paginated list of wallet log entries inside the standard success envelope.
 </Info>
 
 ## What's included in balance history

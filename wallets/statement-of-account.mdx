@@ -16,12 +16,14 @@ A statement of account is a formal summary of all activity on a wallet over a sp
 
 ```bash
 curl --request GET \
-  --url 'https://api.fincra.com/wallets/statement' \
+  --url 'https://api.fincra.com/wallets/logs/statement?currency=NGN&dateFrom=2026-06-01&dateTo=2026-06-30' \
   --header 'api-key: YOUR_API_KEY'
 ```
 
 <Info>
-  Statement of account endpoint path, query parameters (currency, start date, end date, format), and response structure will be documented here once confirmed.
+  Statement endpoint: `GET /wallets/logs/statement`. `currency`, `dateFrom`, and `dateTo`
+  are **required** query parameters; `perPage` max is 50. The response carries opening and
+  closing balances plus the itemized entries, inside the standard success envelope.
 </Info>
 
 ## What's in a statement
