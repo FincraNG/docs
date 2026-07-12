@@ -184,20 +184,32 @@ Temporary accounts expire at a time you set. They are ideal for one-time payment
 
 ### Simulate a payment in sandbox
 
-To test VA payments in the sandbox environment without sending real money, call the sandbox webhook simulation endpoint:
+To test VA payments in the sandbox environment without sending real money, call the sandbox collection simulation endpoint:
+
+{/* HUMAN: confirm the sandbox VA simulation endpoint path and body before publishing.
+    File: payments/ngn-virtual-accounts.mdx
+    The documented path POST /collections/webhooks/wema/callback is a bank-callback
+    ingress, not a merchant-facing test hook — it is not in the collections spec's
+    merchant surface. The code-derived merchant simulation endpoint is
+    POST /collections/transfer/simulate (schema SimulateCollectionRequest), shown below
+    as the best-effort correct value. Verify the exact required body fields for
+    SimulateCollectionRequest in fincra-collections and align the --data block, then
+    remove this note. If /transfer/simulate is not the VA sim in sandbox, replace with
+    the confirmed endpoint. */}
 
 ```bash
 curl --request POST \
-  --url https://sandboxapi.fincra.com/collections/webhooks/wema/callback \
+  --url https://sandboxapi.fincra.com/collections/transfer/simulate \
   --header 'api-key: <YOUR_SANDBOX_SECRET_KEY>' \
   --header 'Content-Type: application/json' \
   --data '{
     "accountNumber": "<VIRTUAL_ACCOUNT_NUMBER>",
-    "amount": 10000
+    "amount": 10000,
+    "currency": "NGN"
   }'
 ```
 
-Your Fincra sandbox wallet will be credited instantly and a `charge.successful` webhook will fire.
+Your Fincra sandbox wallet will be credited and a `charge.successful` webhook will fire.
 
 ---
 

@@ -19,19 +19,31 @@ The fastest way to add test funds in sandbox:
 
 You can also fund sandbox wallets programmatically — useful if you want to automate your test setup.
 
-<Info>
-  Fund Wallet API endpoint path and request payload will be documented here once confirmed. Expected fields: currency, amount, business ID.
-</Info>
+{/* HUMAN: confirm the sandbox fund body fields before publishing.
+    File: wallets/fund-your-wallet.mdx
+    In the wallets code, POST /wallets/fund is a SANDBOX-ONLY endpoint and is
+    UNAUTHENTICATED (it does not require the api-key header). The body below is
+    best-effort (currency, amount, business); verify the exact required fields of the
+    fund DTO in fincra-wallets and align the --data block, then remove this note.
+    Do not present /wallets/fund as a production endpoint — production funding uses the
+    top-up flow below (POST /wallets/topups/initiate). */}
 
 ```bash
 curl --request POST \
   --url 'https://sandboxapi.fincra.com/wallets/fund' \
-  --header 'api-key: YOUR_API_KEY' \
   --header 'Content-Type: application/json' \
   --data '{
-    ...
+    "currency": "NGN",
+    "amount": 100000,
+    "business": "<YOUR_BUSINESS_ID>"
   }'
 ```
+
+<Note>
+  `POST /wallets/fund` works only in sandbox. In production, use the top-up flow below.
+  To automate production top-ups, use `POST /wallets/topups/initiate` (and
+  `POST /wallets/topups/virtual-accounts/initiate` for a funding virtual account).
+</Note>
 
 ## Production: Manual top-up
 
