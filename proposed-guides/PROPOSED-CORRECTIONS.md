@@ -2,9 +2,32 @@
 
 Read-only audit of the existing docs pages against the 11 OpenAPI specs (code is truth).
 These are **factual contradictions a merchant would trip on**, each with spec evidence —
-not style. Fixes are for the content team to apply to the live pages (this PR does not
-edit them). Grouped by severity; "verify" items are where the doc may be right but the
-supplied specs can't confirm (endpoint owned by another service).
+not style. Fixes are for the content team to apply to the live pages. Grouped by
+severity; "verify" items are where the doc may be right but the supplied specs can't
+confirm (endpoint owned by another service).
+
+## Status (2026-07-12) — what is applied vs. what needs a human
+
+Most HIGH items are now **applied on PR #3** (`docs/spec-correctness-fixes`), so this
+punch-list is the audit trail plus the still-open items.
+
+- **Applied on PR #3 (code-confirmed):** sandbox base URL → `sandboxapi.fincra.com`;
+  zero-decimal currencies (UGX/XAF/XOF/RWF); card keys → snake_case; `payAttitude` →
+  `payattitude`; conversion not-found → `CONVERSION_NOT_FOUND`; balance history →
+  `GET /wallets/logs`; statement → `GET /wallets/logs/statement`; NGN resolve →
+  `type: nuban`; webhook retry schedule → 5 attempts (5m/30m/2h/6h/24h); configure
+  timeout → 10s; **Direct Charge auth → `x-business-id`** (now code-confirmed).
+- **Applied on PR #3 with an inline HUMAN note** (best-effort correct, one fact still
+  needs a human to hand to their AI): conversion post-funding wording;
+  `ngn-virtual-accounts` test-mode sim endpoint; `wallets/fund-your-wallet` funding
+  endpoint. Each note names the file, the current value, and the exact conditional edit.
+- **Webhook signing — RESOLVED (was SIG-1):** header is `signature`, algorithm is
+  **HMAC-SHA512** (hex), key is the merchant's **webhook secret key**, signed over the
+  delivered JSON body (`{ event, data }`). The live `webhooks/verify.mdx` already matches
+  this; the proposed `webhooks/verify-signatures.mdx` placeholder has been filled in.
+- **Left for a human** (data not derivable from code): the 4 unconfirmed gateway prefixes
+  (`/v2/auth`, notifications outgoing-webhooks path, `/settlements`, `/cards`) tracked in
+  the spec repo's `NEEDS-HUMAN.md`; MEDIUM/VERIFY rows below owned by other services.
 
 ## HIGH — merchant-breaking, unambiguous (apply)
 

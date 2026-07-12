@@ -13,22 +13,16 @@ that moves money in your system — verify it was signed by Fincra.
 
 ## How verification works
 
-Fincra signs each webhook and sends the signature in an HTTP header. You recompute the
-signature over the **raw request body** using your webhook secret and compare it, in
-constant time, to the header value. If they differ, reject the request with a `401` and
-do not process it.
+Fincra signs each outbound webhook with **HMAC-SHA512** and sends the hex digest in the
+`signature` request header. Recompute the HMAC over the **raw request body** using your
+**webhook secret key** (from your dashboard, under API Keys & Webhooks), hex-encode it,
+and compare it to the `signature` header in constant time. If they differ, reject the
+request with a `401` and do not process it.
 
-Two rules that trip people up:
-
-- Sign the **raw bytes** of the body, exactly as received — do not re-serialize the
-  parsed JSON first (key order and whitespace change the hash).
-- Compare with a **constant-time** equality check, not `==`.
-
-<Note title="Confirm before you ship this page">
-  The exact signature header name and algorithm are being confirmed against the emitter
-  source (extraction item `SIG-1`) and are intentionally left as placeholders below so
-  this page is never wrong. Fill `<signature-header>`, the algorithm, and the secret
-  source from code before publishing. Do not guess them.
+<Note>
+  Fincra signs the exact JSON body it delivers (`{ event, data }`). Hashing the raw bytes
+  you receive reproduces the same digest — so read the raw body before any JSON
+  middleware re-serializes it (which would reorder keys and change the hash).
 </Note>
 
 ## Verify the signature
@@ -38,15 +32,16 @@ Two rules that trip people up:
     ```javascript
     import crypto from "node:crypto";
 
-    // Mount with the RAW body (e.g. express.raw({ type: "application/json" }))
+    // Mount with the RAW body, e.g. express.raw({ type: "application/json" })
     function verifyFincraWebhook(req) {
-      const signature = req.headers["<signature-header>"];        // TODO: confirm header (SIG-1)
+      const signature = req.headers["signature"];
       const expected = crypto
-        .createHmac("<algorithm>", process.env.FINCRA_WEBHOOK_SECRET) // TODO: confirm algo + secret source
-        .update(req.rawBody)                                       // raw bytes, not re-serialized JSON
+        .createHmac("sha512", process.env.FINCRA_WEBHOOK_SECRET)
+        .update(req.rawBody)              // raw bytes as received
         .digest("hex");
       const ok =
-        signature &&
+        typeof signature === "string" &&
+        signature.length === expected.length &&
         crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
       if (!ok) return { verified: false };
       return { verified: true, event: JSON.parse(req.rawBody) };
@@ -58,11 +53,11 @@ Two rules that trip people up:
     import hashlib, hmac, os
 
     def verify_fincra_webhook(raw_body: bytes, headers) -> bool:
-        signature = headers.get("<signature-header>")             # TODO: confirm header (SIG-1)
+        signature = headers.get("signature")
         expected = hmac.new(
-            os.environ["FINCRA_WEBHOOK_SECRET"].encode(),          # TODO: confirm secret source
-            raw_body,                                              # raw bytes
-            hashlib.sha512,                                        # TODO: confirm algorithm
+            os.environ["FINCRA_WEBHOOK_SECRET"].encode(),
+            raw_body,                     # raw bytes as received
+            hashlib.sha512,
         ).hexdigest()
         return bool(signature) and hmac.compare_digest(signature, expected)
     ```
@@ -73,8 +68,8 @@ Two rules that trip people up:
 
 <Steps>
   <Step title="Verify first">Reject with `401` if the signature does not match. Do not parse or act.</Step>
-  <Step title="Acknowledge fast">On success, return `2xx` immediately; process asynchronously.</Step>
-  <Step title="Be idempotent">The same event can arrive more than once; key on `data.reference`.</Step>
+  <Step title="Acknowledge fast">On success, return `2xx` within ~10 seconds; process asynchronously.</Step>
+  <Step title="Be idempotent">The same event can arrive more than once (retries run at 5m/30m/2h/6h/24h); key on `data.reference`.</Step>
 </Steps>
 
 ## Next steps
