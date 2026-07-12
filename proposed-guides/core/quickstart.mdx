@@ -1,0 +1,127 @@
+---
+title: "Quickstart"
+description: "Make your first authenticated Fincra API call and send a test payout in sandbox in a few minutes."
+---
+
+This gets you from zero to a successful sandbox payout. If you can complete it, your
+keys, environment, and webhook handling are wired correctly.
+
+## 1. Get your sandbox key
+
+From the Fincra dashboard, copy your **test secret key**. Set it in your shell:
+
+```bash
+export FINCRA_SECRET_KEY=<your test secret key>
+```
+
+All sandbox calls go to `https://sandboxapi.fincra.com` and move no real money.
+
+## 2. Send a test payout
+
+Send NGN 5,000 to a Nigerian bank account. Replace `business` with your 24-character
+business id from the dashboard.
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl https://sandboxapi.fincra.com/disbursements/payouts \
+      -H "api-key: $FINCRA_SECRET_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "sourceCurrency": "NGN",
+        "destinationCurrency": "NGN",
+        "amount": 5000,
+        "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+        "customerReference": "quickstart-001",
+        "paymentDestination": "bank_account",
+        "beneficiary": {
+          "type": "individual",
+          "accountHolderName": "Amara Okeke",
+          "accountNumber": "0111111111",
+          "bankCode": "058",
+          "country": "NG"
+        }
+      }'
+    ```
+  </Tab>
+  <Tab title="Node.js">
+    ```javascript
+    const res = await fetch("https://sandboxapi.fincra.com/disbursements/payouts", {
+      method: "POST",
+      headers: {
+        "api-key": process.env.FINCRA_SECRET_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sourceCurrency: "NGN",
+        destinationCurrency: "NGN",
+        amount: 5000,
+        business: "63f9a1b2c4d5e6f7a8b9c0d1",
+        customerReference: "quickstart-001",
+        paymentDestination: "bank_account",
+        beneficiary: {
+          type: "individual",
+          accountHolderName: "Amara Okeke",
+          accountNumber: "0111111111",
+          bankCode: "058",
+          country: "NG",
+        },
+      }),
+    });
+    console.log(await res.json());
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os, requests
+
+    res = requests.post(
+        "https://sandboxapi.fincra.com/disbursements/payouts",
+        headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+        json={
+            "sourceCurrency": "NGN",
+            "destinationCurrency": "NGN",
+            "amount": 5000,
+            "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+            "customerReference": "quickstart-001",
+            "paymentDestination": "bank_account",
+            "beneficiary": {
+                "type": "individual",
+                "accountHolderName": "Amara Okeke",
+                "accountNumber": "0111111111",
+                "bankCode": "058",
+                "country": "NG",
+            },
+        },
+    )
+    print(res.json())
+    ```
+  </Tab>
+</Tabs>
+
+A `200` returns the payout with `status: processing`. Money hasn't moved yet — payouts
+are asynchronous.
+
+## 3. Confirm the result
+
+The final state (`successful` / `failed`) arrives at your webhook as `payout.successful`
+/ `payout.failed`. If you haven't set a webhook yet, poll instead:
+
+```bash
+curl https://sandboxapi.fincra.com/disbursements/payouts/reference/PO-1a2b3c4d5e \
+  -H "api-key: $FINCRA_SECRET_KEY"
+```
+
+<Note>
+  `customerReference` is your idempotency key. Reusing `quickstart-001` returns
+  `DUPLICATE_CUSTOMER_REFERENCE` — use a fresh value for each real payout.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" href="/authentication">Keys, headers, and test vs live.</Card>
+  <Card title="Send a payout" href="/payouts/send-a-payout">The full payout flow, all rails.</Card>
+  <Card title="Accept a collection" href="/collections/overview">Take money in.</Card>
+  <Card title="Webhooks" href="/webhooks/overview">Receive asynchronous results reliably.</Card>
+</CardGroup>

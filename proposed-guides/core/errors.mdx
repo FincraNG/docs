@@ -1,0 +1,101 @@
+---
+title: "Errors"
+description: "The shared Fincra error envelope, how to branch on errorType, and the HTTP status conventions."
+---
+
+Every Fincra API error returns the same JSON envelope. Write your integration to branch
+on the machine code, not the human message.
+
+## The error envelope
+
+```json
+{
+  "success": false,
+  "error": "Cannot continue, Duplicate Customer Reference Passed",
+  "errorType": "DUPLICATE_CUSTOMER_REFERENCE"
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `success` | boolean | Always `false` on an error. |
+| `error` | string | Human-readable message. May change wording over time — do not match on it. |
+| `errorType` | string | Stable `SCREAMING_SNAKE_CASE` machine code. **Branch on this.** |
+| `errors` | any | Optional structured detail (for example, the list of per-field messages on a validation failure). Not present on every error. |
+
+<Warning>
+  Match your error handling on `errorType`, never on the `error` string. The message is
+  for humans and can change; the `errorType` is the contract.
+</Warning>
+
+## HTTP status conventions
+
+| Status | When |
+| --- | --- |
+| `422` | Validation failed, or a business rule was violated (the most common error). |
+| `403` | Authenticated but not allowed (wrong business, missing product, bad key). |
+| `404` | The referenced resource does not exist. |
+| `500` | Unexpected server or database error — safe to retry with backoff. |
+| `503` | A dependency is temporarily unavailable — retry with backoff. |
+
+## Common error types
+
+These appear across products; each endpoint's API-reference page lists the full set it
+can return.
+
+| errorType | HTTP | Meaning | What to do |
+| --- | --- | --- | --- |
+| `VALIDATION_FAILED` | 422 | A request field failed validation; `errors` lists which. | Fix the payload; do not retry unchanged. |
+| `UNPROCESSABLE_ENTITY` | 422 | A business rule blocked the request. | Read `error`, correct the condition. |
+| `DUPLICATE_CUSTOMER_REFERENCE` | 422 | You reused an idempotency reference. | Treat as already-submitted; fetch the existing record instead of retrying. |
+| `NO_ENOUGH_MONEY_IN_WALLET` | 422 | Insufficient wallet balance. | Top up, then retry with a new reference. |
+| `ACCESS_DENIED` | 403 | Key/business/product mismatch. | Check the key environment and `business` id. |
+| `RESOURCE_NOT_FOUND` | 404 | The id/reference does not exist. | Verify the identifier. |
+| `INTERNAL_SERVER_ERROR` | 500 | Unexpected server error. | Retry with backoff; if it persists, contact support with the `error` and time. |
+
+## Idempotency and safe retries
+
+Money-moving endpoints take a unique reference (for payouts, `customerReference`) that
+acts as the idempotency key. On a network timeout, **do not blindly retry** — the
+original may have succeeded. Fetch the record by your reference first; only retry with a
+fresh reference once you have confirmed the first did not go through.
+
+## Handle errors in code
+
+<Tabs>
+  <Tab title="Node.js">
+    ```javascript
+    const res = await fetch(url, options);
+    const body = await res.json();
+    if (!body.success) {
+      switch (body.errorType) {
+        case "DUPLICATE_CUSTOMER_REFERENCE":
+          return await fetchExistingByReference(ref);
+        case "VALIDATION_FAILED":
+          throw new BadRequest(body.errors);
+        default:
+          throw new FincraError(body.errorType, body.error);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    body = res.json()
+    if not body["success"]:
+        et = body["errorType"]
+        if et == "DUPLICATE_CUSTOMER_REFERENCE":
+            return fetch_existing_by_reference(ref)
+        if et == "VALIDATION_FAILED":
+            raise BadRequest(body.get("errors"))
+        raise FincraError(et, body["error"])
+    ```
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" href="/authentication">Keys, headers, and environments.</Card>
+  <Card title="Webhooks" href="/webhooks/overview">Asynchronous results and how to verify them.</Card>
+</CardGroup>

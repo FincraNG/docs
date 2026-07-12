@@ -1,0 +1,105 @@
+---
+title: "Authentication"
+description: "Authenticate Fincra API requests with your API key, and understand test vs live keys and environments."
+---
+
+Every Fincra API request is authenticated with an **API key** sent in the `api-key`
+header. Anyone integrating starts here.
+
+## Your keys
+
+Get your keys from the Fincra dashboard. You have two kinds:
+
+| Key | Header | Use |
+| --- | --- | --- |
+| **Secret key** | `api-key: <secret key>` | Server-side calls (payouts, collections, conversions). Never expose it in client code. |
+| **Public key** | `x-pub-key: <public key>` | Client-side flows only (e.g. hosted/inline checkout), where a secret key cannot be used safely. |
+
+The same `api-key` header carries a **test** key (sandbox) or a **live** key
+(production) — the key itself determines the environment, so there is no separate
+"mode" flag to set.
+
+<Warning>
+  Treat the secret key like a password. Do not commit it, log it, or ship it in a
+  mobile/web client. If a secret key leaks, rotate it in the dashboard immediately.
+</Warning>
+
+## Environments
+
+| Environment | Base URL | Keys |
+| --- | --- | --- |
+| Sandbox | `https://sandboxapi.fincra.com` | Test keys. No real money moves. Powers the docs playground. |
+| Production | `https://api.fincra.com` | Live keys. |
+
+<Info>
+  Build and test against sandbox first. Switching to production is the same code with a
+  live key and the production base URL — nothing else changes.
+</Info>
+
+## Authenticate a request
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl https://sandboxapi.fincra.com/... \
+      -H "api-key: $FINCRA_SECRET_KEY" \
+      -H "Content-Type: application/json"
+    ```
+  </Tab>
+  <Tab title="Node.js">
+    ```javascript
+    // node 18+ (native fetch)
+    const res = await fetch("https://sandboxapi.fincra.com/...", {
+      headers: {
+        "api-key": process.env.FINCRA_SECRET_KEY,
+        "Content-Type": "application/json",
+      },
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os, requests
+
+    res = requests.get(
+        "https://sandboxapi.fincra.com/...",
+        headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## When authentication fails
+
+Auth failures use the shared [error envelope](/errors). Branch on `errorType`:
+
+| errorType | HTTP | Meaning |
+| --- | --- | --- |
+| `NO_AUTHORIZATION_KEY_PROVIDED` | 403 | No credential header was sent. |
+| `NO_API_KEY_PROVIDED` | 422 | A bearer token was sent without the required `api-key`. |
+| `ACCESS_DENIED` | 403 | The key is valid but not allowed for this business or product. |
+
+```json
+{
+  "success": false,
+  "error": "No authorization key provided",
+  "errorType": "NO_AUTHORIZATION_KEY_PROVIDED"
+}
+```
+
+## Test it in sandbox
+
+<Steps>
+  <Step title="Set your sandbox secret key">`export FINCRA_SECRET_KEY=<your test secret key>`</Step>
+  <Step title="Call any authenticated endpoint">e.g. list payouts. A `200` confirms the key and environment are correct.</Step>
+  <Step title="Try a bad key">Send a wrong `api-key` and confirm you get a `403` with an auth `errorType` — so your error handling is wired before you go live.</Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Environments" href="/environments">Sandbox vs production, and going live.</Card>
+  <Card title="Errors" href="/errors">The shared error envelope and how to branch on errorType.</Card>
+  <Card title="Send a payout" href="/payouts/send-a-payout">Your first end-to-end call.</Card>
+  <Card title="Webhooks" href="/webhooks/overview">Receive asynchronous results.</Card>
+</CardGroup>
