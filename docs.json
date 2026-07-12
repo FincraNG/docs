@@ -462,6 +462,10 @@
           {
             "group": "Cards",
             "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-card-issuing.yaml"
+          },
+          {
+            "group": "Direct Debit",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/mandate-management.yaml"
           }
         ]
       }
