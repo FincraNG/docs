@@ -1,0 +1,895 @@
+openapi: 3.1.0
+info:
+  title: Fincra Webhooks (fincra-notifications)
+  version: "1.0.0"
+  summary: Merchant-facing outgoing-webhook delivery-log and resend API for the fincra-notifications service.
+  description: >
+    Inspect and operate the webhooks Fincra delivers to your endpoint. This service
+    records every outgoing webhook delivery (collection, payout, settlement,
+    conversion, reversal, and other events) to your configured callback URL, tracks
+    its delivery status and retry attempts, and lets you look up, search, export,
+    and re-send those deliveries.
+
+
+    Delivery is asynchronous and retried out of band. When a live delivery fails and
+    the merchant has opted into auto-retry (`settings.enableWebhookRetry`), a durable
+    background job re-attempts it on a fixed schedule (5m, 30m, 2h, 6h, 24h). The
+    endpoints here read the resulting delivery log and let an operator trigger a
+    manual (one-shot) or bulk resend; the resend itself completes in the background
+    and its outcome is reflected on the delivery record's `status`.
+
+
+    This spec is generated from the source of `fincra-notifications` (code is truth).
+    The harvested working tree was on branch `restore/bake-build-pipeline`
+    (HEAD e4c71085); the outgoing-webhooks component itself is branch-stable. Anything
+    undeterminable from code is marked with an `x-todo` extension carrying the exact
+    `file:line`, and is listed in EXTRACTION-REPORT-notifications.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts these routes at "/webhooks/outgoing" with NO version/base-path
+  prefix (src/entryPoints/outgoingWebhooks/app.ts:22 mounts the entry API at "/",
+  src/entryPoints/outgoingWebhooks/entryApi.ts:7 mounts the component at
+  "/webhooks/outgoing"). The public API prefix a merchant calls (the
+  services.manifest.json note records it as "/notifications/outgoing-webhooks", and
+  the platform-wide /v2) is applied at the Kong gateway, which is not in this repo.
+  Paths below are exactly as routed in code; prepend the confirmed gateway prefix
+  before publishing. See EXTRACTION-REPORT-notifications.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox (test keys). Powers the docs playground. Source k8s/overlays/sandbox/app.properties:7 (SERVER_URL)
+  - url: https://api.fincra.com
+    description: Production (live keys). Source k8s/overlays/prod/app.properties:20 (SERVER_URL)
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Webhooks
+    description: Inspect, search, export and resend the webhooks Fincra delivered to your endpoint.
+
+paths:
+  /webhooks/outgoing:
+    get:
+      operationId: notificationsListOutgoingWebhooks
+      tags: [Webhooks]
+      summary: List delivered webhooks
+      description: >
+        Return a paginated list of the webhooks Fincra delivered (or attempted to
+        deliver) to your configured callback URL for a business. One row per logical
+        webhook; individual retry attempts are folded into the detail view. Use this
+        to build a webhook-activity table or to reconcile deliveries. Supports
+        filtering by delivery status, product/direction, product method, event
+        type(s), a free-text reference search, and an inclusive `createdAt` date
+        range. The `business` query parameter is required and is verified to belong to
+        the authenticated caller.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page (1-100). Service default is 50 when omitted.
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - name: status
+          in: query
+          description: Filter by delivery status.
+          schema: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        - name: event
+          in: query
+          description: >
+            Filter by one or more event names (e.g. collection.successful). Repeat the
+            parameter or pass an array to match several event types.
+          schema:
+            oneOf:
+              - type: string
+              - type: array
+                items: { type: string }
+        - name: product
+          in: query
+          description: >
+            Filter by product/direction. "payout"/"disbursement" matches payout events;
+            "collection"/"payin" matches non-payout (pay-in) events.
+          schema: { type: string }
+        - name: productMethod
+          in: query
+          description: >
+            Filter by payment method/channel (e.g. mobile_money). Matching is
+            separator- and case-insensitive.
+          schema: { type: string }
+        - name: q
+          in: query
+          description: >
+            Free-text search across the source reference, channel reference, event name
+            and callback URL. Multiple space/comma-separated terms are OR'd.
+          schema: { type: string }
+        - name: fromDate
+          in: query
+          description: Include webhooks created on or after this ISO-8601 date/time.
+          schema: { type: string, format: date-time }
+        - name: toDate
+          in: query
+          description: Include webhooks created on or before this ISO-8601 date/time. Must be >= fromDate.
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: A page of delivered webhooks.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OutgoingWebhookPage"
+              example:
+                success: true
+                message: outgoing webhooks retrieved
+                data:
+                  data:
+                    - id: 665f1a2b3c4d5e6f7a8b9c0d
+                      event: collection.successful
+                      eventId: COL-9f21ac7b
+                      type: collection
+                      product: collection
+                      productMethod: mobile_money
+                      callbackURL: https://merchant.example.com/fincra/webhook
+                      business: 63f9a1b2c4d5e6f7a8b9c0d1
+                      status: successful
+                      isSuccessful: true
+                      responseCode: 200
+                      isResend: false
+                      noOfRetries: 0
+                      originAt: "2026-07-10T09:15:22.000Z"
+                      lastAttemptAt: "2026-07-10T09:15:22.000Z"
+                      createdAt: "2026-07-10T09:15:22.000Z"
+                  meta:
+                    page: 1
+                    perPage: 50
+                    total: 1
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: NO_API_KEY_PROVIDED
+          status: 403
+          trigger: The api-key header is missing.
+        - errorType: NO_AUTHORIZATION_KEY_PROVIDED
+          status: 403
+          trigger: The Authorization bearer header is missing.
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The requested business does not belong to the authenticated caller.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails validation (e.g. business not 24 chars, perPage > 100, toDate < fromDate).
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: business is absent when the query filter is built.
+
+  /webhooks/outgoing/export:
+    get:
+      operationId: notificationsExportOutgoingWebhooks
+      tags: [Webhooks]
+      summary: Export delivered webhooks as CSV
+      description: >
+        Export the matched webhooks as a downloadable CSV file, using the same filter
+        set as the list endpoint (minus pagination). Use this for the dashboard
+        "Export" button or offline reconciliation. The response is a `text/csv`
+        attachment, not the JSON success envelope; the match set is capped
+        (WEBHOOK_EXPORT_LIMIT, default 5000 rows). The `business` query parameter is
+        required and verified against the authenticated caller.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: status
+          in: query
+          description: Filter by delivery status.
+          schema: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        - name: event
+          in: query
+          description: Filter by one or more event names.
+          schema:
+            oneOf:
+              - type: string
+              - type: array
+                items: { type: string }
+        - name: product
+          in: query
+          description: Filter by product/direction (payout vs collection).
+          schema: { type: string }
+        - name: productMethod
+          in: query
+          description: Filter by payment method/channel.
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Free-text reference search.
+          schema: { type: string }
+        - name: fromDate
+          in: query
+          description: Include webhooks created on or after this ISO-8601 date/time.
+          schema: { type: string, format: date-time }
+        - name: toDate
+          in: query
+          description: Include webhooks created on or before this ISO-8601 date/time. Must be >= fromDate.
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: CSV export of the matched webhooks (attachment download).
+          content:
+            text/csv:
+              schema:
+                type: string
+                description: >
+                  CSV with columns id, event, eventId, product, productMethod, status,
+                  responseCode, callbackURL, noOfRetries, originAt, lastAttemptAt,
+                  nextRetryAt.
+        "400":
+          description: Export failed. The export route returns a bare status/message body, not the shared error envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Non-standard error body emitted directly by the export route.
+                properties:
+                  status: { type: integer, description: HTTP status code. }
+                  message: { type: string, description: Error message. }
+      x-todo: "Export route bypasses APIHelper and returns { status, message } on error (not the shared ErrorResponse). Source: src/components/outgoingWebhooks/outgoingWebhooksAPI.ts:48"
+      x-fincra-error-catalog:
+        - errorType: NO_API_KEY_PROVIDED
+          status: 403
+          trigger: The api-key header is missing (auth runs before the route handler).
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The requested business does not belong to the authenticated caller.
+
+  /webhooks/outgoing/summary:
+    get:
+      operationId: notificationsGetOutgoingWebhookSummary
+      tags: [Webhooks]
+      summary: Get webhook delivery counts by status
+      description: >
+        Return the count of webhooks in each delivery status (pending, retrying,
+        successful, failed) plus a total, computed over the active filter rather than a
+        fixed time window. Use this to drive the "failed" banner and the "resend all
+        failed" action so both reflect exactly what the current filter is showing. The
+        `business` query parameter is required and verified against the caller.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: status
+          in: query
+          description: Restrict the counts to a single delivery status.
+          schema: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        - name: event
+          in: query
+          description: Filter by one or more event names.
+          schema:
+            oneOf:
+              - type: string
+              - type: array
+                items: { type: string }
+        - name: product
+          in: query
+          description: Filter by product/direction.
+          schema: { type: string }
+        - name: productMethod
+          in: query
+          description: Filter by payment method/channel.
+          schema: { type: string }
+        - name: q
+          in: query
+          description: Free-text reference search.
+          schema: { type: string }
+        - name: fromDate
+          in: query
+          description: Count webhooks created on or after this ISO-8601 date/time.
+          schema: { type: string, format: date-time }
+        - name: toDate
+          in: query
+          description: Count webhooks created on or before this ISO-8601 date/time. Must be >= fromDate.
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Delivery counts by status.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WebhookSummary"
+              example:
+                success: true
+                message: outgoing webhook summary retrieved
+                data:
+                  counts:
+                    pending: 0
+                    retrying: 2
+                    successful: 148
+                    failed: 5
+                  total: 155
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The requested business does not belong to the authenticated caller.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails validation.
+
+  /webhooks/outgoing/retry-config:
+    get:
+      operationId: notificationsGetOutgoingWebhookRetryConfig
+      tags: [Webhooks]
+      summary: Get the outgoing-webhook retry policy
+      description: >
+        Return the live retry policy so a dashboard can render accurate retry-schedule
+        help text instead of guessing. Includes whether auto-retry is enabled for this
+        business (the merchant's own opt-in preference, read live), the maximum number
+        of attempts, the per-attempt delay schedule (5m to 24h by default), the
+        per-request delivery timeout, and the event types eligible for auto-retry. The
+        `business` query parameter is required and verified against the caller.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+      responses:
+        "200":
+          description: The active retry policy.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WebhookRetryConfig"
+              example:
+                success: true
+                message: outgoing webhook retry config retrieved
+                data:
+                  retryEnabled: true
+                  maxAttempts: 5
+                  scheduleMs: [300000, 1800000, 7200000, 21600000, 86400000]
+                  timeoutSeconds: 10
+                  eligibleEventTypes: [collection, bank_transfer, mobilemoney, mobile_money, disbursement, payout, settlement, conversion, reversal]
+                  schedule:
+                    - { attempt: 1, delayMs: 300000, delaySeconds: 300 }
+                    - { attempt: 2, delayMs: 1800000, delaySeconds: 1800 }
+                    - { attempt: 3, delayMs: 7200000, delaySeconds: 7200 }
+                    - { attempt: 4, delayMs: 21600000, delaySeconds: 21600 }
+                    - { attempt: 5, delayMs: 86400000, delaySeconds: 86400 }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The requested business does not belong to the authenticated caller.
+
+  /webhooks/outgoing/resend:
+    post:
+      operationId: notificationsBulkResendOutgoingWebhooks
+      tags: [Webhooks]
+      summary: Bulk-resend delivered webhooks
+      description: >
+        Re-send previously-logged webhooks selected by explicit id(s) or by the active
+        filter (status, product, event type(s), search, date range), always scoped to
+        one business. Use "resend all failed" or "resend selected" from the dashboard.
+        At least one selector is required so a business's entire history can never be
+        resent by accident. Enqueuing is asynchronous: an explicit-id request returns
+        the matched/queued counts synchronously, while a filter-based request is
+        accepted and resolved in the background. Each resend is one-shot and its
+        outcome lands on the delivery record's `status`. The match set is capped
+        (WEBHOOK_BULK_RESEND_LIMIT, default 100).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkResendWebhooksRequest"
+            examples:
+              byIds:
+                summary: Resend specific webhook log ids
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  ids:
+                    - 665f1a2b3c4d5e6f7a8b9c0d
+                    - 665f1a2b3c4d5e6f7a8b9c0e
+              allFailed:
+                summary: Resend all currently-failed webhooks in view
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  status: failed
+                  fromDate: "2026-07-01T00:00:00.000Z"
+                  toDate: "2026-07-10T23:59:59.000Z"
+      responses:
+        "200":
+          description: Resend accepted. Shape differs for explicit-id vs filter-based requests.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BulkResendResult"
+              example:
+                success: true
+                message: outgoing webhooks queued for resend
+                data:
+                  matched: 2
+                  queued: 2
+                  cap: 100
+                  truncated: false
+                  queuedIds:
+                    - 665f1a2b3c4d5e6f7a8b9c0d
+                    - 665f1a2b3c4d5e6f7a8b9c0e
+                  failedIds: []
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The requested business does not belong to the authenticated caller.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails validation (missing business, no selector supplied, id not 24 chars, toDate < fromDate).
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The retry queue (Redis) is unavailable when enqueuing.
+
+  /webhooks/outgoing/{id}/resend:
+    post:
+      operationId: notificationsResendOutgoingWebhook
+      tags: [Webhooks]
+      summary: Resend a single webhook
+      description: >
+        Manually re-send one previously-logged webhook by its id. Use this to recover a
+        single missed or failed delivery to your endpoint. The resend is one-shot and
+        non-blocking: the delivery record is flipped to `retrying`, a background worker
+        re-signs and re-delivers to your current callback URL, honours the finality
+        guard (an already-successful webhook is never re-asserted), and records the
+        result as an attempt on the same webhook. The `business` query parameter is
+        required and is enforced so you can only resend your own webhook.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The 24-character webhook log id to resend.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - $ref: "#/components/parameters/BusinessQuery"
+      responses:
+        "200":
+          description: Resend queued.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ResendAck"
+              example:
+                success: true
+                message: outgoing webhook resent
+                data:
+                  isSuccessful: true
+                  messsage: retry queued
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The requested business does not belong to the authenticated caller.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The id or business is missing or not 24 characters.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The retry queue (Redis) is unavailable when enqueuing.
+
+  /webhooks/outgoing/{id}:
+    get:
+      operationId: notificationsGetOutgoingWebhook
+      tags: [Webhooks]
+      summary: Get a webhook with its attempt history
+      description: >
+        Fetch one logical webhook (the parent delivery record) together with its full
+        delivery-attempt history and the exact payload that was sent. Use this for the
+        detail/drill-down view when reconciling a specific delivery. The lookup is
+        business-scoped: a webhook belonging to another business is reported as not
+        found. The `business` query parameter is required and verified against the
+        caller.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The 24-character webhook log id.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - $ref: "#/components/parameters/BusinessQuery"
+      responses:
+        "200":
+          description: The webhook with its attempt history.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OutgoingWebhookDetail"
+              example:
+                success: true
+                message: outgoing webhook retrieved
+                data:
+                  id: 665f1a2b3c4d5e6f7a8b9c0d
+                  event: payout.failed
+                  eventId: PO-1a2b3c4d5e
+                  type: disbursement
+                  product: disbursement
+                  productMethod: bank_transfer
+                  callbackURL: https://merchant.example.com/fincra/webhook
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  status: successful
+                  isSuccessful: true
+                  responseCode: 200
+                  isResend: false
+                  noOfRetries: 1
+                  originAt: "2026-07-10T09:15:22.000Z"
+                  lastAttemptAt: "2026-07-10T09:20:22.000Z"
+                  createdAt: "2026-07-10T09:15:22.000Z"
+                  sentBody:
+                    event: payout.failed
+                    data:
+                      reference: PO-1a2b3c4d5e
+                      status: failed
+                  payload:
+                    reference: PO-1a2b3c4d5e
+                    status: failed
+                  source: bank_transfer
+                  apiVersion: v1
+                  description: Payout failed
+                  attempts:
+                    - { attempt: 1, status: failed, isSuccessful: false, responseCode: 500, at: "2026-07-10T09:15:22.000Z", response: "Internal Server Error" }
+                    - { attempt: 2, status: successful, isSuccessful: true, responseCode: 200, at: "2026-07-10T09:20:22.000Z", response: "OK" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The requested business does not belong to the authenticated caller.
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No webhook with this id exists for the authenticated business.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The id or business is missing or not 24 characters.
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret or public key, sent in the `api-key` header, together with an
+        `Authorization: Bearer <token>` header. The merchant read/resend routes use the
+        shared fliqpay-utils `authenticateWithBusiness` middleware, which requires BOTH
+        the api-key and the Authorization bearer and verifies that the requested
+        `business` belongs to the caller (business-scoped). Source
+        ../fincra-notifications/node_modules/fliqpay-utils/src/middleware/auth/authMiddlewareV2.ts:59.
+        Note: the service-to-service send (POST /) is intentionally unauthenticated and
+        internal-only; it is not part of this merchant-facing spec.
+
+  parameters:
+    BusinessQuery:
+      name: business
+      in: query
+      required: true
+      description: The 24-character Fincra business id the webhooks belong to. Verified against the authenticated caller.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+
+  responses:
+    Forbidden:
+      description: The request is not authenticated, or the business does not belong to the caller.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: You are not allowed to access this resource
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist for this business.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Webhook log not found
+            errorType: RESOURCE_NOT_FOUND
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "\"business\" length must be 24 characters long"
+            errorType: VALIDATION_FAILED
+    ServerError:
+      description: Unexpected server error (for example the retry queue being unavailable).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: retry queue unavailable
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` is [] when a handler returns nothing.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope, built by fincra-utils APIHelper. Alongside the
+        three contract keys it may also ship an `errors` detail key on validation
+        failures.
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Not present on every error branch.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable
+        on the merchant outgoing-webhook routes (auth middleware + Joi validation +
+        service throws; see EXTRACTION-REPORT-notifications.md).
+      enum:
+        - VALIDATION_FAILED
+        - RESOURCE_NOT_FOUND
+        - ACCESS_DENIED
+        - NO_API_KEY_PROVIDED
+        - NO_AUTHORIZATION_KEY_PROVIDED
+        - INTERNAL_SERVER_ERROR
+
+    WebhookDeliveryStatus:
+      type: string
+      description: >
+        The 4-state delivery status of a logical webhook. `pending` = queued, no attempt
+        yet; `retrying` = an attempt failed and a backed-off retry is scheduled;
+        `successful` = delivered (HTTP 2XX); `failed` = terminal (permanent 4XX, retries
+        exhausted, or retry not enabled). Source
+        src/components/outgoingWebhooks/outgoingWebhooksInterface.ts:47.
+      enum: [pending, retrying, successful, failed]
+
+    OutgoingWebhook:
+      type: object
+      description: >
+        One logical webhook delivery record as returned by the list endpoint. Source of
+        the field set: OutgoingWebhookService.present
+        (src/components/outgoingWebhooks/outgoingWebhooksService.ts:1254).
+      properties:
+        id: { type: string, description: The webhook log id (Mongo ObjectId as a string). }
+        event: { type: string, description: "The event name delivered, e.g. collection.successful. Null when absent." }
+        eventId: { type: string, description: The source reference identifying the event (merchant reference / channel reference). }
+        type: { type: string, description: "The webhook/transaction type, e.g. collection, disbursement." }
+        product: { type: string, description: Product/direction the event belongs to. }
+        productMethod: { type: string, description: "Payment method/channel, e.g. mobile_money." }
+        callbackURL: { type: string, description: The endpoint the webhook was delivered to. }
+        business: { type: string, description: The business id the webhook belongs to. }
+        status: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        isSuccessful: { type: boolean, description: Whether the logical webhook's current status is successful. }
+        responseCode: { type: [integer, "null"], description: HTTP status code of the most-recent delivery attempt. Null if none recorded. }
+        isResend: { type: boolean, description: Whether this record originated from a resend. }
+        noOfRetries: { type: integer, description: Number of retry attempts made. }
+        initialWebhookId: { type: [string, "null"], description: The parent webhook id for a retry attempt; null for a parent row. }
+        originAt: { type: string, format: date-time, description: When the webhook was first recorded. }
+        lastAttemptAt: { type: string, format: date-time, description: Timestamp of the most-recent delivery attempt. }
+        nextRetryAt: { type: [string, "null"], format: date-time, description: "Scheduled time of the next retry, or null if none pending." }
+        createdAt: { type: string, format: date-time, description: Record creation timestamp. }
+
+    OutgoingWebhookPage:
+      type: object
+      description: A page of webhook delivery records. The `data` field of the list endpoint's success envelope.
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/OutgoingWebhook" }
+          description: The webhook records on this page.
+        meta:
+          type: object
+          description: Pagination metadata.
+          properties:
+            page: { type: integer, description: Current page number. }
+            perPage: { type: integer, description: Items per page. }
+            total: { type: integer, description: Total records matching the filter. }
+
+    WebhookAttempt:
+      type: object
+      description: >
+        One delivery attempt in a webhook's history. Source
+        OutgoingWebhookService.presentAttempt (outgoingWebhooksService.ts:1289).
+      properties:
+        attempt: { type: integer, description: 1-based chronological attempt number (parent send is attempt 1). }
+        status: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        isSuccessful: { type: boolean, description: Whether this attempt delivered successfully. }
+        responseCode: { type: [integer, "null"], description: HTTP status code returned by the merchant on this attempt. Null if none. }
+        at: { type: string, format: date-time, description: When this attempt was made. }
+        response: { description: "The merchant's response or error body for this attempt (object or string; truncated upstream)." }
+
+    OutgoingWebhookDetail:
+      type: object
+      description: >
+        A single webhook (all OutgoingWebhook fields) plus the delivered payload and its
+        full attempt history. Source OutgoingWebhookService.getDetail
+        (outgoingWebhooksService.ts:773).
+      allOf:
+        - $ref: "#/components/schemas/OutgoingWebhook"
+        - type: object
+          properties:
+            sentBody:
+              type: object
+              description: The exact body delivered to the merchant.
+              properties:
+                event: { type: string, description: The event name sent. }
+                data: { description: The raw event payload sent. }
+            payload: { description: The raw event payload (request.data). }
+            eventId: { type: string, description: The source reference identifying the event. }
+            source: { type: string, description: The channel/product the event originated from. }
+            apiVersion: { type: string, description: "The webhook API version (payload-supplied or the configured default, e.g. v1)." }
+            description: { type: string, description: Human-readable description of the event. }
+            attempts:
+              type: array
+              items: { $ref: "#/components/schemas/WebhookAttempt" }
+              description: The full delivery-attempt history, oldest first.
+
+    WebhookSummary:
+      type: object
+      description: >
+        Delivery counts by status over the active filter. Source
+        OutgoingWebhookService.summary (outgoingWebhooksService.ts:825).
+      properties:
+        counts:
+          type: object
+          description: Count of webhooks in each delivery status.
+          properties:
+            pending: { type: integer, description: "Count queued, not yet attempted." }
+            retrying: { type: integer, description: Count with a scheduled retry pending. }
+            successful: { type: integer, description: Count delivered successfully. }
+            failed: { type: integer, description: Count in a terminal failed state. }
+        total: { type: integer, description: Sum of all status counts. }
+
+    WebhookRetryScheduleStep:
+      type: object
+      description: One step of the retry delay schedule.
+      properties:
+        attempt: { type: integer, description: 1-based retry attempt number. }
+        delayMs: { type: integer, description: "Wait before this attempt, in milliseconds." }
+        delaySeconds: { type: integer, description: "Wait before this attempt, in seconds." }
+
+    WebhookRetryConfig:
+      type: object
+      description: >
+        The live outgoing-webhook retry policy. Source
+        OutgoingWebhookService.retryConfig (outgoingWebhooksService.ts:853) and
+        src/components/outgoingWebhooks/retryConfig.ts.
+      properties:
+        retryEnabled: { type: boolean, description: "Whether auto-retry is enabled for this business (merchant opt-in, read live)." }
+        maxAttempts: { type: integer, description: Maximum number of retry attempts. }
+        scheduleMs:
+          type: array
+          items: { type: integer }
+          description: The per-attempt delay schedule in milliseconds (default 5m, 30m, 2h, 6h, 24h).
+        timeoutSeconds: { type: integer, description: Per-request delivery timeout in seconds (default 10). }
+        eligibleEventTypes:
+          type: array
+          items: { type: string }
+          description: The event types eligible for auto-retry.
+        schedule:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookRetryScheduleStep" }
+          description: The delay before each retry attempt (#1..#max).
+
+    BulkResendWebhooksRequest:
+      type: object
+      description: >
+        Body for POST /webhooks/outgoing/resend. At least one selector (ids, status,
+        event, product, productMethod, q, fromDate, or toDate) is required so a
+        business's entire history can never be resent. Source
+        src/components/outgoingWebhooks/outgoingWebhooksValidation.ts:58.
+      required: [business]
+      properties:
+        business: { type: string, minLength: 24, maxLength: 24, description: Your 24-character business id. Required. }
+        ids:
+          type: array
+          items: { type: string, minLength: 24, maxLength: 24 }
+          description: Explicit webhook log ids to resend (each 24 characters). A single string is also accepted.
+        status: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        event:
+          description: Filter by one or more event names.
+          oneOf:
+            - type: string
+            - type: array
+              items: { type: string }
+        product: { type: string, description: Filter by product/direction. }
+        productMethod: { type: string, description: Filter by payment method/channel. }
+        q: { type: string, description: Free-text reference search. }
+        fromDate: { type: string, format: date-time, description: Include webhooks created on or after this ISO-8601 date/time. }
+        toDate: { type: string, format: date-time, description: Include webhooks created on or before this ISO-8601 date/time. Must be >= fromDate. }
+
+    BulkResendResult:
+      type: object
+      description: >
+        Result of a bulk resend. An explicit-id request returns matched/queued counts
+        synchronously; a filter-based request returns an async acknowledgement. Source
+        OutgoingWebhookService.bulkResend / enqueueResendForIds
+        (outgoingWebhooksService.ts:1036).
+      properties:
+        matched: { type: integer, description: Number of webhooks the selection matched. }
+        queued: { type: integer, description: Number of resend jobs successfully enqueued. }
+        cap: { type: integer, description: The configured resend cap applied to the match set. }
+        truncated: { type: boolean, description: Whether the match set exceeded the cap and was truncated. }
+        queuedIds:
+          type: array
+          items: { type: string }
+          description: The webhook ids that were enqueued.
+        failedIds:
+          type: array
+          items: { type: string }
+          description: The webhook ids that failed to enqueue.
+        async: { type: boolean, description: True for a filter-based request accepted for background resolution. }
+        messsage: { type: string, description: "Status message (note: the source key is spelled \"messsage\")." }
+
+    ResendAck:
+      type: object
+      description: >
+        Acknowledgement of a single-webhook resend. The resend runs in the background;
+        this only confirms the job was queued. Source
+        OutgoingWebhookService.resend -> enqueueResendByReference
+        (outgoingWebhooksService.ts:997).
+      properties:
+        isSuccessful: { type: boolean, description: Whether the resend job was successfully queued. }
+        messsage: { type: string, description: "Status message (note: the source key is spelled \"messsage\")." }

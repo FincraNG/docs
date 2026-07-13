@@ -1,0 +1,2020 @@
+openapi: 3.1.0
+info:
+  title: Fincra Checkout (checkout-core)
+  version: "1.0.0"
+  summary: Merchant-facing hosted-checkout, direct-charge, and payment-link API for the checkout-core service.
+  description: >
+    Accept payments from customers across African rails — cards, bank transfers,
+    mobile money, EFT, PayAttitude, and PalmPay — through a Fincra-hosted checkout
+    page, a direct server-to-server charge, or a shareable payment link.
+
+
+    Checkout is a mix of synchronous and asynchronous flows. Initiating a hosted
+    payment (`POST /payments`) or a direct charge (`POST /charges`) creates the
+    transaction; card and mobile-money charges then move through an
+    authorization step (OTP/PIN/3DS) before reaching a terminal state, while bank
+    transfer and EFT settle out of band. The final state is delivered by the
+    `charge.successful` / `charge.failed` webhook and can also be polled with the
+    verify and get-by-reference endpoints.
+
+
+    This spec is generated from the source of `checkout-core` on branch `dev`
+    (code is truth). Anything undeterminable from code is marked with an `x-todo`
+    extension carrying the exact `file:line`, and is listed in
+    EXTRACTION-REPORT-checkout.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every route at "/" with NO global prefix and NO versioning
+  (src/start.ts:24-65 — no setGlobalPrefix). Controllers serve at their bare
+  @Controller paths (/payments, /charges, /payment-links, /fees, /banks, /resolve,
+  /data/*, /outgoing-webhooks). The public prefixes a merchant calls (observed by QA
+  as /checkout/* and /checkout-core/*, and hinted by k8s/overlays/prod/app.properties:8
+  BASE_URL=https://api.fincra.com/checkout-core) are applied at the Kong gateway, which
+  is not in this repo. Paths below are exactly as routed in code; prepend the confirmed
+  gateway prefix before publishing. See EXTRACTION-REPORT-checkout.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/checkout-core
+    description: Sandbox (public test keys, pk_test_*). Powers the docs playground and the hosted checkout page.
+  - url: https://api.fincra.com/checkout-core
+    description: Production (live public keys, pk_*). Source k8s/overlays/prod/app.properties:8
+
+security:
+  - BusinessIdAuth: []
+  - PubKeyAuth: []
+
+tags:
+  - name: Checkout
+    description: >
+      Hosted checkout payments, direct charges, payment links, and the public
+      lookups (banks, BINs, methods) that back the Fincra checkout page.
+
+paths:
+  /payments:
+    post:
+      operationId: checkoutInitiatePayment
+      tags: [Checkout]
+      summary: Initiate a hosted checkout payment
+      description: >
+        Create a hosted checkout payment and obtain a reference the customer's
+        browser uses to load the Fincra checkout page. Use this to start a hosted
+        payment from your merchant backend. Authenticated with the public key
+        (`x-pub-key`), not the secret api-key.
+
+
+        The call is synchronous in that it returns the created payment
+        immediately; collecting the money is asynchronous and happens on the
+        hosted page (method selection then charge/authorize). The terminal state
+        is delivered by the `charge.successful` / `charge.failed` webhook and can
+        be polled via `checkoutGetPaymentByReference`.
+      security:
+        - PubKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PubKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiatePaymentRequest"
+            examples:
+              ngnCardAndTransfer:
+                summary: NGN hosted payment, card + bank transfer enabled
+                value:
+                  amount: 5000
+                  currency: NGN
+                  customer:
+                    email: amara.okeke@example.com
+                    name: Amara Okeke
+                    phoneNumber: "2348012345678"
+                  reference: checkout-req-3f81a9c2
+                  redirectUrl: https://merchant.example.com/checkout/complete
+                  paymentMethods: [card, bank_transfer]
+                  defaultPaymentMethod: card
+                  feeBearer: customer
+      responses:
+        "201":
+          description: Hosted payment created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: BAD_REQUEST
+          status: 400
+          trigger: "Body fails validation (amount < 1, bad currency/method enum), a method not in getAvailableMethods(currency), defaultPaymentMethod not within paymentMethods, or customer.name missing a space. Source src/api/payments/payments.controller.ts:60,79; src/api/payments/dto/payment.dto.ts:47-124"
+        - errorType: UNAUTHORIZED
+          status: 401
+          trigger: "x-pub-key header absent. Source src/shared/guards/public-key.guard.ts:37"
+        - errorType: FORBIDDEN
+          status: 403
+          trigger: "x-pub-key undecodable / businessId missing / business unresolvable (guard returns false), or ProductsGuard denies the 'checkout' product (prod/live only). Source src/shared/guards/public-key.guard.ts:48-61; src/shared/guards/products.guard.ts:104-132"
+        - errorType: CONFLICT
+          status: 409
+          trigger: "reference (merchantReference) duplicates an existing payment. Source src/api/payments/payments.service.ts:103"
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: "Downstream/service failure; also business.settings.feeBearer read unconditionally before the null guard can TypeError. Source src/api/payments/payments.service.ts:112-126"
+
+    get:
+      operationId: checkoutListPayments
+      tags: [Checkout]
+      summary: List payments
+      description: >
+        Return the merchant's checkout payments, scoped to the business resolved
+        from the `x-business-id` header. Use this to build a payments table or to
+        reconcile. This read uses the business-id header scheme, distinct from the
+        public-key scheme used by the create endpoint.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      responses:
+        "200":
+          description: A list of payments.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "List query params and pagination envelope not harvested. Source src/api/payments/payments.controller.ts:92-99"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /payments/available-methods:
+    get:
+      operationId: checkoutGetAvailableMethods
+      tags: [Checkout]
+      summary: Get available payment methods for a currency
+      description: >
+        Return the payment methods enabled for a given currency, used by the
+        hosted checkout page to render the method picker. This endpoint is public
+        (no merchant credential) and responds synchronously. The set is capped by
+        the platform's per-currency availability map.
+      security: []
+      parameters:
+        - name: currency
+          in: query
+          required: true
+          description: The currency to list methods for; validated against the Currency enum.
+          schema: { $ref: "#/components/schemas/Currency" }
+      responses:
+        "200":
+          description: Available methods for the currency.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /payments/supported-conversion-currencies:
+    get:
+      operationId: checkoutGetSupportedConversionCurrencies
+      tags: [Checkout]
+      summary: Get supported conversion currencies
+      description: >
+        Return the currencies a payment in the given currency can be converted to
+        on the hosted checkout page (customer-side FX). This endpoint is public
+        and synchronous; the `currency` query is validated against the Currency
+        enum.
+      security: []
+      parameters:
+        - name: currency
+          in: query
+          required: true
+          description: The source currency; validated against the Currency enum.
+          schema: { $ref: "#/components/schemas/Currency" }
+      responses:
+        "200":
+          description: Supported conversion currencies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /payments/merchant-reference/{merchantReference}:
+    get:
+      operationId: checkoutGetPaymentByMerchantReference
+      tags: [Checkout]
+      summary: Get a payment by merchant reference
+      description: >
+        Fetch a single payment by the merchant's own reference, scoped to the
+        business from the `x-business-id` header. Use this to reconcile a hosted
+        payment against your own identifiers. Synchronous read.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: merchantReference
+          in: path
+          required: true
+          description: The merchant's own reference supplied when the payment was initiated.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The payment.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /payments/{reference}:
+    get:
+      operationId: checkoutGetPaymentByReference
+      tags: [Checkout]
+      summary: Get a payment by reference (hosted-page read)
+      description: >
+        Fetch a payment by its Fincra reference, embedding the public business
+        profile. This backs the hosted checkout page and is public (no merchant
+        credential). Synchronous read; also usable to poll a payment's status when
+        you did not receive the webhook.
+      security: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payment reference returned on initiate.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The payment with embedded public business.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /payments/{reference}/mark-as-processing:
+    patch:
+      operationId: checkoutMarkPaymentAsProcessing
+      tags: [Checkout]
+      summary: Mark a payment as processing
+      description: >
+        Transition a hosted payment to the Processing state. This is called by the
+        checkout UI while a charge is in flight and is public (no merchant
+        credential). Synchronous state transition with no request body.
+      security: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payment reference.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Payment marked as processing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payments/{reference}/charges:
+    get:
+      operationId: checkoutGetPaymentCharges
+      tags: [Checkout]
+      summary: List charges for a payment
+      description: >
+        Return all charge attempts made against a hosted payment reference. Used
+        by the checkout UI to show attempt history. This endpoint is public (no
+        merchant credential) and responds synchronously.
+      security: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payment reference.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The charges for the payment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payments/{reference}/charge:
+    get:
+      operationId: checkoutFindOrCreatePaymentCharge
+      tags: [Checkout]
+      summary: Find or create a charge for a payment method
+      description: >
+        Find-or-create the charge for a chosen payment method on a hosted payment,
+        and for bank-transfer/EFT it triggers the charge to obtain the pay-in
+        details. Called by the checkout UI when the customer selects a method.
+        Public (no merchant credential); may be asynchronous for transfer rails
+        whose details settle out of band.
+      security: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payment reference.
+          schema: { type: string }
+        - name: type
+          in: query
+          required: true
+          description: The chosen payment method; validated against ChargeType.
+          schema: { $ref: "#/components/schemas/ChargeType" }
+        - name: bank
+          in: query
+          required: false
+          description: Bank selection for EFT/transfer methods that require it.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The charge (with pay-in details for transfer rails).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: checkoutChargePayment
+      tags: [Checkout]
+      summary: Submit a charge on a hosted payment
+      description: >
+        Submit the customer's payment details (card, phone, mobile-money operator,
+        or bank) to charge a hosted payment. Called by the checkout UI on submit
+        and is public (no merchant credential). Card and mobile-money charges are
+        asynchronous and continue via the authorize step; the terminal state
+        arrives on the `charge.successful` / `charge.failed` webhook.
+      security: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payment reference.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChargePaymentRequest"
+            examples:
+              mobileMoneyGhs:
+                summary: Ghana mobile-money charge
+                value:
+                  type: mobile_money
+                  phone: "233551234567"
+                  operator: MTN
+              cardCharge:
+                summary: Card charge
+                value:
+                  type: card
+                  card:
+                    card_number: "4084127883172787"
+                    expiry_month: "09"
+                    expiry_year: "27"
+                    cvv: "123"
+                    card_holder: Amara Okeke
+      responses:
+        "200":
+          description: Charge submitted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payments/{reference}/charge/authorize:
+    post:
+      operationId: checkoutAuthorizePaymentCharge
+      tags: [Checkout]
+      summary: Authorize a hosted payment charge
+      description: >
+        Complete a hosted-payment charge with an authorization factor (PIN, OTP,
+        AVS, etc.), for example the OTP step of a card charge. Called by the
+        checkout UI and is public (no merchant credential). Asynchronous: the
+        terminal state is delivered by the `charge.successful` / `charge.failed`
+        webhook.
+      security: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payment reference.
+          schema: { type: string }
+        - name: type
+          in: query
+          required: true
+          description: The charge type being authorized; validated against ChargeType.
+          schema: { $ref: "#/components/schemas/ChargeType" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeChargeRequest"
+            examples:
+              otp:
+                summary: OTP authorization
+                value:
+                  otp: "123456"
+      responses:
+        "200":
+          description: Authorization accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payments/{reference}/convert:
+    patch:
+      operationId: checkoutConvertPaymentCurrency
+      tags: [Checkout]
+      summary: Convert a payment's currency
+      description: >
+        Convert a hosted payment to a different currency on the checkout page
+        (customer-side FX). Public (no merchant credential); the `currency` query
+        is parsed with an enum pipe and rejected as 400 if invalid. Synchronous,
+        but may fail with a 500 if the conversion service errors.
+      security: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payment reference.
+          schema: { type: string }
+        - name: currency
+          in: query
+          required: true
+          description: Target currency; parsed against the Currency enum (400 if invalid).
+          schema: { $ref: "#/components/schemas/Currency" }
+      responses:
+        "200":
+          description: Payment converted.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payment" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: "Conversion failed. Source src/api/payments/payments.service.ts:438"
+
+  /charges:
+    post:
+      operationId: checkoutCreateCharge
+      tags: [Checkout]
+      summary: Create a direct charge
+      description: >
+        Create a server-to-server charge without the hosted page, selecting the
+        rail via `type` (card, bank_transfer, mobile_money, eft, payattitude,
+        palmpay, etc.). Authenticated with the `x-business-id` header. Card and
+        mobile-money charges are asynchronous and continue via the authorize
+        step; the terminal state arrives on the `charge.successful` /
+        `charge.failed` webhook.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChargeRequest"
+            examples:
+              ngnBankTransfer:
+                summary: NGN bank-transfer charge
+                value:
+                  type: bank_transfer
+                  amount: 7500
+                  currency: NGN
+                  reference: charge-req-8c2a1f04
+                  accountNumber: "0111111111"
+                  customer:
+                    email: kwame.mensah@example.com
+                    name: Kwame Mensah
+              cardCharge:
+                summary: NGN card charge
+                value:
+                  type: card
+                  amount: 12000
+                  currency: NGN
+                  reference: charge-req-9d55e0af
+                  callbackUrl: https://merchant.example.com/charge/callback
+                  customer:
+                    email: amara.okeke@example.com
+                    name: Amara Okeke
+                  card:
+                    card_number: "4084127883172787"
+                    expiry_month: "09"
+                    expiry_year: "27"
+                    cvv: "123"
+                    card_holder: Amara Okeke
+      responses:
+        "201":
+          description: Charge created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Charge" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: BAD_REQUEST
+          status: 400
+          trigger: "DTO validation, unsupported currency/type combination ('Currency not supported for charge type'), amount too low, or restricted-currency access downgraded to 400. Source src/api/charges/dto/charges.dto.ts:400-504; src/api/charges/charges.service.ts:365,2374"
+        - errorType: CONFLICT
+          status: 409
+          trigger: "reference duplicates an existing charge ('Duplicate reference'). Source src/api/charges/charges.service.ts:156"
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: "Unsupported charge/settlement config or downstream channel error. Source src/api/charges/charges.service.ts:2018,2229,2244"
+
+  /charges/initiate:
+    post:
+      operationId: checkoutInitiateCharge
+      tags: [Checkout]
+      summary: Initiate a direct charge
+      description: >
+        Create a charge shell (returning its id and reference) that can be
+        authorized later, without submitting full instrument details up front.
+        Authenticated with the `x-business-id` header. Asynchronous overall: the
+        terminal state is delivered by the `charge.successful` / `charge.failed`
+        webhook.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiateChargeRequest"
+            examples:
+              initiate:
+                summary: Initiate a card charge shell
+                value:
+                  type: card
+                  reference: charge-req-6b1204de
+                  amount: 3000
+                  currency: NGN
+                  customer:
+                    email: amara.okeke@example.com
+                    name: Amara Okeke
+      responses:
+        "201":
+          description: Charge initiated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/ChargeInitiateResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /charges/merchant-reference/{reference}/authorize:
+    post:
+      operationId: checkoutAuthorizeChargeByMerchantReference
+      tags: [Checkout]
+      summary: Authorize a charge by merchant reference
+      description: >
+        Authorize a charge identified by the merchant's own reference, scoped to
+        the business from the `x-business-id` header, supplying the authorization
+        factor (PIN/OTP/AVS). Asynchronous: the terminal state arrives on the
+        `charge.successful` / `charge.failed` webhook.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: reference
+          in: path
+          required: true
+          description: The merchant's own reference for the charge.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeChargeRequest"
+            examples:
+              otp:
+                summary: OTP authorization
+                value:
+                  otp: "123456"
+      responses:
+        "200":
+          description: Authorization accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-todo: "Handler reads @Param('id') while the route param is named ':reference', so the reference resolves undefined; likely bug. Source src/api/charges/charges.controller.ts:97-113"
+
+  /charges/{id}/authorize:
+    post:
+      operationId: checkoutAuthorizeCharge
+      tags: [Checkout]
+      summary: Authorize a charge by id
+      description: >
+        Authorize a charge by its numeric Fincra charge id, supplying the
+        authorization factor (PIN/OTP/AVS/etc). Authenticated with the
+        `x-business-id` header. Asynchronous: the terminal state arrives on the
+        `charge.successful` / `charge.failed` webhook.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric Fincra charge id.
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeChargeRequest"
+            examples:
+              pin:
+                summary: Card PIN authorization
+                value:
+                  pin: "1234"
+      responses:
+        "200":
+          description: Authorization accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /charges/{id}/capture:
+    post:
+      operationId: checkoutCaptureCharge
+      tags: [Checkout]
+      summary: Capture an authorized card charge
+      description: >
+        Capture a previously authorized card charge (for manual/scheduled capture
+        modes), by numeric charge id. Authenticated with the `x-business-id`
+        header; no request body. Only card charges can be captured — a non-card
+        charge is rejected with 400.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric Fincra charge id.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Charge captured.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-fincra-error-catalog:
+        - errorType: BAD_REQUEST
+          status: 400
+          trigger: "Only card charges can be captured. Source src/api/charges/charges.service.ts:555"
+
+  /charges/reference/{reference}:
+    get:
+      operationId: checkoutGetChargeByReference
+      tags: [Checkout]
+      summary: Get a charge by reference
+      description: >
+        Fetch a charge by its Fincra reference, scoped to the business from the
+        `x-business-id` header. If the charge is pending/processing it may be
+        re-validated live against the channel. Use this to poll a charge's status.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra charge reference.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The charge.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Charge" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /charges/merchant-reference/{merchantReference}:
+    get:
+      operationId: checkoutGetChargeByMerchantReference
+      tags: [Checkout]
+      summary: Get a charge by merchant reference
+      description: >
+        Fetch a charge by the merchant's own reference, scoped to the business
+        from the `x-business-id` header. Use this to reconcile a charge against
+        your own identifiers. Synchronous read, with live re-validation for
+        non-terminal statuses.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: merchantReference
+          in: path
+          required: true
+          description: The merchant's own reference for the charge.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The charge.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Charge" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /charges/{id}/verify:
+    get:
+      operationId: checkoutVerifyCharge
+      tags: [Checkout]
+      summary: Verify a charge's status
+      description: >
+        Verify a charge by its numeric id, optionally forcing a live status check
+        against the channel. This is the merchant "verify payment status"
+        endpoint, authenticated with the `x-business-id` header. It may reach
+        external channel integrations, so a channel error can surface as a 500.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric Fincra charge id.
+          schema: { type: integer }
+        - name: statusCheck
+          in: query
+          required: false
+          description: Whether to force a live status check against the channel. Defaults to true.
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: The verified charge.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Charge" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: BAD_REQUEST
+          status: 400
+          trigger: "Charge id not a valid number, or 'Charge type not supported'. Source src/api/charges/charges.service.ts:861,433"
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: "Charge not found. Source src/api/charges/charges.service.ts:865"
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: "validate() reaches channel validators (card/payAttitude/mobileMoney/eft/palmpay); unmapped channel failures surface as 500, uncaught in the handler. Source src/api/charges/charges.service.ts:492,528,537,578"
+
+  /payment-links:
+    post:
+      operationId: checkoutCreatePaymentLink
+      tags: [Checkout]
+      summary: Create a payment link
+      description: >
+        Create a shareable payment link for the merchant, authenticated with the
+        `x-business-id` header. A payment link lets you collect a payment without
+        integrating the hosted page directly. Synchronous create; collection
+        against the link is asynchronous and reported via the charge webhooks.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentLinkRequest"
+            examples:
+              basic:
+                summary: A fixed-amount NGN payment link
+                value:
+                  amount: 5000
+                  currency: NGN
+                  feeBearer: customer
+      responses:
+        "201":
+          description: Payment link created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      operationId: checkoutListPaymentLinks
+      tags: [Checkout]
+      summary: List payment links
+      description: >
+        Return the merchant's payment links, scoped to the business from the
+        `x-business-id` header, with optional filter and search. Use this to build
+        a payment-links table. Synchronous read.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: filter
+          in: query
+          required: false
+          description: Optional filter applied to the merchant's links.
+          schema: { type: string }
+        - name: search
+          in: query
+          required: false
+          description: Optional free-text search across links.
+          schema: { type: string }
+      responses:
+        "200":
+          description: A list of payment links.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      x-todo: "Filter/search query keys not fully harvested. Source src/api/payment-links/payment-links.controller.ts:76-85"
+
+  /payment-links/{id}/shorten:
+    get:
+      operationId: checkoutShortenPaymentLink
+      tags: [Checkout]
+      summary: Shorten a payment link
+      description: >
+        Produce a shortened URL for an existing payment link, by numeric id,
+        authenticated with the `x-business-id` header. Calls an external URL
+        shortener; shortener failures are surfaced as a 400. Synchronous.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric payment-link id.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: The shortened link.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /payment-links/validate-custom-url/{customUrl}:
+    get:
+      operationId: checkoutValidateCustomUrl
+      tags: [Checkout]
+      summary: Check custom-URL availability for a payment link
+      description: >
+        Check whether a custom URL slug is available for a payment link,
+        authenticated with the `x-business-id` header. Returns a conflict if the
+        slug is already taken. Synchronous availability check.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: customUrl
+          in: path
+          required: true
+          description: The custom URL slug to check.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The slug is available.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /payment-links/{id}:
+    get:
+      operationId: checkoutGetPaymentLink
+      tags: [Checkout]
+      summary: Get a payment link by id
+      description: >
+        Fetch a single payment link by its numeric id, authenticated with the
+        `x-business-id` header. Note the lookup is by id only and is not scoped to
+        the business in the query. Synchronous read.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric payment-link id.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: The payment link.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: checkoutUpdatePaymentLink
+      tags: [Checkout]
+      summary: Update a payment link
+      description: >
+        Update an existing payment link by numeric id, authenticated with the
+        `x-business-id` header. The update criteria are by id and not scoped to
+        the business. Synchronous update.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric payment-link id.
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaymentLinkRequest"
+            examples:
+              disableAndRename:
+                summary: Update the amount on a link
+                value:
+                  amount: 7500
+      responses:
+        "200":
+          description: Payment link updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: checkoutDeletePaymentLink
+      tags: [Checkout]
+      summary: Delete a payment link
+      description: >
+        Delete a payment link by numeric id, authenticated with the
+        `x-business-id` header. The delete criteria are by id and not scoped to
+        the business. Synchronous delete.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric payment-link id.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payment link deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payment-links/{id}/disable:
+    patch:
+      operationId: checkoutDisablePaymentLink
+      tags: [Checkout]
+      summary: Disable a payment link
+      description: >
+        Disable a payment link by numeric id so it can no longer be paid,
+        authenticated with the `x-business-id` header. Sets the link's disabled
+        flag to true. Synchronous state change.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric payment-link id.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payment link disabled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payment-links/{id}/enable:
+    patch:
+      operationId: checkoutEnablePaymentLink
+      tags: [Checkout]
+      summary: Enable a payment link
+      description: >
+        Re-enable a previously disabled payment link by numeric id, authenticated
+        with the `x-business-id` header. Sets the link's disabled flag to false.
+        Synchronous state change.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: id
+          in: path
+          required: true
+          description: The numeric payment-link id.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Payment link enabled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /fees:
+    post:
+      operationId: checkoutCalculateFees
+      tags: [Checkout]
+      summary: Calculate the fee for a charge
+      description: >
+        Calculate the collection fee (and VAT for NGN) for a given amount,
+        currency, and charge type, authenticated with the `x-business-id` header.
+        Synchronous. Note: the handler wraps every downstream failure in an opaque
+        500 ("Unable to calculate fee"), so upstream errors do not surface as
+        4xx.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetFeesRequest"
+            examples:
+              ngnCardFee:
+                summary: Fee for an NGN card charge
+                value:
+                  amount: 10000
+                  currency: NGN
+                  type: card
+      responses:
+        "200":
+          description: The calculated fee.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: BAD_REQUEST
+          status: 400
+          trigger: "GetFeesDTO validation fails (amount not a number, bad currency/type enum). Source src/app.controller.ts:200-228"
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: "Any downstream fee-calc failure is rethrown as InternalServerErrorException('Unable to calculate fee'). Source src/app.controller.ts:225-227"
+
+  /banks:
+    get:
+      operationId: checkoutGetEftBanks
+      tags: [Checkout]
+      summary: List EFT banks for a currency
+      description: >
+        Return the EFT banks available for a given currency, used by the checkout
+        page to render bank selection. This endpoint is public (declared
+        `@NoAuth`) and synchronous; `currency` is validated against the Currency
+        enum.
+      security: []
+      parameters:
+        - name: currency
+          in: query
+          required: true
+          description: The currency to list EFT banks for; validated against the Currency enum.
+          schema: { $ref: "#/components/schemas/Currency" }
+      responses:
+        "200":
+          description: The EFT banks for the currency.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /data/mobile-money-operators:
+    get:
+      operationId: checkoutGetMobileMoneyOperators
+      tags: [Checkout]
+      summary: List mobile-money operators
+      description: >
+        Return the mobile-money operators available for a currency, used by the
+        checkout page to render operator selection. This endpoint is public (no
+        merchant credential) and synchronous. Returns 404 when none are available,
+        and wraps unexpected errors as a 500.
+      security: []
+      parameters:
+        - name: currency
+          in: query
+          required: false
+          description: The currency to list operators for.
+          schema: { $ref: "#/components/schemas/Currency" }
+        - name: businessId
+          in: query
+          required: false
+          description: Optional business id to scope the operator list.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The mobile-money operators.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: "No mobile money operators currently available. Source src/app.controller.ts:141"
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: "Non-NotFound errors rethrown as 'Unable to fetch mobile money operators'. Source src/app.controller.ts:194"
+
+  /resolve/bin/{bin}:
+    get:
+      operationId: checkoutResolveBin
+      tags: [Checkout]
+      summary: Resolve a card BIN
+      description: >
+        Resolve the card scheme and issuer metadata for a card BIN, used by the
+        checkout page as the customer types their card number. This endpoint is
+        public (no merchant credential) and synchronous. The BIN must be numeric
+        and at least 6 digits.
+      security: []
+      parameters:
+        - name: bin
+          in: path
+          required: true
+          description: The card BIN (numeric, at least 6 digits).
+          schema: { type: string, pattern: "^[0-9]{6,}$" }
+      responses:
+        "200":
+          description: The resolved BIN metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /outgoing-webhooks:
+    post:
+      operationId: checkoutResendOutgoingWebhooks
+      tags: [Checkout]
+      summary: Re-send outgoing webhooks
+      description: >
+        Enqueue a bulk replay of the merchant's outgoing charge/collection
+        webhooks, authenticated with the `x-business-id` header. Use this to
+        recover from missed or failed webhook deliveries on your endpoint.
+        Asynchronous: deliveries are queued and retried out of band.
+      security:
+        - BusinessIdAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutgoingWebhooksRequest"
+            examples:
+              byReferences:
+                summary: Replay webhooks for specific charge references
+                value:
+                  references: [charge-req-8c2a1f04, charge-req-9d55e0af]
+      responses:
+        "200":
+          description: Webhook replay enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      x-todo: "OutgoingWebhooksDto field set not harvested; handler injects businessId=business.id (not ._id) which may empty the scope (possible bug). Source src/api/outgoing-webhooks/outgoing-webhooks.controller.ts:14-27"
+
+webhooks:
+  charge.successful:
+    post:
+      operationId: checkoutWebhookChargeSuccessful
+      tags: [Checkout]
+      summary: charge.successful
+      description: >
+        Delivered to the merchant's configured webhook/callback URL when a charge
+        reaches the terminal successful state. Delivery requires
+        `settings.enableWebhook` and a callbackURL/webhookUrl on the business.
+        Verify the signature before trusting the payload.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChargeWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  charge.failed:
+    post:
+      operationId: checkoutWebhookChargeFailed
+      tags: [Checkout]
+      summary: charge.failed
+      description: >
+        Delivered when a charge reaches the terminal failed state. The `data`
+        object carries the charge outcome. Delivery requires
+        `settings.enableWebhook` on the business. Return a 2xx to acknowledge.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChargeWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+
+components:
+  securitySchemes:
+    PubKeyAuth:
+      type: apiKey
+      in: header
+      name: x-pub-key
+      description: >
+        Public-key checkout auth. The `x-pub-key` header carries a base64 value of
+        `businessId::...`; the `pk_test_` prefix denotes a test key, `pk_` a live
+        key. Used ONLY by POST /payments (initiate hosted checkout). This is NOT
+        the secret api-key. Source src/shared/guards/public-key.guard.ts:32-73.
+    BusinessIdAuth:
+      type: apiKey
+      in: header
+      name: x-business-id
+      description: >
+        Business-id header auth used by the direct-charge, payment-link, list, fee,
+        and outgoing-webhook endpoints. The `x-business-id` header carries the
+        business id directly (no signature/secret verification). Missing header ->
+        401; unresolvable business -> 503. Source src/shared/guards/business.guard.ts:14,35-60.
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret api-key (fallback header `apikey`), classified test/live by
+        the profile service. In checkout-core it guards only the admin
+        outgoing-webhooks route (not documented here as merchant self-serve). The
+        merchant checkout surface uses x-pub-key or x-business-id instead. Source
+        src/shared/guards/api-key.guard.ts:35-69.
+
+  parameters:
+    PubKeyHeader:
+      name: x-pub-key
+      in: header
+      required: true
+      description: The merchant's public key (base64 businessId::..., pk_test_/pk_ prefix).
+      schema: { type: string }
+    BusinessIdHeader:
+      name: x-business-id
+      in: header
+      required: true
+      description: The merchant's 24-character Fincra business id.
+      schema: { type: string }
+
+  responses:
+    BadRequest:
+      description: Validation or business-rule failure (NestJS default HttpException body).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            statusCode: 400
+            message: ["amount must not be less than 1"]
+            error: Bad Request
+    Unauthorized:
+      description: A required auth header is missing.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            statusCode: 401
+            message: x-business-id must be provided in the header
+            error: Unauthorized
+    Forbidden:
+      description: Public key unresolvable, or the business lacks the required product.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            statusCode: 403
+            message: Access Denied. You're not authorized to access Checkout product
+            error: Forbidden
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            statusCode: 404
+            message: Charge not found
+            error: Not Found
+    Conflict:
+      description: A uniqueness constraint was violated (duplicate reference).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            statusCode: 409
+            message: Duplicate payment reference
+            error: Conflict
+    ServiceUnavailable:
+      description: The business could not be verified by the profile service.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            statusCode: 503
+            message: Unable to verify business
+            error: Service Unavailable
+    ServerError:
+      description: Unexpected or downstream error, often masked with a generic message.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            statusCode: 500
+            message: Unable to calculate fee
+            error: Internal Server Error
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: >
+        The checkout-core success envelope built by Response.send. NOTE: unlike other
+        Fincra services, the top-level flag key is `status` (boolean true), not
+        `success`. Source src/shared/helpers/response.helper.ts:9-17.
+      required: [status]
+      properties:
+        status:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result (defaults to "success").
+        data:
+          description: The result payload; shape depends on the endpoint (null when the handler returns nothing).
+
+    ErrorResponse:
+      type: object
+      description: >
+        The error envelope for checkout-core. The global ExceptionLoggerFilter
+        re-emits the raw NestJS HttpException body verbatim, so the keys are
+        `statusCode`, `message`, `error`. There is NO `success`/`errorType` shape
+        in this service (grep for errorType/success:false returns nothing). Source
+        src/shared/utils/exception-logger.fliter.ts:9-32.
+      required: [statusCode, message]
+      properties:
+        statusCode:
+          type: integer
+          description: The HTTP status code.
+        message:
+          description: >
+            Error message; a string for most errors, or an array of strings for
+            class-validator (ValidationPipe) failures.
+          oneOf:
+            - type: string
+            - type: array
+              items: { type: string }
+        error:
+          type: string
+          description: The HTTP status text (e.g. "Bad Request", "Not Found").
+
+    ErrorType:
+      type: string
+      description: >
+        checkout-core does NOT emit a machine-readable errorType key (see
+        ErrorResponse). This enum lists the HTTP status texts / classes reachable on
+        the documented paths, for reference in the x-fincra-error-catalog only.
+        Source: throw sites across the controllers/services (see EXTRACTION-REPORT-checkout.md).
+      enum:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - CONFLICT
+        - SERVICE_UNAVAILABLE
+        - INTERNAL_SERVER_ERROR
+
+    Currency:
+      type: string
+      description: >
+        Accepted currency codes. Per-currency method availability is capped by the
+        availablePaymentMethods map (e.g. NGN: card/bank_transfer/payattitude/palmpay;
+        USD: card; GBP/EUR: eft; ZAR: card/eft/bank_transfer). CDF is commented out.
+        Source src/shared/types/currency.types.ts:1-40.
+      enum:
+        - NGN
+        - USD
+        - GBP
+        - EUR
+        - GHS
+        - KES
+        - UGX
+        - TZS
+        - ZMW
+        - EGP
+        - MZN
+        - MWK
+        - ZWL
+        - GNF
+        - XOF
+        - XAF
+        - ZAR
+        - RWF
+
+    ChargeType:
+      type: string
+      description: The payment rail / charge type. Source src/api/charges/charges.enum.ts:16-29.
+      enum:
+        - card
+        - bank_transfer
+        - payattitude
+        - mobile_money
+        - apple_pay
+        - direct_debit
+        - eft
+        - palmpay
+        - wallet_transfer
+
+    MobileMoneyOperator:
+      type: string
+      description: >
+        Mobile-money network for the operator field on mobile_money charges.
+        Source src/api/charges/charges.enum.ts:31-62.
+      enum:
+        - MTN
+        - VODAFONE
+        - VODACOM
+        - ECOCASH
+        - TNM_MPAMBA
+        - TIGO
+        - TIGOPESA
+        - AIRTEL
+        - AIRTEL_TIGO
+        - AIRTELMONEY
+        - MPESA
+        - ZAMTEL
+        - ETISALAT
+        - ORANGE
+        - WEPAY
+        - EQUITEL
+        - TKUSH
+        - MOOV
+        - FREE
+        - EXPRESSO
+        - TMONEY
+        - HALOTEL
+        - HALOPESA
+        - SAMA
+        - WAVE
+        - MOBICASH
+        - ZEEPAY
+        - GHANAPAY
+        - YUPGHANA
+        - GMONEY
+
+    SettlementDestination:
+      type: string
+      description: Where the collected funds settle. Source src/api/payments/dto/payment.dto.ts:47-124.
+      enum: [bank_account, wallet]
+
+    SettlementTime:
+      type: string
+      description: When the collected funds settle. Source src/api/payments/dto/payment.dto.ts:47-124.
+      enum: [instant, next_day, "t+3", end_of_week]
+
+    FeeBearer:
+      type: string
+      description: Who bears the transaction fee. Source src/api/payments/dto/payment.dto.ts:47-124.
+      enum: [customer, business]
+
+    CaptureMode:
+      type: string
+      description: Card capture mode. Only valid for card charges; defaults to instant. Source src/api/charges/dto/charges.dto.ts:400-504.
+      enum: [instant, scheduled, manual]
+
+    Customer:
+      type: object
+      description: The paying customer's details, shared by initiate/charge bodies.
+      required: [email, name]
+      properties:
+        email:
+          type: string
+          format: email
+          description: The customer's email. Required.
+        name:
+          type: string
+          description: The customer's full name; must contain a space (first + last name), else rejected.
+        phoneNumber:
+          type: string
+          description: The customer's phone number. Optional.
+
+    Card:
+      type: object
+      description: Card instrument details, required when charge type is card.
+      required: [card_number, expiry_month, expiry_year, cvv]
+      properties:
+        card_number:
+          type: string
+          description: The card number (PAN). Required.
+        card_holder:
+          type: string
+          description: The name on the card. Optional.
+        expiry_month:
+          type: string
+          description: Two-digit card expiry month. Required.
+        expiry_year:
+          type: string
+          description: Two-digit card expiry year. Required.
+        cvv:
+          type: string
+          description: The card verification value. Required.
+        "3ds":
+          type: object
+          description: Optional 3-D Secure parameters.
+          x-todo: "ThreeDSDto field set not fully harvested. Source src/api/charges/dto/charges.dto.ts:400-504"
+
+    InitiatePaymentRequest:
+      type: object
+      description: >
+        Body for POST /payments (initiate hosted checkout). Unknown keys are silently
+        stripped by the global ValidationPipe (whitelist:true). Source
+        src/api/payments/dto/payment.dto.ts:47-124.
+      required: [amount, currency, customer]
+      properties:
+        paymentLinkId:
+          type: number
+          description: Id of a payment link this payment originates from. Optional.
+        amount:
+          type: number
+          minimum: 1
+          description: The amount to collect, in major units of the currency. Required, minimum 1.
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+          description: The currency to collect in. Required.
+        customer:
+          allOf:
+            - $ref: "#/components/schemas/Customer"
+          description: The paying customer. Required.
+        redirectUrl:
+          type: string
+          format: uri
+          description: URL to redirect the customer to after payment. Optional.
+        settlementDestination:
+          allOf:
+            - $ref: "#/components/schemas/SettlementDestination"
+          description: Where the collected funds settle. Optional.
+        settlementTime:
+          allOf:
+            - $ref: "#/components/schemas/SettlementTime"
+          description: When the collected funds settle. Optional.
+        feeBearer:
+          allOf:
+            - $ref: "#/components/schemas/FeeBearer"
+          description: Who bears the fee. Optional.
+        reference:
+          type: string
+          description: The merchant's own reference (merchantReference); dedup-checked. Optional.
+        paymentMethods:
+          type: array
+          items: { $ref: "#/components/schemas/ChargeType" }
+          description: The methods to enable on the checkout page; each must be available for the currency. Optional.
+        defaultPaymentMethod:
+          allOf:
+            - $ref: "#/components/schemas/ChargeType"
+          description: The pre-selected method; must be one of paymentMethods. Optional.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Arbitrary key-value metadata echoed back on the payment. Optional.
+
+    ChargePaymentRequest:
+      type: object
+      description: >
+        Body for POST /payments/{reference}/charge (checkout-page submit). Source
+        src/api/payments/dto/payment.dto.ts:126-157.
+      required: [type]
+      properties:
+        type:
+          allOf:
+            - $ref: "#/components/schemas/ChargeType"
+          description: The chosen payment method. Required.
+        card:
+          allOf:
+            - $ref: "#/components/schemas/Card"
+          description: Card details. Required when type is card.
+        phone:
+          type: string
+          description: Customer phone. Required when type is payattitude or mobile_money.
+        operator:
+          allOf:
+            - $ref: "#/components/schemas/MobileMoneyOperator"
+          description: Mobile-money network. Required when type is mobile_money.
+        bank:
+          type: string
+          description: Bank selection for transfer/EFT methods. Optional.
+
+    AuthorizeChargeRequest:
+      type: object
+      description: >
+        Body for the charge/payment authorize endpoints. All fields optional; supply
+        the factor the charge requires (PIN, OTP, AVS, etc). Source
+        src/api/charges/dto/charges.dto.ts:506-540.
+      properties:
+        pin:
+          type: string
+          minLength: 4
+          maxLength: 4
+          description: Card PIN (exactly 4 digits). Optional.
+        otp:
+          type: string
+          description: One-time password. Optional.
+        phone:
+          type: string
+          description: Phone number, where the factor requires one. Optional.
+        avs:
+          type: object
+          description: Address Verification System details; all sub-fields required when avs is supplied.
+          required: [city, address, state, country, zip_code]
+          properties:
+            city: { type: string, description: Billing city. }
+            address: { type: string, description: Billing street address. }
+            state: { type: string, description: Billing state/region. }
+            country: { type: string, description: Billing country. }
+            zip_code: { type: string, description: Billing postal/zip code. }
+        birthday:
+          type: string
+          format: date-time
+          description: Cardholder birthday (ISO-8601), where required. Optional.
+        authCode:
+          type: string
+          description: Authorization code, where required. Optional.
+        openId:
+          type: string
+          description: OpenID token, where required. Optional.
+        accountIdentifier:
+          type: string
+          description: Account identifier, where required. Optional.
+        password:
+          type: string
+          description: Account password, where required. Optional.
+
+    CreateChargeRequest:
+      type: object
+      description: >
+        Body for POST /charges (direct charge). Conditional fields depend on `type`.
+        Source src/api/charges/dto/charges.dto.ts:400-504.
+      required: [type, amount, reference, currency, customer]
+      properties:
+        chargeId:
+          type: number
+          description: Existing charge id to attach to. Optional.
+        type:
+          allOf:
+            - $ref: "#/components/schemas/ChargeType"
+          description: The payment rail. Required.
+        amount:
+          type: number
+          minimum: 1
+          description: The amount to charge, major units. Required (validated, minimum 1).
+        reference:
+          type: string
+          minLength: 1
+          description: The merchant's unique reference for this charge. Required.
+        description:
+          type: string
+          description: Free-text narration. Optional.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Arbitrary key-value metadata. Optional.
+        settlementDestination:
+          allOf:
+            - $ref: "#/components/schemas/SettlementDestination"
+          description: Where the funds settle. Optional.
+        settlementTime:
+          allOf:
+            - $ref: "#/components/schemas/SettlementTime"
+          description: When the funds settle. Optional.
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+          description: The currency; the currency/type combination must be in the availability map. Required.
+        customer:
+          allOf:
+            - $ref: "#/components/schemas/Customer"
+          description: The paying customer. Required.
+        accountNumber:
+          type: string
+          pattern: "^\\d{10}$"
+          description: 10-digit account number. Required when type is bank_transfer.
+        card:
+          allOf:
+            - $ref: "#/components/schemas/Card"
+          description: Card details. Required when type is card.
+        phone:
+          type: string
+          description: Customer phone. Required (and validated) when type is payattitude or mobile_money.
+        operator:
+          allOf:
+            - $ref: "#/components/schemas/MobileMoneyOperator"
+          description: Mobile-money network. Required when type is mobile_money and currency is not EGP.
+        bank:
+          type: string
+          description: Bank selection. Required when type is eft and the currency requires bank selection.
+        webhookUrl:
+          type: string
+          format: uri
+          description: Per-charge webhook URL. Optional.
+        callbackUrl:
+          type: string
+          format: uri
+          description: Redirect/callback URL. Required when type is card.
+        feeBearer:
+          allOf:
+            - $ref: "#/components/schemas/FeeBearer"
+          description: Who bears the fee. Optional.
+        captureMode:
+          allOf:
+            - $ref: "#/components/schemas/CaptureMode"
+          description: Card capture mode (card only); defaults to instant. Optional.
+        captureDate:
+          type: string
+          format: date-time
+          description: Scheduled capture date (ISO-8601). Required when captureMode is scheduled; must be in the future and within 7 days.
+
+    InitiateChargeRequest:
+      type: object
+      description: >
+        Body for POST /charges/initiate (create a charge shell). Source
+        src/api/charges/dto/charges.dto.ts:323-398.
+      required: [type, reference, customer]
+      properties:
+        type:
+          allOf:
+            - $ref: "#/components/schemas/ChargeType"
+          description: The payment rail. Required.
+        reference:
+          type: string
+          description: The merchant's unique reference for this charge. Required.
+        customer:
+          allOf:
+            - $ref: "#/components/schemas/Customer"
+          description: The paying customer. Required.
+        amount:
+          type: number
+          description: The amount to charge, major units. Optional (validated when supplied).
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+          description: The currency. Optional.
+        settlementDestination:
+          allOf:
+            - $ref: "#/components/schemas/SettlementDestination"
+          description: Where the funds settle. Optional.
+        settlementTime:
+          allOf:
+            - $ref: "#/components/schemas/SettlementTime"
+          description: When the funds settle. Optional.
+
+    CreatePaymentLinkRequest:
+      type: object
+      description: >
+        Body for POST /payment-links. Field set not fully harvested; core fields
+        inferred from checkout link semantics.
+      x-todo: "CreatePaymentLinkDto fields not harvested. Confirm from src/api/payment-links/dto before publishing. Source src/api/payment-links/payment-links.controller.ts:30-46"
+      properties:
+        amount:
+          type: number
+          description: The amount to collect via the link, major units.
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+          description: The currency to collect in.
+        feeBearer:
+          allOf:
+            - $ref: "#/components/schemas/FeeBearer"
+          description: Who bears the fee.
+
+    UpdatePaymentLinkRequest:
+      type: object
+      description: >
+        Body for PATCH /payment-links/{id}. Field set not fully harvested.
+      x-todo: "UpdatePaymentLinkDto fields not harvested. Confirm from src/api/payment-links/dto before publishing. Source src/api/payment-links/payment-links.controller.ts:137-147"
+      properties:
+        amount:
+          type: number
+          description: The updated amount to collect, major units.
+
+    GetFeesRequest:
+      type: object
+      description: >
+        Body for POST /fees. Source src/app.controller.ts:200-228.
+      required: [amount, currency, type]
+      properties:
+        amount:
+          type: number
+          description: The amount to compute the fee for, major units. Required.
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+          description: The currency. Required.
+        type:
+          allOf:
+            - $ref: "#/components/schemas/ChargeType"
+          description: The charge type/rail. Required.
+
+    OutgoingWebhooksRequest:
+      type: object
+      description: >
+        Body for POST /outgoing-webhooks (bulk webhook replay). Field set not
+        harvested.
+      x-todo: "OutgoingWebhooksDto fields not harvested. Confirm from src/api/outgoing-webhooks/dto before publishing. Source src/api/outgoing-webhooks/outgoing-webhooks.controller.ts:14-27"
+      properties:
+        references:
+          type: array
+          items: { type: string }
+          description: Charge/collection references to replay webhooks for.
+
+    Payment:
+      type: object
+      description: >
+        A hosted checkout payment as returned by the initiate/read endpoints. Exact
+        field set not fully harvested beyond the request-derived fields.
+      x-todo: "Payment response shape not fully harvested. Source src/api/payments/payments.controller.ts:43-165"
+      properties:
+        reference:
+          type: string
+          description: The Fincra payment reference used to load the checkout page.
+        amount:
+          type: number
+          description: The amount to collect, major units.
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+          description: The currency to collect in.
+        status:
+          type: string
+          description: The payment status (e.g. pending, processing, success, failed).
+        merchantReference:
+          type: string
+          description: The merchant's own reference supplied on initiate.
+
+    Charge:
+      type: object
+      description: >
+        A charge as returned by the create/verify/read endpoints. Exact field set not
+        fully harvested; shape derived from transformChargeResponse.
+      x-todo: "Charge response shape not fully harvested. Source src/api/charges/charges.controller.ts (transformChargeResponse)"
+      properties:
+        id:
+          type: integer
+          description: The numeric Fincra charge id.
+        reference:
+          type: string
+          description: The Fincra charge reference.
+        type:
+          allOf:
+            - $ref: "#/components/schemas/ChargeType"
+          description: The payment rail used.
+        amount:
+          type: number
+          description: The charge amount, major units.
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+          description: The charge currency.
+        status:
+          type: string
+          description: The charge status (e.g. pending, processing, success, failed).
+
+    ChargeInitiateResult:
+      type: object
+      description: The result of POST /charges/initiate. Source src/api/charges/charges.controller.ts:61-75.
+      properties:
+        id:
+          type: integer
+          description: The numeric Fincra charge id.
+        reference:
+          type: string
+          description: The Fincra charge reference.
+
+    ChargeWebhookEvent:
+      type: object
+      description: >
+        The outbound webhook envelope Fincra POSTs to your endpoint, built by
+        formatWebhookData -> { event, type, data } where event is
+        `${type}.${event}` (e.g. charge.successful). Source
+        src/shared/helpers/helpers.ts:54-60.
+      required: [event, type, data]
+      properties:
+        event:
+          type: string
+          description: The event name.
+          enum: [charge.successful, charge.failed]
+        type:
+          type: string
+          description: The transaction type. For these events, "charge".
+          enum: [charge]
+        data:
+          allOf:
+            - $ref: "#/components/schemas/Charge"
+          description: >
+            The charge outcome. Includes chargeReference and amountToSettle alongside
+            the transformed charge fields.

@@ -1,0 +1,1169 @@
+openapi: 3.1.0
+info:
+  title: Fincra Payouts (fincra-disbursements)
+  version: "1.0.0"
+  summary: Merchant-facing payout and refund API for the fincra-disbursements service.
+  description: >
+    Send money out of a Fincra wallet to bank accounts, mobile-money wallets, crypto
+    wallets, and cash-pickup locations across Africa and cross-border corridors, and
+    manage the refunds that arise from them.
+
+
+    Payouts are asynchronous. A create call returns `status: processing` (or
+    `initiated`); the final state is delivered by the `payout.successful` /
+    `payout.failed` webhook and can also be polled via the get-by-reference endpoints.
+
+
+    This spec is generated from the source of `fincra-disbursements` on branch `main`
+    (code is truth). Anything undeterminable from code is marked with an `x-todo`
+    extension carrying the exact `file:line`, and is listed in EXTRACTION-REPORT.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every route at "/" with NO version/base-path prefix
+  (src/server.ts:76, src/routes/index.ts). The public API prefix a merchant calls
+  (observed elsewhere as /disbursements, and the platform-wide /v2) is applied at the
+  Kong gateway, which is not in this repo. Paths below are exactly as routed in code;
+  prepend the confirmed gateway prefix before publishing. See EXTRACTION-REPORT.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/disbursements
+    description: Sandbox (test keys). Powers the docs playground. Source k8s/overlays/sandbox/app.properties:6
+  - url: https://api.fincra.com/disbursements
+    description: Production (live keys). Source k8s/overlays/prod/app.properties:6
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Payouts
+    description: Initiate payouts and look up their status.
+  - name: Refunds
+    description: Initiate and track refunds on payouts.
+
+paths:
+  /payouts:
+    post:
+      operationId: payoutsInitiatePayout
+      tags: [Payouts]
+      summary: Initiate a payout
+      description: >
+        Send money from your Fincra wallet to a beneficiary. The beneficiary can be a
+        bank account (NUBAN and other local rails), a mobile-money wallet, a crypto
+        wallet, a cash-pickup location, or a settlement account, selected via
+        `paymentDestination`. Use this when a merchant disburses funds to a recipient.
+
+
+        The call is asynchronous: on success it returns the created payout with
+        `status: processing`. The terminal state arrives via the `payout.successful`
+        or `payout.failed` webhook, and can be polled with
+        `payoutsGetPayoutByReference`. Cross-currency payouts require a `quoteReference`
+        obtained from the conversion/quote service. `customerReference` must be unique
+        per merchant and is the idempotency key (a repeat value returns
+        `DUPLICATE_CUSTOMER_REFERENCE`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayoutRequest"
+            examples:
+              ngBankAccount:
+                summary: NGN to a Nigerian bank account (NUBAN)
+                value:
+                  sourceCurrency: NGN
+                  destinationCurrency: NGN
+                  amount: 5000
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  description: Payout to supplier
+                  customerReference: payout-req-3f81a9c2
+                  paymentDestination: bank_account
+                  beneficiary:
+                    type: individual
+                    firstName: Amara
+                    lastName: Okeke
+                    accountHolderName: Amara Okeke
+                    accountNumber: "0111111111"
+                    bankCode: "058"
+                    country: NG
+              ghMobileMoney:
+                summary: GHS to a Ghana MTN mobile-money wallet
+                value:
+                  sourceCurrency: GHS
+                  destinationCurrency: GHS
+                  amount: 250
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  customerReference: payout-req-7b1204de
+                  paymentDestination: mobile_money_wallet
+                  beneficiary:
+                    type: individual
+                    firstName: Kwame
+                    lastName: Mensah
+                    accountNumber: "233551234567"
+                    mobileMoneyCode: MTN
+                    mobileMoneyId: 1
+                    country: GH
+              crossCurrencyToUsd:
+                summary: NGN to USD (cross-currency, requires a quoteReference)
+                value:
+                  sourceCurrency: NGN
+                  destinationCurrency: USD
+                  amount: 250000
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  customerReference: payout-req-9d55e0af
+                  quoteReference: qer_8c2a1f04b7
+                  paymentDestination: bank_account
+                  customerName: Global Traders LLC
+                  files: "https://sandbox-files.fincra.com/invoice-9d55.pdf"
+                  beneficiary:
+                    type: corporate
+                    accountHolderName: Global Traders LLC
+                    accountNumber: "1234567890"
+                    bankSwiftCode: CHASUS33
+                    country: US
+                    address:
+                      street: 55 Water St
+                      city: New York
+                      state: NY
+                      zip: "10041"
+                      country: US
+      responses:
+        "200":
+          description: Payout created and processing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Payout"
+              example:
+                success: true
+                message: Payout initiated successfully
+                data:
+                  id: 90210
+                  reference: PO-1a2b3c4d5e
+                  customerReference: payout-req-3f81a9c2
+                  status: processing
+                  sourceCurrency: NGN
+                  destinationCurrency: NGN
+                  amountCharged: 5010.75
+                  amountReceived: 5000
+                  fee: 10.75
+                  paymentDestination: bank_account
+                  recipient:
+                    name: Amara Okeke
+                    accountNumber: "0111111111"
+                    type: individual
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Request body fails Joi validation (missing/!typed field, unknown key).
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: Business-rule failure (e.g. cross-currency payout with no quoteReference, beneficiary country required).
+        - errorType: DUPLICATE_CUSTOMER_REFERENCE
+          status: 422
+          trigger: A prior payout with the same customerReference exists for this merchant.
+        - errorType: DISBURSEMENT_CHANNEL_ERROR
+          status: 422
+          trigger: The downstream disbursement channel returned an error.
+        - errorType: TRANSACTION_NOT_INITIATED
+          status: 422
+          trigger: The channel response indicates the payout was not initiated.
+        - errorType: SERVICE_UNAVAILABLE
+          status: 422
+          trigger: Connection refused calling the disbursement channel.
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authenticated business does not match the payout's business.
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: Sender has no wallet in the required source currency.
+    get:
+      operationId: payoutsListPayouts
+      tags: [Payouts]
+      summary: List payouts
+      description: >
+        Return a paginated list of the merchant's payouts, most recent first. Supports
+        filtering by status, currency, date range, and reference. Use this to build a
+        payouts table or to reconcile. Pagination is page-based via `page` and
+        `perPage`, with an optional `cursor`.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10, minimum: 1 }
+        - name: cursor
+          in: query
+          description: Optional numeric cursor for cursor-based paging.
+          schema: { type: integer }
+        - name: status
+          in: query
+          description: Filter by one or more payout statuses.
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/PayoutStatus" }
+        - name: sourceCurrency
+          in: query
+          description: Filter by source currency (uppercased ISO-4217 or platform code).
+          schema: { type: string }
+        - name: destinationCurrency
+          in: query
+          description: Filter by destination currency.
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          description: Include payouts created on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include payouts created on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: merchantReference
+          in: query
+          description: Filter by the merchant's own reference (customerReference).
+          schema: { type: string }
+        - name: searchQuery
+          in: query
+          description: Free-text search across payout fields.
+          schema: { type: string }
+        - name: includeSubAccounts
+          in: query
+          description: Include payouts of sub-accounts. Defaults to false.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: A page of payouts.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PayoutPage"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails validation (e.g. business not 24 chars, bad status enum).
+
+  /payouts/instant:
+    post:
+      operationId: payoutsInitiateInstantPayout
+      tags: [Payouts]
+      summary: Initiate an instant payout
+      description: >
+        Same contract as `payoutsInitiatePayout` but routed through the instant-payout
+        path. Use where instant settlement rails are supported for the corridor. The
+        request body is the CreatePayoutRequest; the response and webhooks are identical
+        to a standard payout (`payout.successful` / `payout.failed`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayoutRequest"
+      responses:
+        "200":
+          description: Instant payout created and processing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payout" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /payouts/self:
+    post:
+      operationId: payoutsInitiateSelfPayout
+      tags: [Payouts]
+      summary: Initiate a self payout
+      description: >
+        Move funds to your own settlement account. Requires a source and destination
+        currency, an amount, the 24-character business id, and a paymentDestination.
+        Asynchronous; completion arrives via the payout webhooks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSelfPayoutRequest"
+      responses:
+        "200":
+          description: Self payout created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payout" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: The destination settlement account does not exist.
+
+  /payouts/wallets:
+    post:
+      operationId: payoutsInitiateWalletPayout
+      tags: [Payouts]
+      summary: Pay out to a Fincra wallet
+      description: >
+        Transfer funds to another Fincra wallet by wallet number. Use for
+        wallet-to-wallet disbursement inside Fincra. Debits the merchant's wallet and
+        credits the beneficiary wallet; fails with `NO_ENOUGH_MONEY_IN_WALLET` if the
+        available balance is insufficient. `customerReference` is the idempotency key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletPayoutRequest"
+            example:
+              business: 63f9a1b2c4d5e6f7a8b9c0d1
+              beneficiaryWalletNumber: 1002003001
+              amount: 1500
+              customerReference: wallet-payout-5f0a12
+              description: Vendor settlement
+      responses:
+        "200":
+          description: Wallet payout created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payout" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: NO_ENOUGH_MONEY_IN_WALLET
+          status: 422
+          trigger: Requested amount exceeds the wallet's available balance.
+        - errorType: DUPLICATE_CUSTOMER_REFERENCE
+          status: 422
+          trigger: A prior wallet payout with the same customerReference exists.
+
+  /payouts/export:
+    post:
+      operationId: payoutsExportPayouts
+      tags: [Payouts]
+      summary: Export payouts
+      description: >
+        Export the merchant's payouts (same filters as list) to a file. `format` is one
+        of csv, excel, or pdf. Returns the export artifact reference/URL as produced by
+        the export module.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportPayoutsRequest"
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /payouts/{id}:
+    get:
+      operationId: payoutsGetPayoutById
+      tags: [Payouts]
+      summary: Get a payout by id
+      description: >
+        Fetch a single payout by its numeric Fincra id. Use for status polling when you
+        stored the numeric id. For the string reference, use
+        `payoutsGetPayoutByReference`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra payout id (path is constrained to digits).
+          schema: { type: integer, minimum: 0 }
+        - $ref: "#/components/parameters/BusinessQuery"
+      responses:
+        "200":
+          description: The payout.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payout" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /payouts/reference/{reference}:
+    get:
+      operationId: payoutsGetPayoutByReference
+      tags: [Payouts]
+      summary: Get a payout by Fincra reference
+      description: >
+        Fetch a single payout by its Fincra-issued `reference`. This is the primary way
+        to poll for the final state of an asynchronous payout when you did not receive,
+        or want to reconcile against, the webhook.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payout reference returned on create.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The payout.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payout" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payouts/reference/with-refund/{reference}:
+    get:
+      operationId: payoutsGetPayoutByReferenceWithRefund
+      tags: [Payouts]
+      summary: Get a payout with its refund by reference
+      description: >
+        Fetch a payout by reference including any associated refund object. Use when you
+        need the payout and its refund in a single call for reconciliation.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra payout reference.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The payout with its refund.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Response data shape (payout + embedded refund) not fully harvested. Source: src/components/disbursements/payouts/apis/payoutsAPI.ts:134"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payouts/customer-reference/{merchantReference}:
+    get:
+      operationId: payoutsGetPayoutByMerchantReference
+      tags: [Payouts]
+      summary: Get a payout by merchant reference
+      description: >
+        Fetch a single payout by the merchant's own reference (`customerReference`, the
+        idempotency key you supplied on create). Use to reconcile against your own
+        system's identifiers.
+      parameters:
+        - name: merchantReference
+          in: path
+          required: true
+          description: The merchant's customerReference supplied at creation.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The payout.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Payout" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /payouts/documents-upload:
+    post:
+      operationId: payoutsUploadPayoutDocument
+      tags: [Payouts]
+      summary: Upload a supporting document for a payout
+      description: >
+        Attach a supporting document (for example a proof of funds or invoice) to a
+        payout transaction, referenced by the payout `reference`. Some cross-border and
+        USD payouts require supporting documents.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadPayoutDocumentRequest"
+      responses:
+        "200":
+          description: Document uploaded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /payouts/resend-webhook:
+    post:
+      operationId: payoutsResendPayoutWebhook
+      tags: [Payouts]
+      summary: Resend payout webhooks
+      description: >
+        Re-trigger delivery of the payout webhook for one or more payouts, selected by
+        payout ids, references, or business plus a date range. Use to recover from a
+        missed or failed webhook delivery on your endpoint. At least one of payoutIds,
+        references, or businessId is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendPayoutWebhookRequest"
+      responses:
+        "200":
+          description: Webhook resend enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-todo: "Route has authenticate() but NO authorizeProduct(PAYOUT) guard, unlike every other /payouts route. Possible authorization gap. Source: src/components/disbursements/payouts/apis/payoutsAPI.ts:172"
+
+  /refunds:
+    post:
+      operationId: refundsInitiateRefund
+      tags: [Refunds]
+      summary: Initiate a refund
+      description: >
+        Initiate a refund against a payout. Asynchronous; the terminal state is
+        delivered via the `refund.successful` / `refund.failed` webhook.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InitiateRefundRequest" }
+      responses:
+        "200":
+          description: Refund initiated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: refundsListRefunds
+      tags: [Refunds]
+      summary: List refunds
+      description: >
+        Return the merchant's refunds. Use to build a refunds table or to reconcile
+        refunds against their originating payouts.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page.
+          schema: { type: integer, default: 10, minimum: 1 }
+      responses:
+        "200":
+          description: A page of refunds.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /refunds/{id}:
+    get:
+      operationId: refundsGetRefundById
+      tags: [Refunds]
+      summary: Get a refund by id
+      description: >
+        Fetch a single refund by its Fincra id. Use for status polling of a specific
+        refund.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The Fincra refund id.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The refund.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /refunds/export:
+    post:
+      operationId: refundsExportRefunds
+      tags: [Refunds]
+      summary: Export refunds
+      description: >
+        Export the merchant's refunds to a file (csv, excel, or pdf), using the same
+        filter set as the refunds list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportPayoutsRequest" }
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+webhooks:
+  payout.successful:
+    post:
+      operationId: webhookPayoutSuccessful
+      tags: [Payouts]
+      summary: payout.successful
+      description: >
+        Delivered to the merchant's configured webhook URL when a payout reaches the
+        terminal `successful` state. Delivery requires `settings.enableWebhook` on the
+        business. Verify the signature before trusting the payload (see the
+        signature-verification guide).
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayoutWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  payout.failed:
+    post:
+      operationId: webhookPayoutFailed
+      tags: [Payouts]
+      summary: payout.failed
+      description: >
+        Delivered when a payout reaches the terminal `failed` state. The `data.reason`
+        field carries the failure reason. Return a 2xx to acknowledge.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayoutWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  refund.successful:
+    post:
+      operationId: webhookRefundSuccessful
+      tags: [Refunds]
+      summary: refund.successful
+      description: Delivered when a refund completes successfully. Return a 2xx to acknowledge.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayoutWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  refund.failed:
+    post:
+      operationId: webhookRefundFailed
+      tags: [Refunds]
+      summary: refund.failed
+      description: Delivered when a refund fails. Return a 2xx to acknowledge.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayoutWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret or public key, sent in the `api-key` header (fallback header
+        `apikey` is also accepted). The auth-service classifies the key as test or live
+        and resolves the merchant. Source ../fincra-utils/src/middleware/auth/authUtil.ts:18.
+        Note: this service exposes NO separate x-pub-key/public-key flow; test vs live is
+        determined by the key itself.
+
+  parameters:
+    BusinessQuery:
+      name: business
+      in: query
+      required: true
+      description: The 24-character Fincra business id the payout belongs to.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+
+  responses:
+    Forbidden:
+      description: The request is authenticated but not allowed for this business/product.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Cannot proceed with payout. Invalid business supplied
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Payout not found
+            errorType: RESOURCE_NOT_FOUND
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Cannot continue, Duplicate Customer Reference Passed
+            errorType: DUPLICATE_CUSTOMER_REFERENCE
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` is [] when a handler returns nothing.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope, built by fincra-utils APIHelper
+        (../fincra-utils/src/utilities/APIHelper.ts:145). Note: alongside the three
+        contract keys it also ships an `errors` detail key.
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Not present on every error branch.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable
+        on the payout/refund paths (grepped from throw sites; see EXTRACTION-REPORT.md).
+      enum:
+        - VALIDATION_FAILED
+        - UNPROCESSABLE_ENTITY
+        - DUPLICATE_CUSTOMER_REFERENCE
+        - NO_ENOUGH_MONEY_IN_WALLET
+        - DISBURSEMENT_CHANNEL_ERROR
+        - TRANSACTION_NOT_INITIATED
+        - SERVICE_UNAVAILABLE
+        - TRADE_EXECUTION_FAILED
+        - WALLET_AUDIT_CHECK_ERROR
+        - QUOTE_NOT_GENERATED
+        - AMOUNT_TO_CHARGE_EMPTY
+        - QUOTE_HAS_NO_CORRIDOR_STRUCTURE
+        - INVALID_QUOTE
+        - NO_OTP_SUPPLIED
+        - NO_TRANSACTION_ID_SUPPLIED
+        - INVALID_OTP
+        - TRANSACTION_LOCK_DUPLICATE_ERROR
+        - ACCESS_DENIED
+        - OPERATION_FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - INTERNAL_SERVER_ERROR
+        - SERVER_ERROR
+        - NO_AUTHORIZATION_KEY_PROVIDED
+        - NO_API_KEY_PROVIDED
+        - NO_SERVICE_SECRET_KEY_PROVIDED
+        - INVALID_SERVICE_SECRET_KEY
+
+    Currency:
+      type: string
+      description: >
+        Platform-supported currency codes (enum Currency,
+        src/components/disbursements/interfaces/disbursementsEnum.ts:154). NOTE: the
+        create-payout validator does NOT bind sourceCurrency/destinationCurrency to this
+        enum (it accepts any uppercased string; payoutsValidation.ts:203). These are the
+        values the platform supports; see EXTRACTION-REPORT.md for the validation gap.
+      enum: [NGN, GBP, GHS, KES, EUR, USD, UGX, TZS, ZAR, ZMW, CDF, MWK, MZN, RWF, CAD, XAF, XOF, EGP, USDT, USDC, CNGN, CNY, CNH]
+
+    PaymentDestination:
+      type: string
+      description: Where the payout is delivered. Source disbursementsEnum.ts:110.
+      enum: [bank_account, crypto_wallet, mobile_money_wallet, cash_pick_up, settlement_account]
+
+    PayoutStatus:
+      type: string
+      description: Lifecycle state of a payout. Terminal states are successful and failed.
+      enum: [initiated, processing, successful, failed]
+
+    BeneficiaryType:
+      type: string
+      description: Legal nature of the beneficiary. Source payoutsInterface.ts:4.
+      enum: [corporate, individual, admin-initiated]
+
+    PaymentScheme:
+      type: string
+      description: >
+        Payout rail / scheme accepted by the create endpoint (supportedPaymentSchemes,
+        payoutsValidation.ts:37). Crypto schemes are used with paymentDestination=crypto_wallet.
+      enum: [sepa, sepa_instant, chaps, fps, swift, ach, fed_wire, cnaps, usdt_trc20, usdt_erc20, usdt_solana, usdt_bep20, usdc_erc20, usdc_solana, usdc_bep20, cngn_bep20]
+
+    ExportFormat:
+      type: string
+      description: File format for an export.
+      enum: [csv, excel, pdf]
+
+    Address:
+      type: object
+      description: Beneficiary or sender postal address.
+      required: [street]
+      properties:
+        street: { type: string, description: Street line. Required. }
+        city: { type: string, description: City. }
+        state: { type: string, description: State or region. }
+        zip: { type: string, description: Postal/zip code. }
+        country: { type: string, description: Country (ISO-3166 alpha-2 for USD/CNH beneficiaries). }
+
+    Beneficiary:
+      type: object
+      description: >
+        The payout recipient for bank_account / mobile_money_wallet destinations.
+        NUBAN vs mobile money is distinguished by `paymentDestination` plus the
+        mobileMoney* fields, not by a separate account-type enum.
+      required: [accountNumber, type]
+      properties:
+        type: { $ref: "#/components/schemas/BeneficiaryType" }
+        firstName: { type: string, description: Given name. Required when type=individual. }
+        lastName: { type: string, description: Family name. }
+        accountHolderName: { type: string, description: Name on the account. Required when paymentDestination=bank_account. }
+        accountNumber: { type: string, description: Bank account number (NUBAN is 10 digits) or mobile-money MSISDN. Required. }
+        email: { type: string, format: email, description: Beneficiary email. }
+        phone: { type: string, description: Beneficiary phone. }
+        bankCode: { type: string, description: Local bank/institution code (e.g. NG NIP code). }
+        bankName: { type: string, description: Bank name. Required when destinationCurrency is CNY or CNH. }
+        sortCode: { type: string, description: Sort code where the corridor uses one. }
+        bankSwiftCode: { type: string, description: SWIFT/BIC. Required when destinationCurrency is CNY or CNH. }
+        country: { type: string, description: "Beneficiary country, uppercased." }
+        mobileMoneyCode: { type: string, description: Mobile-money network code (e.g. MTN). Only for mobile_money_wallet; forbidden otherwise. }
+        mobileMoneyId: { type: integer, description: Mobile-money network id. Only for mobile_money_wallet; forbidden otherwise. }
+        address: { $ref: "#/components/schemas/Address" }
+
+    CryptoBeneficiary:
+      type: object
+      description: The payout recipient when paymentDestination=crypto_wallet.
+      required: [walletAddress]
+      properties:
+        walletAddress: { type: string, description: Destination crypto wallet address. Required. }
+        destinationTag: { type: string, description: Memo/destination tag where the chain requires one. }
+        type: { $ref: "#/components/schemas/BeneficiaryType" }
+        firstName: { type: string, description: Given name. }
+        lastName: { type: string, description: Family name. }
+        accountHolderName: { type: string, description: Name of the wallet holder. }
+        email: { type: string, format: email, description: Contact email. }
+
+    Sender:
+      type: object
+      description: The sender/originator, used for cross-border and USD payouts.
+      required: [name, type]
+      properties:
+        name: { type: string, description: Sender name. Required. }
+        email: { type: string, format: email, description: Sender email. }
+        type: { $ref: "#/components/schemas/BeneficiaryType" }
+        nationality: { type: string, description: Sender nationality. }
+        birthDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Date of birth, YYYY-MM-DD." }
+        address: { type: string, description: Sender address (free text on this schema). }
+        idType:
+          type: string
+          description: Identity document type.
+          enum: [national_id, international_passport, drivers_license, business_registration_number]
+        idNumber: { type: string, maxLength: 30, description: Identity document number. }
+        countryOfOrigin: { type: string, description: Required when type=individual. }
+        countryOfIncorporation: { type: string, description: Required when type=corporate. }
+        phone: { type: string, description: Sender phone. }
+
+    CreatePayoutRequest:
+      type: object
+      description: >
+        Body for POST /payouts. Unknown keys are rejected. For cross-currency payouts a
+        `quoteReference` is required; for destinationCurrency=USD, `customerName` and
+        `files` are required. When paymentDestination=cash_pick_up a distinct schema
+        applies (see EXTRACTION-REPORT.md).
+      required: [sourceCurrency, destinationCurrency, amount, business, customerReference, paymentDestination, beneficiary]
+      properties:
+        sourceCurrency:
+          type: string
+          description: Currency debited from your wallet, uppercased. Accepts any uppercased string (not enum-bound in code); supported values are in Currency.
+        destinationCurrency:
+          type: string
+          description: Currency the beneficiary receives, uppercased. See sourceCurrency note.
+        amount:
+          type: number
+          description: >
+            Amount in major units of sourceCurrency. Must be an integer for zero-decimal
+            currencies (UGX, XAF, XOF, RWF); otherwise a decimal is allowed.
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your 24-character Fincra business id.
+        customerReference:
+          type: string
+          description: Your unique reference for this payout; the idempotency key. Reusing a value returns DUPLICATE_CUSTOMER_REFERENCE.
+        paymentDestination: { $ref: "#/components/schemas/PaymentDestination" }
+        beneficiary:
+          description: The recipient. Use Beneficiary for bank/mobile-money, CryptoBeneficiary for crypto_wallet.
+          oneOf:
+            - $ref: "#/components/schemas/Beneficiary"
+            - $ref: "#/components/schemas/CryptoBeneficiary"
+        description: { type: string, minLength: 1, description: Free-text narration for the payout. }
+        action:
+          type: string
+          description: Payout action; `authenticate` completes a previously initiated OTP-gated payout.
+          enum: [initiate, authenticate]
+        sender: { $ref: "#/components/schemas/Sender" }
+        senderId: { type: string, description: Id of a previously stored sender. }
+        purposeOfFund:
+          type: string
+          description: Purpose of funds. Enum-enforced only for cross-border merchants; free string otherwise.
+        relationshipWithBeneficiary:
+          type: string
+          description: Sender's relationship to the beneficiary. Enum-enforced only for cross-border merchants.
+        paymentScheme: { $ref: "#/components/schemas/PaymentScheme" }
+        feeBearer: { type: string, description: Who bears the fee. }
+        quoteReference: { type: string, description: Quote reference from the conversion service. Required for cross-currency payouts. }
+        transactionId: { type: string, description: Required when action=authenticate; identifies the initiated payout to complete. }
+        otp: { type: string, minLength: 6, description: "OTP, when the payout is OTP-gated (portal flows)." }
+        files:
+          description: Supporting document(s). Required when destinationCurrency=USD.
+        customerName: { type: string, description: Customer name. Required when destinationCurrency=USD. }
+        additionalInfo: { type: string, description: Extra info for USD payouts. }
+        correspondent:
+          type: object
+          description: Correspondent bank (USD payouts).
+          properties:
+            bankName: { type: string, description: Correspondent bank name. }
+            bankSwiftCode: { type: string, description: Correspondent SWIFT/BIC. }
+        intermediary:
+          type: object
+          description: Intermediary bank (USD payouts).
+          properties:
+            bankName: { type: string, description: Intermediary bank name. }
+            bankAddress: { type: string, description: Intermediary bank address. }
+
+    CreateSelfPayoutRequest:
+      type: object
+      description: Body for POST /payouts/self.
+      required: [sourceCurrency, destinationCurrency, amount, business, paymentDestination]
+      properties:
+        sourceCurrency: { type: string, description: "Currency to debit, uppercased." }
+        destinationCurrency: { type: string, description: "Currency to credit, uppercased." }
+        amount: { type: number, description: Amount in major units; integer for zero-decimal currencies. }
+        business: { type: string, minLength: 24, maxLength: 24, description: Your 24-character business id. }
+        paymentDestination: { $ref: "#/components/schemas/PaymentDestination" }
+        otp: { type: integer, description: OTP if required. }
+        quoteReference: { type: string, description: Quote reference for cross-currency self payouts. }
+
+    WalletPayoutRequest:
+      type: object
+      description: Body for POST /payouts/wallets.
+      required: [business, beneficiaryWalletNumber, amount, customerReference]
+      properties:
+        business: { type: string, minLength: 24, maxLength: 24, description: Your 24-character business id. }
+        beneficiaryWalletNumber: { type: integer, minimum: 0, description: Destination Fincra wallet number. }
+        amount: { type: number, minimum: 0, description: "Amount to transfer, major units." }
+        customerReference: { type: string, description: Unique idempotency key for this transfer. }
+        description: { type: string, description: Narration. }
+        token: { type: string, description: Optional transfer token. }
+        otp: { type: string, minLength: 6, description: OTP if required. }
+
+    ExportPayoutsRequest:
+      type: object
+      description: Body for POST /payouts/export and /refunds/export.
+      required: [business, format]
+      properties:
+        business: { type: string, minLength: 24, maxLength: 24, description: Your 24-character business id. }
+        format: { $ref: "#/components/schemas/ExportFormat" }
+        sourceCurrency: { type: string, description: Filter by source currency. }
+        destinationCurrency: { type: string, description: Filter by destination currency. }
+        dateFrom: { type: string, format: date, description: Created-on-or-after filter. }
+        dateTo: { type: string, format: date, description: Created-on-or-before filter. }
+        merchantReference: { type: string, description: Filter by your reference. }
+        searchQuery: { type: string, description: Free-text filter. }
+        includeSubAccounts: { type: boolean, default: false, description: Include sub-account records. }
+
+    UploadPayoutDocumentRequest:
+      type: object
+      description: Multipart body for POST /payouts/documents-upload.
+      required: [name, type, reference]
+      properties:
+        name: { type: string, description: Document name. }
+        type: { type: string, description: Document type. }
+        reference: { type: string, description: The payout reference the document supports. }
+        file: { type: string, format: binary, description: The document file. }
+        businessId: { type: string, description: Optional business id. }
+
+    ResendPayoutWebhookRequest:
+      type: object
+      description: >
+        Body for POST /payouts/resend-webhook. At least one of payoutIds, references, or
+        businessId is required; if both startDate and endDate are given, startDate must
+        be <= endDate.
+      properties:
+        payoutIds:
+          type: array
+          maxItems: 700
+          items: { type: integer, minimum: 1 }
+          description: Payout ids to resend (max 700).
+        references:
+          type: array
+          maxItems: 700
+          items: { type: string }
+          description: Payout references to resend (max 700).
+        businessId: { type: integer, minimum: 1, description: Resend for all matching payouts of this business. }
+        date: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Single date filter, YYYY-MM-DD." }
+        startDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Range start, YYYY-MM-DD." }
+        endDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Range end, YYYY-MM-DD." }
+        webhookDeliveryStatus:
+          type: string
+          description: Only resend payouts whose last delivery had this status.
+          enum: [failed, successful]
+
+    InitiateRefundRequest:
+      type: object
+      description: Body for POST /refunds.
+      x-todo: "Refund request schema not harvested; confirm fields from src/components/disbursements/refunds/refundsValidation.ts before publishing. Source: src/components/disbursements/refunds/refundsAPI.ts:36"
+      properties:
+        reference: { type: string, description: The payout reference to refund. }
+
+    Payout:
+      type: object
+      description: >
+        A payout as returned by the read endpoints and carried in the webhook `data`.
+        Field set is taken from the webhook data builder
+        (src/components/transactionStatusQuery/transactionStatusQueryFactory.ts:144).
+      properties:
+        id: { type: integer, description: Numeric Fincra payout id. }
+        reference: { type: string, description: Fincra payout reference. }
+        customerReference: { type: string, description: Your reference (idempotency key). }
+        status: { $ref: "#/components/schemas/PayoutStatus" }
+        sourceCurrency: { type: string, description: Currency debited. }
+        destinationCurrency: { type: string, description: Currency delivered. }
+        amountCharged: { type: number, description: Total debited from your wallet (amount + fees + stamp duty). }
+        amountReceived: { type: number, description: Amount the beneficiary receives. }
+        fee: { type: number, description: Fincra fee. }
+        stampDutySourceAmount: { type: number, description: Stamp duty in source currency. }
+        stampDutyDestinationAmount: { type: number, description: Stamp duty in destination currency. }
+        rate: { type: number, description: FX rate applied for cross-currency payouts. }
+        paymentScheme: { $ref: "#/components/schemas/PaymentScheme" }
+        paymentDestination: { $ref: "#/components/schemas/PaymentDestination" }
+        recipient:
+          type: object
+          description: The beneficiary summary.
+          properties:
+            name: { type: string, description: Beneficiary name. }
+            accountNumber: { type: string, description: Beneficiary account number / MSISDN. }
+            type: { type: string, description: Beneficiary type. }
+            email: { type: string, description: Beneficiary email. }
+        reason: { type: string, description: Failure or status reason (present on failures). }
+        traceId: { type: string, description: Fincra trace id for the transaction. }
+        isNip: { type: boolean, description: Whether the payout used NIP (NG instant transfer). }
+        valuedAt: { type: string, format: date-time, description: When the payout was valued. }
+        createdAt: { type: string, format: date-time, description: Creation timestamp. }
+        updatedAt: { type: string, format: date-time, description: Last update timestamp. }
+
+    PayoutPage:
+      type: object
+      description: A page of payouts. Envelope of the list endpoint's data field.
+      x-todo: "Exact pagination envelope keys (e.g. count/totalPages/page) not harvested; confirm from the list serializer. Source: src/components/disbursements/payouts/controllers/payoutsController.ts (getAll)"
+      properties:
+        payouts:
+          type: array
+          items: { $ref: "#/components/schemas/Payout" }
+          description: The payouts on this page.
+        page: { type: integer, description: Current page number. }
+        perPage: { type: integer, description: Items per page. }
+
+    PayoutWebhookEvent:
+      type: object
+      description: >
+        The webhook envelope Fincra POSTs to your endpoint. `event` is `${type}.${status}`
+        (e.g. payout.successful). Source
+        src/components/disbursements/payouts/queues/notificationQueueHandler.ts:100.
+      required: [event, data]
+      properties:
+        event:
+          type: string
+          description: The event name.
+          enum: [payout.successful, payout.failed, refund.successful, refund.failed, settlement.successful, settlement.failed]
+        type: { type: string, description: "Transaction type (disbursement, settlement)." }
+        business: { type: string, description: The business id the event belongs to. }
+        callbackURL: { type: string, description: The merchant webhook URL the event was sent to. }
+        data: { $ref: "#/components/schemas/Payout" }

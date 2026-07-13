@@ -1,0 +1,1319 @@
+openapi: 3.1.0
+info:
+  title: Fincra Wallets (fincra-wallets)
+  version: "1.0.0"
+  summary: Merchant-facing wallet ledger, statement, analytics, and top-up API for the fincra-wallets service.
+  description: >
+    Read a merchant's Fincra wallet activity and fund wallets. This service exposes the
+    wallet transaction ledger (logs), currency-scoped wallet statements with opening and
+    closing balances, transaction analytics, and the manual/virtual-account top-up
+    (funding) workflow.
+
+
+    All endpoints are synchronous request/response: a read returns its payload directly in
+    the success envelope, and a top-up create returns the created funding request. This
+    service emits no merchant webhooks of its own; the terminal state of a funding request
+    is reflected on the funding record and surfaced by the platform's collections/settlement
+    webhooks, not by fincra-wallets.
+
+
+    This spec is generated from the source of `fincra-wallets` on branch `pr258-merge`
+    (code is truth). The wallet balance/CRUD primitives mounted at `/` carry no auth
+    middleware in this repo and take the business id as a request parameter; they are the
+    internal service-to-service surface and are deliberately NOT documented here. Anything
+    undeterminable from code is marked with an `x-todo` extension carrying the exact
+    `file:line`, and is listed in EXTRACTION-REPORT-wallets.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every route at "/" with NO version/base-path prefix (src/app.ts:29,
+  src/server.ts:14; componentsAPI mounts /logs, /analytics, /topups directly). The public
+  API prefix a merchant calls (QA observed /wallets upstream) is applied at the Kong
+  gateway, which is not in this repo. Paths below are exactly as routed in code; prepend
+  the confirmed gateway prefix before publishing. This also explains the QA "not found"
+  for /wallets/topups: the router exists at /topups in code, not /wallets/topups. See
+  EXTRACTION-REPORT-wallets.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/wallets
+    description: Sandbox (test keys). Powers the docs playground.
+  - url: https://api.fincra.com/wallets
+    description: Production (live keys).
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Wallets
+    description: Read wallet logs, statements, and analytics, and fund wallets via top-ups.
+
+paths:
+  /logs:
+    get:
+      operationId: walletsListWalletLogs
+      tags: [Wallets]
+      summary: List wallet logs
+      description: >
+        Return a paginated list of the authenticated merchant's wallet logs (ledger
+        entries / transactions), scoped to the merchant resolved from the api-key. Use this
+        to build a wallet transaction table or to reconcile debits and credits. The call is
+        synchronous and returns the page directly; no webhook is associated. Supports
+        filtering by currency, reference, date range, amount, action, transaction type, and
+        free-text description.
+      parameters:
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, minimum: 1, default: 10 }
+        - name: business
+          in: query
+          description: Optional 24-character Fincra business id to scope the logs. When omitted, the merchant is derived from the api-key.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: currency
+          in: query
+          description: Filter by wallet currency.
+          schema: { $ref: "#/components/schemas/Currency" }
+        - name: reason
+          in: query
+          description: Filter by the ledger entry reason.
+          schema: { type: string }
+        - name: reference
+          in: query
+          description: Filter by the transaction reference.
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          description: Include logs created on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include logs created on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: amount
+          in: query
+          description: Filter by exact ledger amount.
+          schema: { type: number }
+        - name: action
+          in: query
+          description: Filter by ledger action (e.g. debit or credit).
+          schema: { type: string }
+        - name: transaction
+          in: query
+          description: Filter by the linked transaction id/reference.
+          schema: { type: string }
+        - name: transactionType
+          in: query
+          description: Filter by transaction type (e.g. disbursement, collection, conversion).
+          schema: { type: string }
+        - name: token
+          in: query
+          description: Filter by transaction token.
+          schema: { type: string }
+        - name: description
+          in: query
+          description: Free-text filter over the log description.
+          schema: { type: string }
+        - name: merchantDescription
+          in: query
+          description: Free-text filter over the merchant-supplied description.
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of wallet logs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WalletLogPage"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails Joi validation (getAllWalletLogsSchema).
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: A database error (DBError) is surfaced while reading logs; APIHelper returns a generic 500.
+
+  /logs/statement:
+    get:
+      operationId: walletsGetWalletStatement
+      tags: [Wallets]
+      summary: Get a wallet statement
+      description: >
+        Return the authenticated merchant's wallet statement for one currency over a
+        required date range, including opening and closing balances, served from the
+        statement view. Use this to produce a periodic account statement for a single
+        wallet currency. The call is synchronous and returns the statement directly; no
+        webhook is associated. `currency`, `dateFrom`, and `dateTo` are required.
+      parameters:
+        - name: currency
+          in: query
+          required: true
+          description: Wallet currency to produce the statement for.
+          schema: { $ref: "#/components/schemas/Currency" }
+        - name: dateFrom
+          in: query
+          required: true
+          description: Statement start date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          required: true
+          description: Statement end date (ISO-8601). Must be on or after dateFrom.
+          schema: { type: string, format: date }
+        - name: perPage
+          in: query
+          description: Items per page. Maximum 50.
+          schema: { type: integer, minimum: 1, maximum: 50 }
+        - name: merchant
+          in: query
+          description: Optional merchant id to scope the statement.
+          schema: { type: string }
+        - name: businessSQLId
+          in: query
+          description: Optional business SQL id to scope the statement.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The wallet statement.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WalletStatement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: currency, dateFrom, or dateTo missing/invalid (getStatementSchema).
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: No wallet exists for the merchant in the requested currency, or dateTo is before dateFrom.
+
+  /logs/statement-view:
+    get:
+      operationId: walletsGetWalletStatementView
+      tags: [Wallets]
+      summary: Get a wallet statement (view alias)
+      description: >
+        Alias of `walletsGetWalletStatement`: returns the same currency-scoped wallet
+        statement with opening and closing balances from the statement view, using the
+        identical handler and validator. Use whichever path your integration was built
+        against. The call is synchronous; no webhook is associated. `currency`, `dateFrom`,
+        and `dateTo` are required.
+      parameters:
+        - name: currency
+          in: query
+          required: true
+          description: Wallet currency to produce the statement for.
+          schema: { $ref: "#/components/schemas/Currency" }
+        - name: dateFrom
+          in: query
+          required: true
+          description: Statement start date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          required: true
+          description: Statement end date (ISO-8601). Must be on or after dateFrom.
+          schema: { type: string, format: date }
+        - name: perPage
+          in: query
+          description: Items per page. Maximum 50.
+          schema: { type: integer, minimum: 1, maximum: 50 }
+        - name: merchant
+          in: query
+          description: Optional merchant id to scope the statement.
+          schema: { type: string }
+        - name: businessSQLId
+          in: query
+          description: Optional business SQL id to scope the statement.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The wallet statement.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WalletStatement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: currency, dateFrom, or dateTo missing/invalid (getStatementSchema).
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: No wallet exists for the merchant in the requested currency, or dateTo is before dateFrom.
+
+  /logs/{id}:
+    get:
+      operationId: walletsGetWalletLogById
+      tags: [Wallets]
+      summary: Get a wallet log by id
+      description: >
+        Fetch a single wallet log (ledger entry) by its numeric id, scoped to the
+        authenticated merchant. Use this to inspect one transaction after finding it in the
+        list. The path is constrained to digits. The call is synchronous and returns the
+        log directly; no webhook is associated.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric wallet log id (path constrained to digits).
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: The wallet log.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/WalletLog"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id is missing or not numeric (getOneWalletLogSchema).
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No wallet log matches the id ("Wallet log not found").
+
+  /logs/export:
+    post:
+      operationId: walletsExportWalletLogs
+      tags: [Wallets]
+      summary: Export wallet logs
+      description: >
+        Export the authenticated merchant's wallet logs to a file (for example CSV) using
+        the same filter set as the list endpoint. Use this to produce a downloadable ledger
+        extract. The call is synchronous and returns the export artifact reference in the
+        success envelope; no webhook is associated. `exportType` is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportWalletLogsRequest"
+            examples:
+              ngnCsvExport:
+                summary: Export NGN wallet logs as CSV for a date range
+                value:
+                  exportType: csv
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  currency: NGN
+                  dateFrom: "2026-06-01"
+                  dateTo: "2026-06-30"
+                  action: debit
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: exportType missing, or a filter fails validation (exportWalletLogsSchema).
+
+  /analytics/transactions:
+    get:
+      operationId: walletsGetTransactionAnalytics
+      tags: [Wallets]
+      summary: Get transaction analytics
+      description: >
+        Return a transaction analytics summary for the authenticated merchant, scoped to
+        the resolved merchant, for a given business and currency and an optional date range
+        and product type. Use this to power dashboard tiles that summarise disbursement,
+        collection, or conversion activity. The call is synchronous and returns the summary
+        directly; no webhook is associated. `business` and `currency` are required.
+      parameters:
+        - name: business
+          in: query
+          required: true
+          description: The 24-character Fincra business id to summarise.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: currency
+          in: query
+          required: true
+          description: Wallet currency to summarise.
+          schema: { $ref: "#/components/schemas/Currency" }
+        - name: dateFrom
+          in: query
+          description: Include transactions on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include transactions on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: type
+          in: query
+          description: Restrict the summary to one product type.
+          schema:
+            type: string
+            enum: [disbursements, collections, conversions]
+      responses:
+        "200":
+          description: The transaction analytics summary.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TransactionAnalytics"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: business or currency missing, or type not in the allowed set (getTransactionAnalyticsSchema).
+
+  /topups/payment-account-details:
+    get:
+      operationId: walletsGetPaymentAccountDetails
+      tags: [Wallets]
+      summary: Get wallet funding account details
+      description: >
+        Return the deposit/payment account details a merchant uses to fund a wallet in a
+        given currency. Requires a merchant api-key and a business (authenticateWithBusiness).
+        Use this to display the bank/virtual account to which a merchant should transfer to
+        top up. The call is synchronous and returns the account details directly; no webhook
+        is associated. `business` and `currency` are required.
+      parameters:
+        - name: business
+          in: query
+          required: true
+          description: The 24-character Fincra business id funding the wallet.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: currency
+          in: query
+          required: true
+          description: Wallet currency to fund.
+          schema: { $ref: "#/components/schemas/Currency" }
+      responses:
+        "200":
+          description: The payment/deposit account details.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Payment account details response shape not harvested. Source: src/components/walletFunding/walletFundingController.ts (getPaymentAccountDetails)"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key, incomplete credentials, invalid service credentials, or missing business (authenticateWithBusiness).
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: business or currency missing/invalid (getPaymentAccountDetailsSchema).
+
+  /topups/initiate:
+    post:
+      operationId: walletsInitiateTopup
+      tags: [Wallets]
+      summary: Initiate a wallet top-up
+      description: >
+        Initiate a manual wallet top-up (funding) request for a business and currency.
+        Requires a merchant api-key and a business (authenticateWithBusiness). Use this to
+        record a merchant's intent to fund a wallet against a unique reference. The call is
+        synchronous and returns the created funding request; no webhook is emitted by this
+        service. `business`, `currency`, and `reference` are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FundWalletRequest"
+            examples:
+              ngnManualTopup:
+                summary: Manual NGN wallet top-up
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  currency: NGN
+                  reference: topup-req-3f81a9c2
+                  action: initiate
+      responses:
+        "200":
+          description: Top-up request created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key, incomplete credentials, invalid service credentials, or missing business (authenticateWithBusiness).
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: business, currency, or reference missing/invalid (fundWalletSchema).
+
+  /topups/virtual-accounts/initiate:
+    post:
+      operationId: walletsInitiateVirtualAccountTopup
+      tags: [Wallets]
+      summary: Initiate a virtual-account wallet top-up
+      description: >
+        Initiate a virtual-account wallet funding request. Requires a merchant api-key and a
+        business (authenticateWithBusiness). Use this when the merchant funds via a virtual
+        account and supplies the payer, amount, and supporting files. The call is synchronous
+        and returns the created funding request; no webhook is emitted by this service.
+        `business`, `currency`, `payer`, `amount`, and `files` are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FundVirtualAccountRequest"
+            examples:
+              ngnVirtualAccountTopup:
+                summary: NGN virtual-account funding
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  currency: NGN
+                  amount: 500000
+                  payer: Adaeze Nwosu
+                  files: "https://sandbox-files.fincra.com/deposit-slip-3f81.pdf"
+      responses:
+        "200":
+          description: Virtual-account top-up request created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key, incomplete credentials, invalid service credentials, or missing business (authenticateWithBusiness).
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A required field (business, currency, payer, amount, files) is missing/invalid (fundVirtualAccountSchema).
+
+  /topups/deposit-requests:
+    post:
+      operationId: walletsLogDepositRequest
+      tags: [Wallets]
+      summary: Log a wallet deposit request
+      description: >
+        Log a deposit request for a wallet top-up, capturing the payment method, amount,
+        reason for payment, and supporting files. Requires a merchant api-key and a business
+        (authenticateWithBusiness). Use this to record an off-platform deposit for
+        reconciliation. The call is synchronous and returns the logged request; no webhook is
+        emitted by this service. `business`, `currency`, `reasonForPayment`, `files`,
+        `amount`, and `paymentMethod` are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogDepositRequest"
+            examples:
+              ngnDepositRequest:
+                summary: NGN bank-transfer deposit request
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  currency: NGN
+                  amount: 750000
+                  reasonForPayment: Wallet funding for June settlements
+                  paymentMethod: bank_transfer
+                  files: "https://sandbox-files.fincra.com/deposit-slip-7b12.pdf"
+      responses:
+        "200":
+          description: Deposit request logged.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key, incomplete credentials, invalid service credentials, or missing business (authenticateWithBusiness).
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A required field is missing/invalid (logDepositRequestSchema).
+
+  /topups:
+    get:
+      operationId: walletsListTopups
+      tags: [Wallets]
+      summary: List wallet top-ups
+      description: >
+        Return a paginated list of the merchant's wallet funding/top-up requests. Requires a
+        merchant api-key (authenticate). Use this to build a funding-history table or to
+        reconcile deposits. The call is synchronous and returns the page directly; no webhook
+        is associated. `business` is required; supports status, currency, reference, amount,
+        payment method, and date-range filters.
+      parameters:
+        - name: business
+          in: query
+          required: true
+          description: The 24-character Fincra business id whose top-ups to list.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: page
+          in: query
+          description: 1-based page number.
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page.
+          schema: { type: integer, minimum: 1, default: 10 }
+        - name: searchQuery
+          in: query
+          description: Free-text search across funding fields.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by one or more funding statuses.
+          schema:
+            type: array
+            items: { type: string }
+        - name: currency
+          in: query
+          description: Filter by wallet currency.
+          schema: { $ref: "#/components/schemas/Currency" }
+        - name: reference
+          in: query
+          description: Filter by funding reference.
+          schema: { type: string }
+        - name: amount
+          in: query
+          description: Filter by exact amount.
+          schema: { type: number }
+        - name: from
+          in: query
+          description: Include funding requests on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Include funding requests on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: paymentMethod
+          in: query
+          description: Filter by one or more payment methods.
+          schema:
+            type: array
+            items: { type: string }
+      responses:
+        "200":
+          description: A page of wallet top-up requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: business missing, or a filter fails validation (getAllWalletFundingSchema).
+
+  /topups/export:
+    post:
+      operationId: walletsExportTopups
+      tags: [Wallets]
+      summary: Export wallet top-ups
+      description: >
+        Export the merchant's wallet funding/top-up requests to a file using the same filter
+        set as the list endpoint. Requires a merchant api-key (authenticate). Use this to
+        produce a downloadable funding extract. The call is synchronous and returns the
+        export artifact in the success envelope; no webhook is associated. `business` is
+        required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportWalletFundingRequest"
+            examples:
+              exportNgnTopups:
+                summary: Export NGN top-ups for a business
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  currency: NGN
+                  from: "2026-06-01"
+                  to: "2026-06-30"
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: business missing, or a filter fails validation (exportWalletFundingSchema).
+
+  /topups/complete:
+    post:
+      operationId: walletsCompleteTopup
+      tags: [Wallets]
+      summary: Complete a wallet top-up
+      description: >
+        Complete a wallet funding request by supplying the payer, amount, and proof files
+        against the funding id. Requires a merchant api-key (authenticate); this is an
+        api-key-authenticatable completion step that may also be driven from the merchant
+        portal. The call is synchronous and returns the updated funding request; no webhook
+        is emitted by this service. `id`, `payer`, `files`, and `amount` are required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteTopupRequest"
+            examples:
+              completeTopup:
+                summary: Complete a funding request with proof of payment
+                value:
+                  id: 63f9a1b2c4d5e6f7a8b9c0d1
+                  payer: Adaeze Nwosu
+                  amount: 500000
+                  files: "https://sandbox-files.fincra.com/proof-3f81.pdf"
+      responses:
+        "200":
+          description: Top-up completed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A required field (id, payer, files, amount) is missing/invalid (completeWalletFundingSchema).
+
+  /topups/{id}:
+    get:
+      operationId: walletsGetTopupById
+      tags: [Wallets]
+      summary: Get a wallet top-up by id
+      description: >
+        Fetch a single wallet funding/top-up request by its Mongo id. Requires a merchant
+        api-key (authenticate). Use this to inspect the status and details of one funding
+        request. The call is synchronous and returns the request directly; no webhook is
+        associated. `id` must be a 24-character id.
+      parameters:
+        - $ref: "#/components/parameters/TopupIdPath"
+      responses:
+        "200":
+          description: The wallet top-up request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id is not a 24-character id (getOneWalletFundingSchema).
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No funding request matches the id.
+    delete:
+      operationId: walletsDeleteTopup
+      tags: [Wallets]
+      summary: Delete a wallet top-up
+      description: >
+        Delete a wallet funding/top-up request by its Mongo id. Requires a merchant api-key
+        (authenticate). Use this to remove a funding request that is no longer needed. The
+        call is synchronous and returns the result in the success envelope; no webhook is
+        associated. `id` must be a 24-character id.
+      parameters:
+        - $ref: "#/components/parameters/TopupIdPath"
+      responses:
+        "200":
+          description: Top-up request deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id is not a 24-character id (deleteWalletFundingSchema).
+
+  /topups/{id}/cancel:
+    patch:
+      operationId: walletsCancelTopup
+      tags: [Wallets]
+      summary: Cancel a wallet top-up
+      description: >
+        Cancel a wallet funding/top-up request by its Mongo id. Requires a merchant api-key
+        (authenticate). Use this to cancel a pending funding request. The call is synchronous
+        and returns the updated request in the success envelope; no webhook is associated.
+        `id` must be a 24-character id.
+      parameters:
+        - $ref: "#/components/parameters/TopupIdPath"
+      responses:
+        "200":
+          description: Top-up request cancelled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id is not a 24-character id (cancelWalletFundingSchema).
+
+  /topups/{id}/addtional-information:
+    get:
+      operationId: walletsListTopupAdditionalInfo
+      tags: [Wallets]
+      summary: List additional-information requests on a top-up
+      description: >
+        List the additional-information requests raised against a wallet funding request.
+        Requires a merchant api-key (authenticate). Use this to see what supporting
+        information Fincra has requested for a top-up. The call is synchronous and returns the
+        list directly; no webhook is associated. Note the code path spells the segment
+        "addtional"; the path here mirrors the code exactly. `id` must be a 24-character id.
+      parameters:
+        - $ref: "#/components/parameters/TopupIdPath"
+      responses:
+        "200":
+          description: The additional-information requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id is not a 24-character id (getAllRequestedAddtionalInfoSchema).
+
+  /topups/{id}/addtional-information/{addtionalInfoId}:
+    patch:
+      operationId: walletsRespondTopupAdditionalInfo
+      tags: [Wallets]
+      summary: Respond to an additional-information request on a top-up
+      description: >
+        Respond to a specific additional-information request raised against a wallet funding
+        request, optionally with text and files. Requires a merchant api-key (authenticate).
+        Use this to satisfy an information request so the top-up can proceed. The call is
+        synchronous and returns the updated request; no webhook is associated. Note the code
+        path spells the segment "addtional"; the path here mirrors the code exactly. Both
+        `id` and `addtionalInfoId` must be 24-character ids.
+      parameters:
+        - $ref: "#/components/parameters/TopupIdPath"
+        - name: addtionalInfoId
+          in: path
+          required: true
+          description: The 24-character id of the additional-information request being answered (segment spelled "addtional" in code).
+          schema: { type: string, minLength: 24, maxLength: 24 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RespondAdditionalInfoRequest"
+            examples:
+              respondWithFile:
+                summary: Answer an information request with a document
+                value:
+                  text: Attaching the requested source-of-funds statement.
+                  files: "https://sandbox-files.fincra.com/source-of-funds-9d55.pdf"
+      responses:
+        "200":
+          description: Response saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: No api-key supplied, incomplete credentials, or invalid service credentials.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id or addtionalInfoId is not a 24-character id (saveAddtionalInfoResponseSchema).
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret or public key, sent in the `api-key` header (fallback header
+        `apikey` is also accepted). The auth-service classifies the key as test or live and
+        resolves the merchant. An `authorization` header alone is rejected; `api-key` is
+        required. Source ../fincra-utils/src/middleware/auth/authUtil.ts:16-38. Note: the
+        wallet balance/CRUD primitives at `/` carry no auth in this repo and are not
+        documented here; the top-up merchant routes additionally require a business
+        (authenticateWithBusiness).
+
+  parameters:
+    TopupIdPath:
+      name: id
+      in: path
+      required: true
+      description: The 24-character Mongo id of the wallet funding/top-up request.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+
+  responses:
+    Forbidden:
+      description: >
+        The request could not be authenticated for this route. All auth failures on this
+        service surface as ACCESS_DENIED with HTTP 403 (the underlying AccessDeniedError
+        hardcodes errorType and status).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: No API Key Provided
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Wallet log not found
+            errorType: RESOURCE_NOT_FOUND
+    UnprocessableEntity:
+      description: >
+        Validation or business-rule failure. `errorType` identifies the cause
+        (VALIDATION_FAILED for Joi failures, UNPROCESSABLE_ENTITY for business-rule
+        failures such as no wallet for the currency or an inverted date range).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occurred during payload validation. currency is required"
+            errorType: VALIDATION_FAILED
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` is [] when a handler returns nothing.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result, set by the controller.
+        data:
+          description: The result payload; shape depends on the endpoint. Defaults to an empty array when the handler returns nothing.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope. In-controller throws are formatted by fincra-utils
+        APIHelper (../fincra-utils/src/utilities/APIHelper.ts:90-153) as
+        {success:false, error, errorType, errors}; auth and 404 failures are formatted by the
+        express errorHandler (../fincra-utils/src/middleware/errorHandler.ts:5-16) as
+        {success:false, error, errorType} (plus optional code/attribution/retryable, not set
+        by the errors on these paths). The `errors` detail key is present only on the
+        APIHelper path (for example the array of Joi messages on a VALIDATION_FAILED).
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (for example the array of per-field Joi messages on a
+            VALIDATION_FAILED). Present only on the APIHelper (in-controller throw) path.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable on
+        the merchant-facing wallet paths (grepped from throw sites; see
+        EXTRACTION-REPORT-wallets.md). Note: all auth failures emit ACCESS_DENIED because
+        AccessDeniedError hardcodes it, so the authConstants errorType names
+        (NO_API_KEY_PROVIDED etc.) are never emitted on the wire.
+      enum:
+        - VALIDATION_FAILED
+        - UNPROCESSABLE_ENTITY
+        - ACCESS_DENIED
+        - RESOURCE_NOT_FOUND
+        - INTERNAL_SERVER_ERROR
+        - SERVER_ERROR
+        - SERVICE_UNAVAILABLE
+
+    Currency:
+      type: string
+      description: >
+        Wallet currency code accepted by the wallet read/statement/analytics/funding
+        validators. Exact per-schema enum binding was not fully harvested; these are the
+        platform-supported wallet currencies. See EXTRACTION-REPORT-wallets.md.
+      x-todo: "Per-validator currency enum not harvested; confirm the Joi-bound currency set. Source: src/components/walletLogs/walletLogsValidation.ts:22-29; src/components/analytics/analyticsValidation.ts:3-9"
+      enum: [NGN, GBP, GHS, KES, EUR, USD, UGX, TZS, ZAR, ZMW, CDF, MWK, MZN, RWF, CAD, XAF, XOF, EGP, USDT, USDC, CNGN, CNY, CNH]
+
+    ExportFormat:
+      type: string
+      description: File format for an export artifact.
+      x-todo: "exportType allowed values not harvested; confirm the Joi enum. Source: src/components/walletLogs/walletLogsValidation.ts:35-48"
+      enum: [csv, excel, pdf]
+
+    WalletLog:
+      type: object
+      description: >
+        A single wallet ledger entry as returned by the log read endpoints. The exact field
+        set was not harvested from the serializer.
+      x-todo: "WalletLog response field set not harvested; confirm from the walletLogs serializer/model. Source: src/components/walletLogs/walletLogsController.ts:62-76; src/components/walletLogs/walletLogsService.ts:21-206"
+      properties:
+        id:
+          type: integer
+          description: Numeric wallet log id.
+        reference:
+          type: string
+          description: Transaction reference associated with the ledger entry.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        amount:
+          type: number
+          description: Ledger amount in major units of the wallet currency.
+        action:
+          type: string
+          description: Ledger action (for example debit or credit).
+        description:
+          type: string
+          description: Description of the ledger entry.
+        createdAt:
+          type: string
+          format: date-time
+          description: When the ledger entry was created.
+
+    WalletLogPage:
+      type: object
+      description: A page of wallet logs. Envelope of the list endpoint's data field.
+      x-todo: "Exact pagination envelope keys (e.g. count/totalPages) not harvested; confirm from the list serializer. Source: src/components/walletLogs/walletLogsController.ts:15-29"
+      properties:
+        logs:
+          type: array
+          items: { $ref: "#/components/schemas/WalletLog" }
+          description: The wallet logs on this page.
+        page:
+          type: integer
+          description: Current page number.
+        perPage:
+          type: integer
+          description: Items per page.
+
+    WalletStatement:
+      type: object
+      description: >
+        A wallet statement for one currency over a date range, including opening and closing
+        balances, served from the statement view. The exact field set was not harvested.
+      x-todo: "WalletStatement response shape (opening/closing balances, entries) not harvested; confirm from getStatementFromView view. Source: src/components/walletLogs/walletLogsController.ts:47-60; src/components/walletLogs/walletLogsService.ts:120-214"
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        openingBalance:
+          type: number
+          description: Wallet balance at the start of the statement period.
+        closingBalance:
+          type: number
+          description: Wallet balance at the end of the statement period.
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/WalletLog" }
+          description: The ledger entries within the statement period.
+
+    TransactionAnalytics:
+      type: object
+      description: >
+        Transaction analytics summary for a business and currency. The exact field set was
+        not harvested.
+      x-todo: "TransactionAnalytics response shape not harvested; confirm from getTransactionsSummary. Source: src/components/analytics/analyticsController.ts:7-21"
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        totalCount:
+          type: integer
+          description: Number of transactions in the summarised set.
+        totalAmount:
+          type: number
+          description: Total transaction amount in the summarised set.
+
+    ExportWalletLogsRequest:
+      type: object
+      description: Body for POST /logs/export. Filters mirror the list endpoint; `exportType` is required.
+      required: [exportType]
+      properties:
+        exportType:
+          $ref: "#/components/schemas/ExportFormat"
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Optional 24-character Fincra business id to scope the export.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        reference:
+          type: string
+          description: Filter by transaction reference.
+        dateFrom:
+          type: string
+          format: date
+          description: Include logs created on or after this date.
+        dateTo:
+          type: string
+          format: date
+          description: Include logs created on or before this date.
+        amount:
+          type: number
+          description: Filter by exact ledger amount.
+        action:
+          type: string
+          description: Filter by ledger action (for example debit or credit).
+        transaction:
+          type: string
+          description: Filter by the linked transaction id/reference.
+        reason:
+          type: string
+          description: Filter by the ledger entry reason.
+        method:
+          type: string
+          description: Filter by payment method.
+        token:
+          type: string
+          description: Filter by transaction token.
+
+    FundWalletRequest:
+      type: object
+      description: Body for POST /topups/initiate.
+      required: [business, currency, reference]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: The 24-character Fincra business id funding the wallet.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        reference:
+          type: string
+          description: Your unique reference for this top-up.
+        payer:
+          type: string
+          description: Name of the party funding the wallet.
+        files:
+          description: Supporting document(s) for the funding request.
+        action:
+          type: string
+          description: Funding action to perform.
+          x-todo: "fundWalletSchema action allowed values not harvested. Source: src/components/walletFunding/walletFundingValidation.ts:18-25"
+
+    FundVirtualAccountRequest:
+      type: object
+      description: Body for POST /topups/virtual-accounts/initiate.
+      required: [business, currency, payer, amount, files]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: The 24-character Fincra business id funding the wallet.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        payer:
+          type: string
+          description: Name of the party funding the wallet via virtual account.
+        amount:
+          type: number
+          description: Amount funded, in major units of the wallet currency.
+        files:
+          description: Supporting document(s) evidencing the deposit.
+
+    LogDepositRequest:
+      type: object
+      description: Body for POST /topups/deposit-requests.
+      required: [business, currency, reasonForPayment, files, amount, paymentMethod]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: The 24-character Fincra business id the deposit is for.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        reasonForPayment:
+          type: string
+          description: The stated reason for the deposit.
+        files:
+          description: Supporting document(s) evidencing the deposit.
+        amount:
+          type: number
+          description: Amount deposited, in major units of the wallet currency.
+        paymentMethod:
+          type: string
+          description: How the deposit was made (for example bank transfer).
+          x-todo: "paymentMethod allowed values not harvested. Source: src/components/walletFunding/walletFundingValidation.ts:35-44"
+
+    CompleteTopupRequest:
+      type: object
+      description: Body for POST /topups/complete.
+      required: [id, payer, files, amount]
+      properties:
+        id:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: The 24-character id of the funding request to complete.
+        payer:
+          type: string
+          description: Name of the party who funded the wallet.
+        files:
+          description: Proof-of-payment document(s).
+        amount:
+          type: number
+          description: Amount funded, in major units of the wallet currency.
+
+    ExportWalletFundingRequest:
+      type: object
+      description: Body for POST /topups/export. Filters mirror the top-up list endpoint; `business` is required.
+      required: [business]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: The 24-character Fincra business id whose top-ups to export.
+        searchQuery:
+          type: string
+          description: Free-text search across funding fields.
+        status:
+          type: array
+          items: { type: string }
+          description: Filter by one or more funding statuses.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        reference:
+          type: string
+          description: Filter by funding reference.
+        amount:
+          type: number
+          description: Filter by exact amount.
+        from:
+          type: string
+          format: date
+          description: Include funding requests on or after this date.
+        to:
+          type: string
+          format: date
+          description: Include funding requests on or before this date.
+        paymentMethod:
+          type: array
+          items: { type: string }
+          description: Filter by one or more payment methods.
+
+    RespondAdditionalInfoRequest:
+      type: object
+      description: >
+        Body for PATCH /topups/{id}/addtional-information/{addtionalInfoId}. Both text and
+        files are optional.
+      properties:
+        text:
+          type: string
+          description: Free-text response to the additional-information request.
+        files:
+          description: Supporting document(s) attached to the response.
