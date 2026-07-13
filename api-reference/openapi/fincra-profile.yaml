@@ -1,0 +1,3647 @@
+openapi: 3.1.0
+info:
+  title: Fincra Verification and Virtual Accounts (fincra-profile)
+  version: "1.0.0"
+  summary: Merchant-facing profile, verification, and reserved (virtual) account API for the fincra-profile service.
+  description: >
+    Manage the merchant profile surface of Fincra: request and manage reserved
+    (virtual) accounts across African rails (NGN, GHS, KES, TZS) and cross-border
+    IBAN corridors, look up virtual accounts by BVN, manage KYC and business
+    settings, customers, beneficiaries, sub-accounts, settlement accounts,
+    dashboard users and roles, virtual cards, and API-key/webhook-key rotation.
+
+
+    Most reads are synchronous. Virtual-account issuing is effectively asynchronous:
+    a create call records the request (`status: pending`) and the account is
+    provisioned by the downstream provider; poll the list/get endpoints for the
+    final state. This service does NOT emit merchant-facing webhooks — the only
+    outbound events found in code are internal Slack/notification and 2FA/login
+    audit categories, so there is no top-level `webhooks` block.
+
+
+    This spec is generated from the source of `fincra-profile` on branch
+    `restore/ci-build-reusable-workflows` (code is truth). Anything undeterminable
+    from code is marked with an `x-todo` extension carrying the exact `file:line`,
+    and is listed in EXTRACTION-REPORT-profile.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every route at "/" with NO version/base-path prefix
+  (src/server.ts:95, src/routes/index.ts). The public API prefix a merchant calls
+  (observed externally as /profile) is applied at the Kong gateway, which is not in
+  this repo (k8s ingress only exposes the internal hosts profile.fincra.com /
+  profile-sandbox.dev.fincra.com). Paths below are exactly as routed in code;
+  prepend the confirmed gateway prefix before publishing. See
+  EXTRACTION-REPORT-profile.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/profile
+    description: Sandbox (test keys). Powers the docs playground. Source k8s/overlays/sandbox/app.properties (APP_ENVIRONMENT=test).
+  - url: https://api.fincra.com/profile
+    description: Production (live keys). Source k8s/overlays/prod/app.properties (APP_ENVIRONMENT=live).
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Payments
+    description: Reserved (virtual) account issuing and management, plus KYC required to hold them.
+  - name: Verification
+    description: BVN lookup for virtual accounts, customer records, and merchant profile/KYC/settings.
+  - name: Beneficiaries
+    description: Manage saved beneficiaries per business.
+
+paths:
+  /virtual-accounts/requests:
+    post:
+      operationId: profileRequestVirtualAccount
+      tags: [Payments]
+      summary: Request a reserved (virtual) account
+      description: >
+        Request a reserved (virtual) account for a merchant. The request body is
+        dispatched per currency and accountType (NGN, GHS, KES, TZS local rails, plus
+        IBAN/XAF cross-border), each with its own KYC requirements. Use this to
+        provision a dedicated account number a payer can fund. Issuing is effectively
+        asynchronous: the request is recorded with `status: pending` and provisioned by
+        the downstream provider; poll `profileListVirtualAccounts` for the final state.
+        This service emits no merchant webhook for the outcome.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestVirtualAccountRequest"
+            examples:
+              ngnCorporate:
+                summary: NGN corporate reserved account (BVN-validated)
+                value:
+                  accountType: corporate
+                  currency: NGN
+                  channel: wema
+                  KYCInformation:
+                    businessName: Ada Commerce Limited
+                    rcNumber: "1456789"
+                    bvn: "22212345678"
+                    bvnName: Adaeze Nwosu
+              ghsIndividual:
+                summary: GHS individual reserved account
+                value:
+                  accountType: individual
+                  currency: GHS
+                  phoneNumber: "+233551234567"
+                  KYCInformation:
+                    firstName: Kwame
+                    lastName: Mensah
+                    email: kwame.mensah@ada-commerce.com
+      responses:
+        "200":
+          description: Virtual-account request recorded.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/VirtualAccount"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails the per-currency Joi schema. Source src/components/virtualAccounts/validations/index.ts:53.
+        - errorType: INVALID_CURRENCY
+          status: 422
+          trigger: currency is 'MCY', or an unsupported currency reaches validateVirtualAccountCurrency. Source virtualAccountsController.ts:214; virtualAccountsService.ts:738.
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: FCY feature disabled for an MCY currency (USD/EUR/GBP/CAD). Source virtualAccountsController.ts:232.
+        - errorType: BUSINESS_PROFILE_REQUIRED
+          status: 403
+          trigger: The merchant has no business profile. Source businessesService.ts:246.
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: Invalid country code or prohibited MCY nationality. Source virtualAccountsService.ts:1620, :1575.
+        - errorType: DUPLICATE_REFERENCE
+          status: 409
+          trigger: Duplicate merchantReference on createVirtualAccount. Source virtualAccountsService.ts:158.
+    get:
+      operationId: profileListVirtualAccountRequests
+      tags: [Payments]
+      summary: List reserved-account requests
+      description: >
+        Return a paginated list of the merchant's virtual-account requests (as opposed to
+        provisioned accounts), filterable by status, channel, currency, accountType,
+        entityType, dates, and references. Use to track requests that have not yet been
+        provisioned. Gated by the VIRTUAL_ACCOUNT product.
+      parameters:
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10, minimum: 1 }
+        - name: status
+          in: query
+          description: Filter by virtual-account status.
+          schema: { $ref: "#/components/schemas/VirtualAccountStatus" }
+        - name: channelName
+          in: query
+          description: Filter by provider channel.
+          schema: { $ref: "#/components/schemas/VirtualAccountChannel" }
+        - name: currencyType
+          in: query
+          description: Filter by crypto vs fiat.
+          schema: { type: string, enum: [crypto, fiat] }
+        - name: currency
+          in: query
+          description: Filter by currency (uppercased).
+          schema: { type: string }
+        - name: accountType
+          in: query
+          description: Filter by account type.
+          schema: { $ref: "#/components/schemas/VirtualAccountType" }
+        - name: entityType
+          in: query
+          description: Filter by entity type.
+          schema: { $ref: "#/components/schemas/VirtualAccountEntityType" }
+        - name: requestedDate
+          in: query
+          description: Filter by request date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: issuedDate
+          in: query
+          description: Filter by issue date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: businessName
+          in: query
+          description: Filter by business name.
+          schema: { type: string }
+        - name: accountNumber
+          in: query
+          description: Filter by account number.
+          schema: { type: string }
+        - name: merchantReference
+          in: query
+          description: Filter by your own reference.
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of virtual-account requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/corporate/self-requests:
+    post:
+      operationId: profileRequestCorporateVirtualAccount
+      tags: [Payments]
+      summary: Self-request a corporate reserved account
+      description: >
+        Self-service variant that provisions a corporate reserved account for the
+        authenticated merchant, reusing the core request-virtual-account flow without an
+        explicit product-authorization guard at the route. Use when a corporate merchant
+        provisions its own account. Issuing is asynchronous; poll the list endpoint for
+        the provisioned account number.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestVirtualAccountRequest"
+            example:
+              accountType: corporate
+              currency: NGN
+              channel: wema
+              KYCInformation:
+                businessName: Ada Commerce Limited
+                bvn: "22212345678"
+      responses:
+        "200":
+          description: Corporate virtual-account request recorded.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VirtualAccount" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Wrong accountType/purpose for a corporate self-request. Source virtualAccountsController.ts:156.
+
+  /virtual-accounts/requests/migrate:
+    post:
+      operationId: profileRequestVirtualAccountForMigration
+      tags: [Payments]
+      summary: Request a reserved account for migration
+      description: >
+        Request a reserved account as part of a migration flow (existing merchant moving
+        onto Fincra-issued accounts). Same body contract as the core request endpoint and
+        gated by the VIRTUAL_ACCOUNT product. Issuing is asynchronous; poll the list
+        endpoint for the provisioned account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestVirtualAccountRequest"
+            example:
+              accountType: corporate
+              currency: NGN
+              channel: wema
+              KYCInformation:
+                businessName: Ada Commerce Limited
+                bvn: "22212345678"
+      responses:
+        "200":
+          description: Migration virtual-account request recorded.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VirtualAccount" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts:
+    get:
+      operationId: profileListVirtualAccounts
+      tags: [Payments]
+      summary: List the merchant's reserved accounts
+      description: >
+        Return a paginated list of the merchant's reserved (virtual) accounts, with
+        filters for status, currency, accountType, entityType, dates, and references. Use
+        to build a virtual-accounts table or to poll for the provisioned state of a
+        request. This route is gated by authenticate() only (no product gate).
+      parameters:
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10, minimum: 1 }
+        - name: status
+          in: query
+          description: Filter by virtual-account status.
+          schema: { $ref: "#/components/schemas/VirtualAccountStatus" }
+        - name: currency
+          in: query
+          description: Filter by currency (uppercased; not enum-restricted on this query).
+          schema: { type: string }
+        - name: accountType
+          in: query
+          description: Filter by account type.
+          schema: { $ref: "#/components/schemas/VirtualAccountType" }
+        - name: entityType
+          in: query
+          description: Filter by entity type (main vs sub account).
+          schema: { $ref: "#/components/schemas/VirtualAccountEntityType" }
+        - name: requestedDate
+          in: query
+          description: Filter by request date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: issuedDate
+          in: query
+          description: Filter by issue date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: businessName
+          in: query
+          description: Filter by business name.
+          schema: { type: string }
+        - name: virtualAccountType
+          in: query
+          description: Filter by virtual-account type label.
+          schema: { type: string }
+        - name: accountNumber
+          in: query
+          description: Filter by account number.
+          schema: { type: string }
+        - name: merchantReference
+          in: query
+          description: Filter by your own reference.
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of virtual accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: BUSINESS_PROFILE_REQUIRED
+          status: 403
+          trigger: The merchant has no business profile. Source businessesService.ts:246.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails getMerchantVirtualAccountsSchema. Source virtualAccountsValidation.ts:42.
+
+  /virtual-accounts/bvn:
+    get:
+      operationId: profileGetVirtualAccountsByBvn
+      tags: [Verification]
+      summary: Look up virtual accounts by BVN
+      description: >
+        Look up the virtual accounts associated with a Nigerian BVN for a business. Use
+        this verification lookup to confirm which reserved accounts map to a given BVN.
+        Synchronous. Gated by the VIRTUAL_ACCOUNT product. Returns
+        VIRTUAL_ACCOUNT_NOT_FOUND if no account matches the BVN.
+      parameters:
+        - name: bvn
+          in: query
+          required: true
+          description: The 11-digit Nigerian Bank Verification Number.
+          schema: { type: string, minLength: 11, maxLength: 11 }
+        - name: business
+          in: query
+          required: true
+          description: The Fincra business id (max 24 chars).
+          schema: { type: string, maxLength: 24 }
+      responses:
+        "200":
+          description: Matching virtual accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: bvn not exactly 11 chars or business missing/over 24. Source virtualAccountsValidation.ts:62.
+        - errorType: VIRTUAL_ACCOUNT_NOT_FOUND
+          status: 404
+          trigger: No virtual account exists for the BVN. Source virtualAccountsService.ts:139.
+
+  /virtual-accounts/transfer:
+    post:
+      operationId: profileRequestVirtualAccountForBankTransfer
+      tags: [Payments]
+      summary: Request a temporary bank-transfer reserved account
+      description: >
+        Request a short-lived reserved account for a one-off bank transfer of a specific
+        amount, expiring after `expiresAt`. Use this for pay-by-bank-transfer collection
+        flows where a payer funds a temporary account. Gated by the VIRTUAL_ACCOUNT
+        product. Provisioning is asynchronous; the account details are returned for the
+        payer to fund.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestBankTransferVirtualAccountRequest"
+            example:
+              amount: "5000.00"
+              expiresAt: 1800
+              accountType: corporate
+              currency: NGN
+              channel: wema
+              merchantReference: va-transfer-3f81a9c2
+              KYCInformation:
+                businessName: Ada Commerce Limited
+                email: pay@ada-commerce.com
+      responses:
+        "200":
+          description: Temporary virtual account created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VirtualAccount" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails requestVirtualAccountForBankTransferSchema. Source virtualAccountsValidation.ts:97.
+
+  /virtual-accounts/generate-for-bank-transfer:
+    post:
+      operationId: profileGenerateVirtualAccountForBankTransfer
+      tags: [Payments]
+      summary: Generate a temporary bank-transfer reserved account
+      description: >
+        Same contract and controller as `profileRequestVirtualAccountForBankTransfer`,
+        exposed without the VIRTUAL_ACCOUNT product gate (authenticate() only). Use where
+        a temporary bank-transfer account is generated without product authorization.
+        Provisioning is asynchronous; the account details are returned for funding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestBankTransferVirtualAccountRequest"
+            example:
+              amount: "2500.50"
+              expiresAt: 900
+              accountType: corporate
+              currency: NGN
+              channel: globus
+              accountNumber: "0123456789"
+              KYCInformation:
+                businessName: Ada Commerce Limited
+      responses:
+        "200":
+          description: Temporary virtual account generated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VirtualAccount" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/business/{businessID}/sub-accounts/{subAccountID}/requests:
+    post:
+      operationId: profileRequestSubVirtualAccount
+      tags: [Payments]
+      summary: Request a reserved account for a sub-account
+      description: >
+        Request a reserved (virtual) account scoped to a specific sub-account of a
+        business. Gated by the VIRTUAL_ACCOUNT product, authenticateWithBusiness, and
+        sub-account ownership validation. Provisioning is asynchronous; poll the
+        sub-account virtual-accounts endpoint for the result.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/SubAccountIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestVirtualAccountRequest"
+            example:
+              accountType: corporate
+              currency: NGN
+              channel: wema
+              KYCInformation:
+                businessName: Ada Commerce Sub Ltd
+                bvn: "22212345678"
+      responses:
+        "200":
+          description: Sub-account virtual-account request recorded.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VirtualAccount" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/business/{businessID}/sub-accounts/{subAccountID}/requests/auto:
+    post:
+      operationId: profileRequestSubVirtualAccountAuto
+      tags: [Payments]
+      summary: Auto-request a reserved account for a sub-account
+      description: >
+        Version-2 auto flow to request a reserved account for a sub-account of a business.
+        Same guards as the standard sub-account request (VIRTUAL_ACCOUNT product,
+        authenticateWithBusiness, sub-account validation). Provisioning is asynchronous;
+        poll the sub-account virtual-accounts endpoint for the result.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/SubAccountIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestVirtualAccountRequest"
+            example:
+              accountType: corporate
+              currency: NGN
+              channel: wema
+              KYCInformation:
+                businessName: Ada Commerce Sub Ltd
+                bvn: "22212345678"
+      responses:
+        "200":
+          description: Sub-account virtual-account auto-request recorded.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VirtualAccount" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/business/{businessID}/sub-accounts/{subAccountID}:
+    get:
+      operationId: profileGetSubAccountVirtualAccounts
+      tags: [Payments]
+      summary: Get a sub-account's reserved accounts
+      description: >
+        Return the reserved (virtual) accounts belonging to a specific sub-account of a
+        business. Use to poll for the provisioned account of a sub-account request. Gated
+        by the VIRTUAL_ACCOUNT product, authenticateWithBusiness, and sub-account
+        ownership validation.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/SubAccountIdPath"
+      responses:
+        "200":
+          description: The sub-account's virtual accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/business/{businessID}/sub-accounts:
+    get:
+      operationId: profileGetBusinessSubAccountsVirtualAccounts
+      tags: [Payments]
+      summary: Get reserved accounts across a business's sub-accounts
+      description: >
+        Return the reserved (virtual) accounts across all sub-accounts of a business. Use
+        to build a business-wide view of sub-account virtual accounts. Gated by the
+        VIRTUAL_ACCOUNT product and authenticateWithBusiness.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: Virtual accounts across the business's sub-accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/update-info/{id}:
+    patch:
+      operationId: profileUpdateVirtualAccountInfo
+      tags: [Payments]
+      summary: Update reserved-account info
+      description: >
+        Update stored information on a reserved account (Blackthorn provider flow),
+        identified by its id. Gated by the VIRTUAL_ACCOUNT product and
+        authenticateWithBusiness. Synchronous update of the account metadata.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The virtual-account id to update.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateVirtualAccountInfoRequest" }
+      responses:
+        "200":
+          description: Virtual-account info updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/{id}:
+    get:
+      operationId: profileGetVirtualAccountById
+      tags: [Payments]
+      summary: Get one reserved account
+      description: >
+        Fetch a single reserved (virtual) account by its id, scoped to the merchant's
+        business. Use for status polling of a specific account. Gated by the
+        VIRTUAL_ACCOUNT product. Returns VIRTUAL_ACCOUNT_NOT_FOUND if the account does not
+        belong to the business.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The virtual-account id.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The virtual account.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VirtualAccount" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: BUSINESS_PROFILE_REQUIRED
+          status: 403
+          trigger: The merchant has no business profile. Source businessesService.ts:246.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id fails getOneVirtualAccountSchema. Source virtualAccountsController.ts:665.
+        - errorType: VIRTUAL_ACCOUNT_NOT_FOUND
+          status: 404
+          trigger: No virtual account for this business/id. Source virtualAccountsService.ts:570.
+
+  /virtual-accounts/{id}/update-bvn:
+    patch:
+      operationId: profileUpdateVirtualAccountBvn
+      tags: [Verification]
+      summary: Update the BVN on an NGN reserved account
+      description: >
+        Update the Bank Verification Number attached to an NGN reserved account,
+        identified by its id. Use to correct or attach a BVN on an existing account. Gated
+        by the VIRTUAL_ACCOUNT product. Synchronous.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The virtual-account id (max 24 chars).
+          schema: { type: string, maxLength: 24 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateVirtualAccountBvnRequest" }
+            example:
+              id: 63f9a1b2c4d5e6f7a8b9c0d1
+              bvn: "22212345678"
+      responses:
+        "200":
+          description: BVN updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id over 24 chars or bvn not exactly 11 chars. Source virtualAccountsValidation.ts:193.
+
+  /virtual-accounts/additional-information/{additionalInfoId}:
+    patch:
+      operationId: profileSaveVirtualAccountAdditionalInfo
+      tags: [Payments]
+      summary: Save additional-information response
+      description: >
+        Save a merchant's response to a request for additional information on a reserved
+        account, identified by the additional-information id. Use to complete provider
+        follow-up requirements. Authenticate() only; synchronous.
+      parameters:
+        - name: additionalInfoId
+          in: path
+          required: true
+          description: The additional-information record id.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveAdditionalInfoRequest" }
+      responses:
+        "200":
+          description: Additional-information response saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /virtual-accounts/{id}/additional-information:
+    get:
+      operationId: profileGetVirtualAccountAdditionalInfo
+      tags: [Payments]
+      summary: Get requested additional information
+      description: >
+        Return all additional-information items requested for a reserved account,
+        identified by its id. Use to discover what provider follow-up data the account
+        still needs. Authenticate() only; synchronous.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The virtual-account id.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The requested additional-information items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /virtual-accounts/accept-terms:
+    post:
+      operationId: profileAcceptVirtualAccountTerms
+      tags: [Payments]
+      summary: Accept virtual-account terms
+      description: >
+        Accept the reserved-account terms agreement using a one-time token and a captcha
+        token. This route is mounted with NO auth middleware (see EXTRACTION-REPORT-profile.md);
+        it is called from the terms page rather than with a merchant credential.
+        Synchronous.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptTermsRequest" }
+            example:
+              token: 9f8c2a1f04b7d3e5a6c7b8d9
+              captchaToken: 03AGdBq26xr...captcha
+              ipAddress: 197.210.55.12
+      responses:
+        "200":
+          description: Terms accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: token, captchaToken, or ipAddress missing. Source virtualAccountsValidation.ts:633.
+
+  /customers:
+    post:
+      operationId: profileCreateCustomer
+      tags: [Verification]
+      summary: Create a customer
+      description: >
+        Create a customer record for the merchant. Use to store a payer/customer profile
+        that other flows can reference. Synchronous. Note the /customers surface is CRUD
+        only; there is no standalone account-number or BVN verification endpoint here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCustomerRequest" }
+            example:
+              firstName: Amara
+              lastName: Okeke
+              email: amara.okeke@ada-commerce.com
+              phoneNumber: "+2348030001122"
+      responses:
+        "200":
+          description: Customer created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListCustomers
+      tags: [Verification]
+      summary: List customers
+      description: >
+        Return the merchant's customer records. Use to build a customers table or to
+        reconcile against your own directory. Synchronous read.
+      responses:
+        "200":
+          description: The merchant's customers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /customers/{cid}:
+    get:
+      operationId: profileGetCustomer
+      tags: [Verification]
+      summary: Get one customer
+      description: >
+        Fetch a single customer record by its customer id. Use to read a stored customer
+        profile. Synchronous read.
+      parameters:
+        - name: cid
+          in: path
+          required: true
+          description: The customer id.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The customer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: profileUpdateCustomer
+      tags: [Verification]
+      summary: Update a customer
+      description: >
+        Update a customer record identified by its customer id. Use to correct or enrich a
+        stored customer profile. Synchronous.
+      parameters:
+        - name: cid
+          in: path
+          required: true
+          description: The customer id.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCustomerRequest" }
+      responses:
+        "200":
+          description: Customer updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /beneficiaries/business/{businessID}:
+    post:
+      operationId: profileCreateBeneficiary
+      tags: [Beneficiaries]
+      summary: Create a beneficiary
+      description: >
+        Create a saved beneficiary for a business. Use to store a recipient you pay
+        repeatedly. Gated by authenticateWithBusiness. Synchronous. Request fields are
+        validated in-controller (no route-level DTO).
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBeneficiaryRequest" }
+            example:
+              firstName: Amara
+              lastName: Okeke
+              accountNumber: "0111111111"
+              bankCode: "058"
+      responses:
+        "200":
+          description: Beneficiary created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListBeneficiaries
+      tags: [Beneficiaries]
+      summary: List beneficiaries
+      description: >
+        Return the saved beneficiaries for a business. Use to build a beneficiary picker
+        or table. Gated by authenticateWithBusiness. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: The business's beneficiaries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /beneficiaries/business/{businessID}/{beneficiaryID}:
+    patch:
+      operationId: profileUpdateBeneficiary
+      tags: [Beneficiaries]
+      summary: Update a beneficiary
+      description: >
+        Update a saved beneficiary of a business, identified by beneficiary id. Use to
+        correct beneficiary details. Gated by authenticateWithBusiness. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/BeneficiaryIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBeneficiaryRequest" }
+      responses:
+        "200":
+          description: Beneficiary updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      operationId: profileDeleteBeneficiary
+      tags: [Beneficiaries]
+      summary: Delete a beneficiary
+      description: >
+        Delete a saved beneficiary of a business, identified by beneficiary id. Use to
+        remove a recipient you no longer pay. Gated by authenticateWithBusiness.
+        Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/BeneficiaryIdPath"
+      responses:
+        "200":
+          description: Beneficiary deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      operationId: profileGetBeneficiary
+      tags: [Beneficiaries]
+      summary: Get one beneficiary
+      description: >
+        Fetch a single saved beneficiary of a business by beneficiary id. Use to read
+        stored recipient details. Gated by authenticateWithBusiness. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/BeneficiaryIdPath"
+      responses:
+        "200":
+          description: The beneficiary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /merchants/{id}:
+    get:
+      operationId: profileGetMerchant
+      tags: [Verification]
+      summary: Get a merchant
+      description: >
+        Fetch a merchant profile by id for the authenticated credential. Use to read the
+        merchant's profile record. Synchronous. Request/response fields are validated and
+        shaped in-controller (no route-level DTO harvested).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The merchant id.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The merchant profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /merchants/whitelist-ip-address:
+    patch:
+      operationId: profileWhitelistIpAddress
+      tags: [Verification]
+      summary: Whitelist an IP address
+      description: >
+        Add an IP address to the merchant's API IP allowlist. Use to authorize a server
+        to call the Fincra API. Synchronous. Fields are validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WhitelistIpRequest" }
+            example:
+              ipAddress: 197.210.55.12
+      responses:
+        "200":
+          description: IP address whitelisted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/api/keys:
+    get:
+      operationId: profileGetMerchantApiKeys
+      tags: [Verification]
+      summary: Get merchant API keys
+      description: >
+        Return the merchant's API key metadata for API-key management in the dashboard.
+        Use to display the current keys. Synchronous read. (No approved product tag covers
+        API-key management; tagged Verification as the closest fit — flagged in the report.)
+      responses:
+        "200":
+          description: The merchant's API keys.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /merchants/kyc:
+    post:
+      operationId: profileSaveMerchantKyc
+      tags: [Verification]
+      summary: Save merchant KYC
+      description: >
+        Save the merchant's KYC information (customer/merchant validation and KYC). Use as
+        part of onboarding or KYC upkeep. Synchronous. Fields are validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveKycRequest" }
+      responses:
+        "200":
+          description: KYC saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/kyc/details:
+    get:
+      operationId: profileGetMerchantKyc
+      tags: [Verification]
+      summary: Get merchant KYC details
+      description: >
+        Return the merchant's stored KYC details. Use to display current KYC state during
+        onboarding. Synchronous read.
+      responses:
+        "200":
+          description: The merchant KYC details.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /merchants/kyc/upload:
+    post:
+      operationId: profileUploadMerchantKyc
+      tags: [Verification]
+      summary: Upload a KYC document
+      description: >
+        Upload a KYC document for the merchant. Use to attach supporting documents during
+        KYC. Synchronous. The multipart/file fields are handled in-controller.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/KycUploadRequest" }
+      responses:
+        "200":
+          description: KYC document uploaded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/kyc/submit:
+    post:
+      operationId: profileSubmitMerchantKyc
+      tags: [Verification]
+      summary: Submit merchant KYC
+      description: >
+        Submit the merchant's KYC for review. Use once all KYC data and documents are in
+        place. Synchronous acknowledgement; the actual review is handled downstream.
+      responses:
+        "200":
+          description: KYC submitted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/kyc/validate:
+    post:
+      operationId: profileValidateMerchantKyc
+      tags: [Verification]
+      summary: Validate merchant KYC
+      description: >
+        Validate the merchant's KYC data before submission. Use to check completeness and
+        surface issues early. Synchronous. Fields are validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ValidateKycRequest" }
+      responses:
+        "200":
+          description: KYC validation result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/kyc/followups:
+    get:
+      operationId: profileGetMerchantKycFollowups
+      tags: [Verification]
+      summary: Get KYC follow-ups
+      description: >
+        Return the admin follow-up items raised on the merchant's KYC. Use to see what
+        additional information reviewers have requested. Synchronous read.
+      responses:
+        "200":
+          description: The KYC follow-ups.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /merchants/kyc/followups/response:
+    patch:
+      operationId: profileRespondMerchantKycFollowup
+      tags: [Verification]
+      summary: Respond to a KYC follow-up
+      description: >
+        Save the merchant's response to a KYC follow-up raised by reviewers. Use to supply
+        the requested additional information. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KycFollowupResponseRequest" }
+      responses:
+        "200":
+          description: KYC follow-up response saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/kyc/level:
+    get:
+      operationId: profileGetMerchantKycLevel
+      tags: [Verification]
+      summary: Get KYC level
+      description: >
+        Return the merchant's current KYC level/tier. Use to gate features that depend on
+        KYC completeness. Synchronous read.
+      responses:
+        "200":
+          description: The merchant KYC level.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /merchants/kyc-upgrades/requests:
+    post:
+      operationId: profileRequestKycUpgrade
+      tags: [Verification]
+      summary: Request a KYC upgrade
+      description: >
+        Request a KYC-level upgrade for the merchant. Requires a dashboard user with the
+        Super Admin role (a merchant credential, not a Fincra system admin). Synchronous
+        acknowledgement; the upgrade is reviewed downstream.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KycUpgradeRequest" }
+      responses:
+        "200":
+          description: KYC upgrade requested.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/kyc-upgrades/requests/{id}/submit:
+    post:
+      operationId: profileSubmitKycUpgrade
+      tags: [Verification]
+      summary: Submit a KYC upgrade request
+      description: >
+        Submit a previously created KYC-upgrade request for review, identified by its
+        numeric id. Requires a dashboard user with the Super Admin role. Synchronous
+        acknowledgement.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The numeric KYC-upgrade request id (path constrained to digits).
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: KYC upgrade submitted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/kyc-upgrades/requests/pending:
+    get:
+      operationId: profileGetPendingKycUpgradeRequests
+      tags: [Verification]
+      summary: Get pending KYC upgrade requests
+      description: >
+        Return the merchant's pending KYC-upgrade requests. Use to track upgrade requests
+        awaiting review. Synchronous read.
+      responses:
+        "200":
+          description: Pending KYC upgrade requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /merchants/kyc-upgrades/followups:
+    get:
+      operationId: profileGetKycUpgradeFollowups
+      tags: [Verification]
+      summary: Get KYC upgrade follow-ups
+      description: >
+        Return the admin follow-up items raised on the merchant's KYC-upgrade requests.
+        Use to see what reviewers still need for an upgrade. Synchronous read.
+      responses:
+        "200":
+          description: The KYC upgrade follow-ups.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /merchants/regenerate-api-key:
+    post:
+      operationId: profileRegenerateApiKey
+      tags: [Verification]
+      summary: Regenerate the API key
+      description: >
+        Begin regeneration of the merchant's API key; typically triggers an OTP that must
+        be confirmed before the new key is issued. Use to rotate a compromised key.
+        Synchronous acknowledgement of the OTP challenge. (API-key management has no
+        dedicated product tag; tagged Verification — flagged in the report.)
+      responses:
+        "200":
+          description: API-key regeneration initiated (OTP challenge sent).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/regenerate-api-key/confirm-otp:
+    post:
+      operationId: profileConfirmApiKeyRegenerationOtp
+      tags: [Verification]
+      summary: Confirm API-key regeneration OTP
+      description: >
+        Confirm the OTP for an API-key regeneration and issue the new key. Use to complete
+        the key-rotation flow. Synchronous. The OTP is validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmOtpRequest" }
+            example:
+              otp: "482913"
+      responses:
+        "200":
+          description: API key regenerated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/regenerate-api-key/resend-otp:
+    post:
+      operationId: profileResendApiKeyRegenerationOtp
+      tags: [Verification]
+      summary: Resend API-key regeneration OTP
+      description: >
+        Resend the OTP for an in-progress API-key regeneration. Use when the merchant did
+        not receive the first challenge. Synchronous acknowledgement.
+      responses:
+        "200":
+          description: OTP resent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/regenerate-api-key-with-username:
+    post:
+      operationId: profileRegenerateApiKeyWithUsername
+      tags: [Verification]
+      summary: Regenerate the API key with username
+      description: >
+        Regenerate the merchant's API key using a username-based flow. Use as an
+        alternative key-rotation path. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegenerateApiKeyWithUsernameRequest" }
+      responses:
+        "200":
+          description: API key regenerated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/regenerate-webhook-key:
+    post:
+      operationId: profileRegenerateWebhookKey
+      tags: [Verification]
+      summary: Regenerate the webhook signing key
+      description: >
+        Regenerate the merchant's webhook signing key used to verify inbound Fincra
+        webhooks. Use to rotate the signing secret. Synchronous. (Webhook-key management
+        has no dedicated product tag; tagged Verification — flagged in the report.)
+      responses:
+        "200":
+          description: Webhook signing key regenerated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/ip-whitelist/requests:
+    post:
+      operationId: profileCreateIpWhitelistRequest
+      tags: [Verification]
+      summary: Create an IP-whitelist change request
+      description: >
+        Create a request to change the merchant's API IP allowlist; typically triggers an
+        OTP that must be verified. Use to add or change allowed IPs securely. Synchronous
+        acknowledgement of the OTP challenge.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IpWhitelistChangeRequest" }
+            example:
+              ipAddress: 197.210.55.12
+      responses:
+        "200":
+          description: IP-whitelist change request created (OTP challenge sent).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListIpWhitelistRequests
+      tags: [Verification]
+      summary: List IP-whitelist change requests
+      description: >
+        Return the merchant's IP-whitelist change requests. Use to track the status of
+        pending allowlist changes. Synchronous read.
+      responses:
+        "200":
+          description: The IP-whitelist change requests.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /merchants/ip-whitelist/requests/verify:
+    post:
+      operationId: profileVerifyIpWhitelistRequest
+      tags: [Verification]
+      summary: Verify an IP-whitelist change OTP
+      description: >
+        Verify the OTP for an in-progress IP-whitelist change request and apply the change.
+        Use to complete the secure allowlist update. Synchronous. OTP validated
+        in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmOtpRequest" }
+            example:
+              otp: "482913"
+      responses:
+        "200":
+          description: IP-whitelist change verified and applied.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/ip-whitelist/requests/resend-otp:
+    post:
+      operationId: profileResendIpWhitelistOtp
+      tags: [Verification]
+      summary: Resend the IP-whitelist change OTP
+      description: >
+        Resend the OTP for an in-progress IP-whitelist change request. Use when the
+        merchant did not receive the first challenge. Synchronous acknowledgement.
+      responses:
+        "200":
+          description: OTP resent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business:
+    post:
+      operationId: profileCreateBusiness
+      tags: [Verification]
+      summary: Create a business
+      description: >
+        Create a business under the authenticated merchant. Use to add a new business
+        entity to the merchant account. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBusinessRequest" }
+            example:
+              name: Ada Commerce Limited
+              country: NG
+      responses:
+        "200":
+          description: Business created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListBusinesses
+      tags: [Verification]
+      summary: List businesses
+      description: >
+        Return the businesses belonging to the authenticated merchant. Use to enumerate
+        the merchant's business entities. Synchronous read.
+      responses:
+        "200":
+          description: The merchant's businesses.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /business/me:
+    get:
+      operationId: profileGetParentBusiness
+      tags: [Verification]
+      summary: Get the parent business
+      description: >
+        Return the authenticated merchant's parent business. Use to resolve the primary
+        business context for the merchant. Synchronous read.
+      responses:
+        "200":
+          description: The parent business.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /business/merchant/credentials:
+    get:
+      operationId: profileGetMerchantCredentials
+      tags: [Verification]
+      summary: Get merchant credentials
+      description: >
+        Return the merchant's API credentials for a business. Gated by
+        authenticateWithBusiness. NOTE: defined after GET /business/:businessID so Express
+        likely matches it as businessID='merchant' first — probably shadowed/unreachable
+        (see EXTRACTION-REPORT-profile.md). Synchronous read.
+      responses:
+        "200":
+          description: The merchant credentials.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /business/{businessID}:
+    get:
+      operationId: profileGetBusiness
+      tags: [Verification]
+      summary: Get a business
+      description: >
+        Fetch a business by id. Use to read a specific business entity's profile. Gated by
+        authenticateWithBusiness. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: The business.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: profileUpdateBusiness
+      tags: [Verification]
+      summary: Update a business
+      description: >
+        Update a business entity identified by id. Use to change core business details.
+        Gated by authenticateWithBusiness. Synchronous. Fields validated in-controller.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateBusinessRequest" }
+      responses:
+        "200":
+          description: Business updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/email-settings:
+    patch:
+      operationId: profileUpdateBusinessEmailSettings
+      tags: [Verification]
+      summary: Update business email settings
+      description: >
+        Update the email-notification settings for a business. Use to configure which
+        emails the business receives. Gated by authenticateWithBusiness. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessSettingsRequest" }
+      responses:
+        "200":
+          description: Email settings updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/checkout-settings:
+    patch:
+      operationId: profileUpdateBusinessCheckoutSettings
+      tags: [Verification]
+      summary: Update business checkout settings
+      description: >
+        Update the checkout settings for a business. Use to configure the business's
+        hosted-checkout behaviour. Gated by authenticateWithBusiness. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessSettingsRequest" }
+      responses:
+        "200":
+          description: Checkout settings updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/settings:
+    patch:
+      operationId: profileUpdateBusinessSettings
+      tags: [Verification]
+      summary: Update business settings
+      description: >
+        Update general settings for a business. Use to change business-level configuration
+        flags. Gated by authenticateWithBusiness. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessSettingsRequest" }
+      responses:
+        "200":
+          description: Business settings updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/settlement-settings:
+    patch:
+      operationId: profileUpdateBusinessSettlementSettings
+      tags: [Verification]
+      summary: Update business settlement settings
+      description: >
+        Update the settlement configuration for a business (how and where the business is
+        settled). Use to change settlement preferences. Gated by authenticateWithBusiness.
+        Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessSettingsRequest" }
+      responses:
+        "200":
+          description: Settlement settings updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/sub-accounts:
+    post:
+      operationId: profileCreateSubAccount
+      tags: [Verification]
+      summary: Create a sub-account
+      description: >
+        Create a sub-account under a business. Gated by authenticateWithBusiness plus the
+        authorizeApi('create_sub_account') grant. Use to segment funds/reporting under a
+        business. Synchronous. Fields validated in-controller.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSubAccountRequest" }
+            example:
+              name: Retail Division
+      responses:
+        "200":
+          description: Sub-account created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListSubAccounts
+      tags: [Verification]
+      summary: List sub-accounts
+      description: >
+        Return the sub-accounts of a business. Use to enumerate segments under a business.
+        Gated by authenticateWithBusiness. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: The business's sub-accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /business/{businessID}/sub-accounts/search:
+    get:
+      operationId: profileSearchSubAccounts
+      tags: [Verification]
+      summary: Search sub-accounts
+      description: >
+        Search the sub-accounts of a business. Use to find a sub-account by name or other
+        criteria. Gated by authenticateWithBusiness. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: Matching sub-accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /business/{businessID}/sub-accounts/{subAccountID}:
+    get:
+      operationId: profileGetSubAccount
+      tags: [Verification]
+      summary: Get a sub-account
+      description: >
+        Fetch a single sub-account of a business by id, validated for merchant ownership.
+        Use to read a sub-account's details. Gated by authenticateWithBusiness. Synchronous
+        read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/SubAccountIdPath"
+      responses:
+        "200":
+          description: The sub-account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: profileUpdateSubAccount
+      tags: [Verification]
+      summary: Update a sub-account
+      description: >
+        Update a sub-account of a business by id, validated for merchant ownership. Use to
+        change a sub-account's details. Gated by authenticateWithBusiness. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - $ref: "#/components/parameters/SubAccountIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSubAccountRequest" }
+      responses:
+        "200":
+          description: Sub-account updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/settlement-accounts:
+    get:
+      operationId: profileListSettlementAccounts
+      tags: [Verification]
+      summary: List settlement accounts
+      description: >
+        Return the settlement accounts configured for a business. Use to display where the
+        business is settled. Gated by authenticateWithBusiness. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: The business's settlement accounts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: profileCreateSettlementAccount
+      tags: [Verification]
+      summary: Create a settlement account
+      description: >
+        Create a settlement account for a business. Use to add a destination the business
+        is settled to. Gated by authenticateWithBusiness. Synchronous. Fields validated
+        in-controller.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSettlementAccountRequest" }
+            example:
+              currency: NGN
+              accountNumber: "0111111111"
+              bankCode: "058"
+      responses:
+        "200":
+          description: Settlement account created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/settlement-accounts/{currency}:
+    get:
+      operationId: profileGetSettlementAccountByCurrency
+      tags: [Verification]
+      summary: Get a settlement account by currency
+      description: >
+        Fetch the settlement account for a business in a given currency. Use to read the
+        settlement destination for a currency. Gated by authenticateWithBusiness.
+        Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+        - name: currency
+          in: path
+          required: true
+          description: The settlement-account currency code (uppercased).
+          schema: { type: string }
+      responses:
+        "200":
+          description: The settlement account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /business/{businessID}/settlement-accounts/fiat/resolve:
+    get:
+      operationId: profileResolveSettlementBankAccount
+      tags: [Verification]
+      summary: Resolve a settlement bank account
+      description: >
+        Resolve (name-enquiry) a bank account for a business's fiat settlement account.
+        Gated by authenticateWithBusiness. NOTE: likely shadowed by GET /:currency
+        (currency='fiat') defined earlier and probably unreachable (see
+        EXTRACTION-REPORT-profile.md). Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: The resolved bank account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /business/{businessID}/settlement-accounts/crypto/validate:
+    get:
+      operationId: profileValidateSettlementWalletAddress
+      tags: [Verification]
+      summary: Validate a settlement wallet address
+      description: >
+        Validate a crypto wallet address for a business's settlement account. Gated by
+        authenticateWithBusiness. NOTE: likely shadowed by GET /:currency (currency='crypto')
+        and probably unreachable (see EXTRACTION-REPORT-profile.md). Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      responses:
+        "200":
+          description: The wallet-address validation result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /analytics/sub-accounts:
+    get:
+      operationId: profileGetSubAccountsAnalytics
+      tags: [Verification]
+      summary: Get sub-accounts analytics
+      description: >
+        Return analytics aggregated across the merchant's sub-accounts. Use to power a
+        sub-accounts analytics view. Synchronous read.
+      responses:
+        "200":
+          description: Sub-accounts analytics.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /issuing:
+    post:
+      operationId: profileCreateVirtualCard
+      tags: [Payments]
+      summary: Issue a virtual card
+      description: >
+        Issue a virtual card for the merchant. Use to create a spendable virtual card
+        instrument. Card creation may be provisioned asynchronously by the downstream
+        issuer; poll the get endpoints for status. (No approved card-issuing tag; tagged
+        Payments as the closest fit — flagged in the report.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateVirtualCardRequest" }
+            example:
+              currency: USD
+              amount: 50
+      responses:
+        "200":
+          description: Virtual card issued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListVirtualCards
+      tags: [Payments]
+      summary: List virtual cards
+      description: >
+        Return the merchant's issued virtual cards. Use to build a cards table. Synchronous
+        read.
+      responses:
+        "200":
+          description: The merchant's virtual cards.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /issuing/{id}:
+    get:
+      operationId: profileGetVirtualCard
+      tags: [Payments]
+      summary: Get a virtual card
+      description: >
+        Fetch a single virtual card by id. Use to read a card's status and details.
+        Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/CardIdPath"
+      responses:
+        "200":
+          description: The virtual card.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /issuing/{id}/fund:
+    post:
+      operationId: profileFundVirtualCard
+      tags: [Payments]
+      summary: Fund a virtual card
+      description: >
+        Add funds to a virtual card by id. Use to top up a card's spendable balance. Funding
+        may settle asynchronously via the issuer; poll the get endpoint for the updated
+        balance.
+      parameters:
+        - $ref: "#/components/parameters/CardIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardAmountRequest" }
+            example:
+              amount: 25
+      responses:
+        "200":
+          description: Card funded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /issuing/{id}/withdraw:
+    post:
+      operationId: profileWithdrawFromVirtualCard
+      tags: [Payments]
+      summary: Withdraw from a virtual card
+      description: >
+        Withdraw funds from a virtual card by id back to the merchant wallet. Use to pull
+        unused balance off a card. Withdrawal may settle asynchronously; poll the get
+        endpoint for the updated balance.
+      parameters:
+        - $ref: "#/components/parameters/CardIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardAmountRequest" }
+            example:
+              amount: 10
+      responses:
+        "200":
+          description: Withdrawal processed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /issuing/{id}/freeze:
+    patch:
+      operationId: profileFreezeVirtualCard
+      tags: [Payments]
+      summary: Freeze a virtual card
+      description: >
+        Freeze a virtual card by id so it cannot be used. Use to temporarily block a card.
+        Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/CardIdPath"
+      responses:
+        "200":
+          description: Card frozen.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /issuing/{id}/unfreeze:
+    patch:
+      operationId: profileUnfreezeVirtualCard
+      tags: [Payments]
+      summary: Unfreeze a virtual card
+      description: >
+        Unfreeze a previously frozen virtual card by id so it can be used again. Use to
+        restore a blocked card. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/CardIdPath"
+      responses:
+        "200":
+          description: Card unfrozen.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /issuing/{id}/transactions:
+    get:
+      operationId: profileGetVirtualCardTransactions
+      tags: [Payments]
+      summary: Get virtual-card transactions
+      description: >
+        Return the transactions on a virtual card by id. Use to build a card statement.
+        Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/CardIdPath"
+      responses:
+        "200":
+          description: The card's transactions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /users/me:
+    get:
+      operationId: profileGetLoggedInUser
+      tags: [Verification]
+      summary: Get the logged-in user
+      description: >
+        Return the details of the currently authenticated dashboard user (merchant
+        profile). Use to populate the signed-in user's profile. Synchronous read.
+      responses:
+        "200":
+          description: The logged-in user's details.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /users/password/change:
+    patch:
+      operationId: profileChangePassword
+      tags: [Verification]
+      summary: Change the user's password
+      description: >
+        Change the authenticated user's password. Use for self-service password changes in
+        the dashboard. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "200":
+          description: Password changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /nps/status:
+    get:
+      operationId: profileGetNpsStatus
+      tags: [Verification]
+      summary: Get NPS submission status
+      description: >
+        Return whether the merchant user has an outstanding NPS (Net Promoter Score) survey
+        to submit. Use to decide whether to prompt for feedback. Synchronous read.
+      responses:
+        "200":
+          description: The NPS submission status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /nps:
+    post:
+      operationId: profileCreateNpsRecord
+      tags: [Verification]
+      summary: Submit an NPS record
+      description: >
+        Submit a Net Promoter Score record for the merchant user. Use to capture user
+        feedback. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateNpsRequest" }
+            example:
+              score: 9
+              comment: Great virtual-account experience
+      responses:
+        "200":
+          description: NPS record submitted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /referral/merchant/{referralCode}:
+    get:
+      operationId: profileGetMerchantByReferralCode
+      tags: [Verification]
+      summary: Get a merchant by referral code
+      description: >
+        Resolve a merchant from a referral code. Use to look up who a referral code belongs
+        to. Synchronous read.
+      parameters:
+        - name: referralCode
+          in: path
+          required: true
+          description: The referral code to resolve.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The merchant for the referral code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /referral/my-referral-code:
+    get:
+      operationId: profileGetMyReferralCode
+      tags: [Verification]
+      summary: Get my referral code
+      description: >
+        Return the authenticated merchant's own referral code. Gated by the REFERRAL
+        product. Use to display the merchant's shareable referral code. Synchronous read.
+      responses:
+        "200":
+          description: The merchant's referral code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /referral/my-referred-merchants:
+    get:
+      operationId: profileGetMyReferredMerchants
+      tags: [Verification]
+      summary: Get my referred merchants
+      description: >
+        Return the merchants the authenticated merchant has referred. Gated by the REFERRAL
+        product. Use to display a referrals dashboard. Synchronous read.
+      responses:
+        "200":
+          description: The referred merchants.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /referral/update-referral-code:
+    patch:
+      operationId: profileUpdateReferralCode
+      tags: [Verification]
+      summary: Update my referral code
+      description: >
+        Update the authenticated merchant's referral code to a custom value. Gated by the
+        REFERRAL product. Use to personalize the referral code. Synchronous. Fields
+        validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateReferralCodeRequest" }
+            example:
+              referralCode: ada-commerce
+      responses:
+        "200":
+          description: Referral code updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /pos/request-terminal:
+    post:
+      operationId: profileRequestPosTerminal
+      tags: [Payments]
+      summary: Request a POS terminal
+      description: >
+        Request a point-of-sale terminal for the merchant. Use to start terminal
+        onboarding. Provisioning of the physical/virtual terminal is handled downstream.
+        Synchronous acknowledgement. (No approved POS tag; tagged Payments as the closest
+        fit — flagged in the report.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequestPosTerminalRequest" }
+      responses:
+        "200":
+          description: Terminal request submitted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /pos/register-agent:
+    post:
+      operationId: profileRegisterPosAgent
+      tags: [Payments]
+      summary: Register a POS agent
+      description: >
+        Register an agent for the merchant's POS network. Use to enroll an agent who will
+        operate terminals. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterPosAgentRequest" }
+      responses:
+        "200":
+          description: Agent registered.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /pos/available-terminals:
+    get:
+      operationId: profileGetAvailablePosTerminals
+      tags: [Payments]
+      summary: Get available POS terminals
+      description: >
+        Return the POS terminals available to the merchant. Use to display terminals the
+        merchant can request or manage. Synchronous read.
+      responses:
+        "200":
+          description: The available terminals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users:
+    post:
+      operationId: profileCreateTeamUser
+      tags: [Verification]
+      summary: Create a team user
+      description: >
+        Create a dashboard team member (user) under the merchant. Use to add a colleague to
+        the merchant account. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTeamUserRequest" }
+            example:
+              firstName: Ngozi
+              lastName: Eze
+              email: ngozi.eze@ada-commerce.com
+      responses:
+        "200":
+          description: Team user created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListTeamUsers
+      tags: [Verification]
+      summary: List team users
+      description: >
+        Return the dashboard team members of the merchant. Use to build a team-management
+        table. Synchronous read.
+      responses:
+        "200":
+          description: The merchant's team users.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/{id}:
+    get:
+      operationId: profileGetTeamUser
+      tags: [Verification]
+      summary: Get a team user
+      description: >
+        Fetch a single dashboard team member by numeric id. Use to read a team member's
+        profile. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      responses:
+        "200":
+          description: The team user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /user-management/users/{id}/roles:
+    put:
+      operationId: profileUpdateTeamUserRoles
+      tags: [Verification]
+      summary: Update a team user's roles
+      description: >
+        Replace the roles assigned to a dashboard team member by numeric id. Use to change
+        a colleague's permissions. Synchronous. Fields validated in-controller.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRolesRequest" }
+      responses:
+        "200":
+          description: Roles updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /user-management/users/{id}/activate:
+    patch:
+      operationId: profileActivateTeamUser
+      tags: [Verification]
+      summary: Activate a team user
+      description: >
+        Activate a dashboard team member by numeric id so they can sign in. Use to enable a
+        colleague's account. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      responses:
+        "200":
+          description: Team user activated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/{id}/deactivate:
+    patch:
+      operationId: profileDeactivateTeamUser
+      tags: [Verification]
+      summary: Deactivate a team user
+      description: >
+        Deactivate a dashboard team member by numeric id so they can no longer sign in. Use
+        to disable a colleague's account. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      responses:
+        "200":
+          description: Team user deactivated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/initiate-2fa:
+    patch:
+      operationId: profileInitiate2fa
+      tags: [Verification]
+      summary: Initiate 2FA setup
+      description: >
+        Begin two-factor-authentication configuration for the authenticated user. Use to
+        start enrolling in 2FA. Synchronous; returns the setup material.
+      responses:
+        "200":
+          description: 2FA setup initiated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/enable-2fa:
+    patch:
+      operationId: profileEnable2fa
+      tags: [Verification]
+      summary: Enable 2FA
+      description: >
+        Enable two-factor authentication for the authenticated user after setup. Use to turn
+        on 2FA. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Enable2faRequest" }
+      responses:
+        "200":
+          description: 2FA enabled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /user-management/users/disable-2fa:
+    patch:
+      operationId: profileDisable2fa
+      tags: [Verification]
+      summary: Disable 2FA
+      description: >
+        Disable two-factor authentication for the authenticated user. Requires a valid OTP
+        (validateOTP guard, event disable_2fa). Use to turn off 2FA. Synchronous.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Disable2faRequest" }
+            example:
+              otp: "482913"
+      responses:
+        "200":
+          description: 2FA disabled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /user-management/users/2fa-status:
+    get:
+      operationId: profileGet2faStatus
+      tags: [Verification]
+      summary: Get 2FA status
+      description: >
+        Return whether two-factor authentication is enabled for the authenticated user. Use
+        to display the current 2FA state. Synchronous read.
+      responses:
+        "200":
+          description: The 2FA status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/2fa/backup-codes:
+    post:
+      operationId: profileGenerate2faBackupCodes
+      tags: [Verification]
+      summary: Generate 2FA backup codes
+      description: >
+        Generate a new set of two-factor-authentication backup codes for the authenticated
+        user. Use to issue recovery codes. Synchronous; returns the codes once.
+      responses:
+        "200":
+          description: Backup codes generated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/2fa/otp:
+    post:
+      operationId: profileGenerate2faOtp
+      tags: [Verification]
+      summary: Generate a 2FA OTP
+      description: >
+        Generate a one-time password for a two-factor-authentication flow for the
+        authenticated user. Use to issue an OTP challenge. Synchronous acknowledgement.
+      responses:
+        "200":
+          description: OTP generated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/tour/complete:
+    patch:
+      operationId: profileCompleteUserTour
+      tags: [Verification]
+      summary: Complete the product tour
+      description: >
+        Mark the dashboard product tour as complete for the authenticated user. Use to
+        suppress onboarding prompts once seen. Synchronous.
+      responses:
+        "200":
+          description: Tour marked complete.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/users/environments:
+    patch:
+      operationId: profileSwitchUserEnvironment
+      tags: [Verification]
+      summary: Switch environment (test/live)
+      description: >
+        Switch the authenticated user's active environment between test and live. Use to
+        toggle the dashboard between sandbox and production context. Synchronous. Fields
+        validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SwitchEnvironmentRequest" }
+            example:
+              environment: test
+      responses:
+        "200":
+          description: Environment switched.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /user-management/users/environments/sync/initiate:
+    patch:
+      operationId: profileInitiateEnvironmentSync
+      tags: [Verification]
+      summary: Initiate environment sync
+      description: >
+        Begin syncing the authenticated user's data between the test and live environments.
+        Use to mirror configuration across environments. Synchronous acknowledgement; the
+        sync itself runs downstream.
+      responses:
+        "200":
+          description: Environment sync initiated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/permissions/grouped:
+    get:
+      operationId: profileGetGroupedPermissions
+      tags: [Verification]
+      summary: Get grouped permissions
+      description: >
+        Return the available permissions organized by group. Use to render a role/permission
+        editor. Synchronous read.
+      responses:
+        "200":
+          description: The grouped permissions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/roles:
+    post:
+      operationId: profileCreateRole
+      tags: [Verification]
+      summary: Create a role
+      description: >
+        Create a role (permission set) for the merchant's team. Use to define a new access
+        profile. Synchronous. Fields validated in-controller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRoleRequest" }
+            example:
+              name: Operations
+      responses:
+        "200":
+          description: Role created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    get:
+      operationId: profileListRoles
+      tags: [Verification]
+      summary: List roles
+      description: >
+        Return the roles defined for the merchant's team. Use to build a roles table.
+        Synchronous read.
+      responses:
+        "200":
+          description: The merchant's roles.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/roles/export:
+    post:
+      operationId: profileExportRoles
+      tags: [Verification]
+      summary: Export roles
+      description: >
+        Export the merchant's roles to a file. Use to download the role configuration.
+        Synchronous; returns the export artifact reference.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportRequest" }
+      responses:
+        "200":
+          description: Roles export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/roles/{id}:
+    get:
+      operationId: profileGetRole
+      tags: [Verification]
+      summary: Get a role
+      description: >
+        Fetch a single role by numeric id. Use to read a role's permissions. Synchronous
+        read.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      responses:
+        "200":
+          description: The role.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: profileUpdateRole
+      tags: [Verification]
+      summary: Update a role
+      description: >
+        Update a role by numeric id, changing its name or permission set. Use to adjust an
+        access profile. Synchronous. Fields validated in-controller.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateRoleRequest" }
+      responses:
+        "200":
+          description: Role updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /user-management/roles/{id}/activate:
+    patch:
+      operationId: profileActivateRole
+      tags: [Verification]
+      summary: Activate a role
+      description: >
+        Activate a role by numeric id so it can be assigned. Use to enable a role. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      responses:
+        "200":
+          description: Role activated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/roles/{id}/deactivate:
+    patch:
+      operationId: profileDeactivateRole
+      tags: [Verification]
+      summary: Deactivate a role
+      description: >
+        Deactivate a role by numeric id so it can no longer be assigned. Use to retire a
+        role. Synchronous.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      responses:
+        "200":
+          description: Role deactivated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/roles/{id}/users:
+    get:
+      operationId: profileGetRoleUsers
+      tags: [Verification]
+      summary: Get users of a role
+      description: >
+        Return the team members assigned to a role by numeric id. Use to see who holds a
+        role. Synchronous read.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      responses:
+        "200":
+          description: The role's users.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+  /user-management/roles/{id}/users/export:
+    post:
+      operationId: profileExportRoleUsers
+      tags: [Verification]
+      summary: Export users of a role
+      description: >
+        Export the team members assigned to a role by numeric id to a file. Use to download
+        the role's membership. Synchronous; returns the export artifact reference.
+      parameters:
+        - $ref: "#/components/parameters/NumericIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportRequest" }
+      responses:
+        "200":
+          description: Role-users export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret key, sent in the `api-key` header (fallback header `apikey` is
+        also accepted). The auth-service classifies the key as test or live and resolves
+        the merchant. Source node_modules/fliqpay-utils/dist/middleware/auth/authUtil.js:19.
+        Some dashboard routes additionally accept an `Authorization: Bearer <token>` user
+        token, and product-gated routes require the merchant to hold the relevant product
+        (e.g. VIRTUAL_ACCOUNT); the product check is bypassed when APP_ENVIRONMENT=test.
+
+  parameters:
+    BusinessIdPath:
+      name: businessID
+      in: path
+      required: true
+      description: The Fincra business id the resource belongs to.
+      schema:
+        type: string
+    SubAccountIdPath:
+      name: subAccountID
+      in: path
+      required: true
+      description: The sub-account id under the business.
+      schema:
+        type: string
+    BeneficiaryIdPath:
+      name: beneficiaryID
+      in: path
+      required: true
+      description: The beneficiary id under the business.
+      schema:
+        type: string
+    CardIdPath:
+      name: id
+      in: path
+      required: true
+      description: The virtual-card id.
+      schema:
+        type: string
+    NumericIdPath:
+      name: id
+      in: path
+      required: true
+      description: Numeric id (the route path is constrained to digits).
+      schema:
+        type: integer
+        minimum: 0
+
+  responses:
+    Forbidden:
+      description: The request is authenticated but not allowed for this business/product.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Access Denied. You're not authorized to access VIRTUAL_ACCOUNT product
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Virtual account not found
+            errorType: VIRTUAL_ACCOUNT_NOT_FOUND
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Validation failed
+            errorType: VALIDATION_FAILED
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` is [] when a handler returns nothing.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope. Controller errors are built by fincra-utils
+        APIHelper (adds an optional `errors` detail array); middleware/auth and 404 errors
+        are built by the fincra-utils errorHandler (may add code/attribution/retryable).
+        Source fincra-utils APIHelper.ts:145, errorHandler.ts:8.
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Present only on the controller (APIHelper) error path.
+        code:
+          type: string
+          description: Optional canonical error code, present only on the middleware error path.
+        attribution:
+          type: string
+          description: Optional attribution hint, present only on canonical middleware errors.
+        retryable:
+          type: boolean
+          description: Optional retry hint, present only on canonical middleware errors.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable on
+        the merchant-facing profile paths (from throw sites; see EXTRACTION-REPORT-profile.md).
+      enum:
+        - VALIDATION_FAILED
+        - INVALID_CURRENCY
+        - BUSINESS_PROFILE_REQUIRED
+        - VIRTUAL_ACCOUNT_NOT_FOUND
+        - CONFLICT_ERROR
+        - DUPLICATE_REFERENCE
+        - DUPLICATE_ACTION_FORBIDDEN
+        - UNPROCESSABLE_ENTITY
+        - RESOURCE_NOT_FOUND
+        - ACCESS_DENIED
+        - INTERNAL_SERVER_ERROR
+
+    Currency:
+      type: string
+      description: >
+        Reserved-account currency codes (enum VirtualAccountCurrency,
+        src/components/virtualAccounts/interfaces/virtualAccountsEnum.ts:25). The MCY (FCY)
+        subset is GBP, EUR, USD, CAD.
+      enum: [GBP, EUR, NGN, USD, XAF, GHS, KES, CAD, TZS]
+
+    VirtualAccountType:
+      type: string
+      description: Whether the reserved account is for a corporate or individual holder.
+      enum: [corporate, individual]
+
+    VirtualAccountStatus:
+      type: string
+      description: >
+        Lifecycle state of a reserved account (enum VirtualAccountStatus,
+        virtualAccountsEnum.ts).
+      enum: [pending, approved, declined, expired, closed, reviewed]
+
+    VirtualAccountEntityType:
+      type: string
+      description: Whether the account belongs to the main account or a sub-account.
+      enum: [main_account, sub_account]
+
+    VirtualAccountChannel:
+      type: string
+      description: >
+        Provider channel that issued or will issue the account (enum VirtualAccountChannel,
+        virtualAccountsEnum.ts:68).
+      enum:
+        - rave
+        - wema
+        - uba
+        - reservetrust
+        - vfd
+        - providus
+        - blackthorn
+        - globus
+        - moniepoint
+        - providusOmfb
+        - sterling
+        - clearjunction
+        - bold
+        - tazapay
+        - keyrails
+        - habari
+        - rail
+        - cca
+        - flutterwave
+        - choice
+        - pateno
+        - temboplus
+        - ifx
+        - freemarket
+        - firstbank
+
+    NgnChannel:
+      type: string
+      description: >
+        Active NGN provider channels accepted on NGN reserved-account requests
+        (NGNVirtualAccountsValidation.ts:199; vfd/providus/rave are commented out in code).
+      enum: [globus, wema, uba, habari, sterling, moniepoint, bold]
+
+    Address:
+      type: object
+      description: Postal address used in reserved-account KYC.
+      required: [countryOfResidence, number, zip, street, state, city]
+      properties:
+        countryOfResidence:
+          type: string
+          maxLength: 2
+          description: ISO-3166 alpha-2 country of residence, uppercased. Required.
+        number:
+          type: string
+          description: Building/house number. Required.
+        zip:
+          type: string
+          description: Postal/zip code. Required.
+        street:
+          type: string
+          description: Street line. Required.
+        state:
+          type: string
+          description: State or region. Required.
+        city:
+          type: string
+          description: City. Required.
+
+    KycDocument:
+      type: object
+      description: Identity document supplied in reserved-account KYC (createDocumentSchema).
+      required: [type, number, issuedCountryCode, issuedBy]
+      properties:
+        type:
+          type: string
+          description: Document type (enum IBANDocumentType). Required.
+          enum: [passport, driverLicense, idCard, nationalId]
+        number:
+          type: string
+          description: Document number. Required.
+        issuedCountryCode:
+          type: string
+          maxLength: 2
+          description: ISO-3166 alpha-2 issuing country, uppercased. Required.
+        issuedBy:
+          type: string
+          description: Issuing authority. Required.
+        issuedDate:
+          type: string
+          format: date
+          description: Issue date (YYYY-MM-DD, not in the future). Required for passport/driverLicense.
+        expirationDate:
+          type: string
+          format: date
+          description: Expiry date (YYYY-MM-DD, after issuedDate). Required for passport/driverLicense.
+
+    NgnIndividualKyc:
+      type: object
+      description: >
+        NGN individual KYC (NGNIndividualKYCSchema). bvnValidationOption is force-set
+        server-side, so some fields become conditionally required depending on it.
+      required: [lastName, firstName]
+      properties:
+        lastName:
+          type: string
+          description: Family name (ASCII, trimmed). Required.
+        firstName:
+          type: string
+          description: Given name (ASCII, trimmed). Required.
+        email:
+          type: string
+          format: email
+          description: Email. Required when bvn is empty and documents are required.
+        bvn:
+          type: string
+          description: Bank Verification Number. Required when bvnValidationOption is bvn_required.
+        address:
+          description: Address. Required when bvn is empty and documents are required.
+          allOf:
+            - $ref: "#/components/schemas/Address"
+        document:
+          description: Identity document. Required when bvn is empty and documents are required.
+          allOf:
+            - $ref: "#/components/schemas/KycDocument"
+        bvnValidationOption:
+          type: string
+          description: BVN validation mode. Defaults to bvn_required but is overwritten server-side.
+          enum: [bypass, documents_required, bvn_required]
+
+    NgnCorporateKyc:
+      type: object
+      description: >
+        NGN corporate KYC (NGNCorporateKYCSchema). Many fields become required only when
+        documents_required (bvn empty).
+      required: [businessName]
+      properties:
+        businessName:
+          type: string
+          description: Registered business name (ASCII, trimmed). Required.
+        rcNumber:
+          type: string
+          description: Corporate registration (RC) number.
+        incorporationDate:
+          type: string
+          description: Date of incorporation (MM-DD-YYYY).
+        email:
+          type: string
+          format: email
+          description: Business email. Required when bvn is empty and documents are required.
+        bvn:
+          type: string
+          description: Director/business BVN. Required when bvnValidationOption is bvn_required.
+        bvnName:
+          type: string
+          description: Name attached to the BVN.
+        website:
+          type: string
+          description: Business website URL. Required when documents are required.
+        taxNumber:
+          type: string
+          description: Tax identification number. Required when documents are required.
+        businessCategory:
+          type: string
+          description: Business category (enum VirtualAccountBusinessCategory). Required when documents are required.
+        primaryBusiness:
+          type: string
+          description: Primary line of business (enum VirtualAccountPrimaryBusiness). Required when documents are required.
+        address:
+          description: Business address. Required when documents are required.
+          allOf:
+            - $ref: "#/components/schemas/Address"
+        bvnValidationOption:
+          type: string
+          description: BVN validation mode. Defaults to bvn_required but is overwritten server-side.
+          enum: [bypass, documents_required, bvn_required]
+
+    NonNgnCorporateKyc:
+      type: object
+      description: >
+        Corporate KYC for GHS/KES/TZS reserved accounts. KES additionally requires
+        primaryBusiness and country fields (see per-currency notes in the report).
+      required: [businessName]
+      properties:
+        businessName:
+          type: string
+          description: Registered business name (ASCII, trimmed). Required.
+        email:
+          type: string
+          format: email
+          description: Business email. Required for GHS.
+        primaryBusiness:
+          type: string
+          description: Primary line of business (enum VirtualAccountPrimaryBusiness). Required for KES.
+        businessRegistrationCountry:
+          type: string
+          maxLength: 2
+          description: ISO-3166 alpha-2 registration country, uppercased. Required for KES.
+        incorporationCountryCode:
+          type: string
+          maxLength: 2
+          description: ISO-3166 alpha-2 incorporation country, uppercased. Required for KES.
+
+    NonNgnIndividualKyc:
+      type: object
+      description: Individual KYC for GHS/KES/TZS reserved accounts.
+      required: [lastName, firstName]
+      properties:
+        lastName:
+          type: string
+          description: Family name (ASCII, trimmed). Required.
+        firstName:
+          type: string
+          description: Given name (ASCII, trimmed). Required.
+        email:
+          type: string
+          format: email
+          description: Email. Required for GHS.
+
+    RequestVirtualAccountRequest:
+      type: object
+      description: >
+        Body for POST /virtual-accounts/requests (and the corporate self-request, migrate,
+        and sub-account request variants). The exact KYCInformation shape depends on
+        currency and accountType; NGN uses NgnIndividualKyc/NgnCorporateKyc, GHS/KES/TZS use
+        the NonNgn* schemas. IBAN (GBP/EUR/USD/CAD) and XAF schemas were not field-harvested
+        (see EXTRACTION-REPORT-profile.md).
+      required: [accountType, currency]
+      properties:
+        accountType:
+          $ref: "#/components/schemas/VirtualAccountType"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        channel:
+          $ref: "#/components/schemas/NgnChannel"
+        merchantReference:
+          type: string
+          description: Your unique reference for this account request.
+        phoneNumber:
+          type: string
+          description: Contact phone (validated for GH on GHS requests).
+        dateOfBirth:
+          type: string
+          description: Date of birth (MM-DD-YYYY), NGN only.
+        accountNumber:
+          type: string
+          description: Preferred account number; allowed (length 10) only when channel=globus, otherwise forbidden.
+        metadata:
+          description: Arbitrary metadata object (must be truthy when present).
+        KYCInformation:
+          description: >
+            KYC payload; the exact shape is selected server-side by accountType and
+            currency. For NGN see NgnIndividualKyc (individual) and NgnCorporateKyc
+            (corporate); for GHS/KES/TZS see NonNgnIndividualKyc (individual) and
+            NonNgnCorporateKyc (corporate). Because the branch is conditional in code (not a
+            strict discriminated union), this is modelled as anyOf rather than oneOf.
+          anyOf:
+            - $ref: "#/components/schemas/NgnIndividualKyc"
+            - $ref: "#/components/schemas/NgnCorporateKyc"
+            - $ref: "#/components/schemas/NonNgnIndividualKyc"
+            - $ref: "#/components/schemas/NonNgnCorporateKyc"
+
+    RequestBankTransferVirtualAccountRequest:
+      type: object
+      description: >
+        Body for POST /virtual-accounts/transfer and /generate-for-bank-transfer. Creates a
+        temporary, amount-scoped reserved account that expires after `expiresAt` seconds.
+      required: [expiresAt, amount, accountType]
+      properties:
+        amount:
+          type: string
+          pattern: "^\\d+(\\.\\d{1,2})?$"
+          description: Expected transfer amount, as a string with up to 2 decimals. Required.
+        expiresAt:
+          type: integer
+          minimum: 1
+          description: Time-to-live for the temporary account, in seconds. Required.
+        accountType:
+          $ref: "#/components/schemas/VirtualAccountType"
+        currency:
+          description: Currency of the temporary account. Defaults to NGN.
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+        channel:
+          type: string
+          description: >
+            Provider channel. For GHS, firstbank is valid; otherwise one of
+            wema, globus, habari, moniepoint, sterling, bold.
+        accountNumber:
+          type: string
+          description: Preferred account number; allowed (length 10) only when channel=globus, otherwise forbidden.
+        name:
+          type: string
+          description: Display name for the temporary account.
+        merchantReference:
+          type: string
+          description: Your unique reference for this temporary account.
+        metadata:
+          description: Arbitrary metadata (must be truthy when present).
+        KYCInformation:
+          type: object
+          description: Minimal KYC for the temporary account (NGNTempVaSchema).
+          required: [businessName]
+          properties:
+            businessName:
+              type: string
+              description: Business name (ASCII, trimmed). Required.
+            email:
+              type: string
+              format: email
+              description: Contact email.
+
+    UpdateVirtualAccountBvnRequest:
+      type: object
+      description: Body for PATCH /virtual-accounts/{id}/update-bvn.
+      required: [id, bvn]
+      properties:
+        id:
+          type: string
+          maxLength: 24
+          description: The virtual-account id (max 24 chars). Required.
+        bvn:
+          type: string
+          minLength: 11
+          maxLength: 11
+          description: The 11-digit Nigerian BVN to attach. Required.
+
+    UpdateVirtualAccountInfoRequest:
+      type: object
+      description: >
+        Body for PATCH /virtual-accounts/update-info/{id}. Field set validated in-controller
+        (Blackthorn update flow); not fully harvested.
+      x-todo: "Exact update-info fields not harvested. Source: src/components/virtualAccounts/api/virtualAccountsAPI.ts:188"
+      properties:
+        additionalInformation:
+          description: Provider-specific information to update on the account.
+
+    SaveAdditionalInfoRequest:
+      type: object
+      description: >
+        Body for PATCH /virtual-accounts/additional-information/{additionalInfoId}.
+        Field set validated in-controller; not fully harvested.
+      x-todo: "Exact additional-info response fields not harvested. Source: src/components/virtualAccounts/api/virtualAccountsAPI.ts:246"
+      properties:
+        response:
+          description: The merchant's response to the requested additional information.
+
+    AcceptTermsRequest:
+      type: object
+      description: Body for POST /virtual-accounts/accept-terms (unauthenticated route).
+      required: [token, captchaToken, ipAddress]
+      properties:
+        token:
+          type: string
+          description: The one-time terms token from the terms page. Required.
+        captchaToken:
+          type: string
+          description: The captcha verification token. Required.
+        ipAddress:
+          type: string
+          description: The accepting user's IP address. Required.
+
+    VirtualAccount:
+      type: object
+      description: >
+        A reserved (virtual) account as returned by the request/read endpoints. Field set
+        validated and shaped in-controller; the full serialized shape was not harvested.
+      x-todo: "Full VirtualAccount response shape not harvested; fields below are the stable, code-referenced ones. Source: src/components/virtualAccounts/virtualAccountsController.ts:171"
+      properties:
+        id:
+          type: string
+          description: The virtual-account id.
+        accountNumber:
+          type: string
+          description: The provisioned account number a payer funds.
+        accountType:
+          $ref: "#/components/schemas/VirtualAccountType"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        channel:
+          $ref: "#/components/schemas/VirtualAccountChannel"
+        status:
+          $ref: "#/components/schemas/VirtualAccountStatus"
+        merchantReference:
+          type: string
+          description: Your reference supplied on the request.
+
+    CreateCustomerRequest:
+      type: object
+      description: >
+        Body for POST /customers. Field set validated in-controller (customersController);
+        not fully harvested.
+      x-todo: "Exact customer create fields not harvested. Source: src/components/customers/customersAPI.ts:7"
+      properties:
+        firstName:
+          type: string
+          description: Customer's given name.
+        lastName:
+          type: string
+          description: Customer's family name.
+        email:
+          type: string
+          format: email
+          description: Customer's email.
+        phoneNumber:
+          type: string
+          description: Customer's phone number.
+
+    UpdateCustomerRequest:
+      type: object
+      description: Body for PUT /customers/{cid}. Field set validated in-controller; not fully harvested.
+      x-todo: "Exact customer update fields not harvested. Source: src/components/customers/customersAPI.ts:37"
+      properties:
+        firstName:
+          type: string
+          description: Customer's given name.
+        lastName:
+          type: string
+          description: Customer's family name.
+        email:
+          type: string
+          format: email
+          description: Customer's email.
+        phoneNumber:
+          type: string
+          description: Customer's phone number.
+
+    CreateBeneficiaryRequest:
+      type: object
+      description: Body for POST /beneficiaries/business/{businessID}. Validated in-controller; not fully harvested.
+      x-todo: "Exact beneficiary create fields not harvested. Source: src/components/beneficiaries/beneficiariesAPI.ts:6"
+      properties:
+        firstName:
+          type: string
+          description: Beneficiary's given name.
+        lastName:
+          type: string
+          description: Beneficiary's family name.
+        accountNumber:
+          type: string
+          description: Beneficiary's bank account number.
+        bankCode:
+          type: string
+          description: Beneficiary's bank/institution code.
+
+    UpdateBeneficiaryRequest:
+      type: object
+      description: Body for PATCH /beneficiaries/business/{businessID}/{beneficiaryID}. Validated in-controller; not fully harvested.
+      x-todo: "Exact beneficiary update fields not harvested. Source: src/components/beneficiaries/beneficiariesAPI.ts:17"
+      properties:
+        firstName:
+          type: string
+          description: Beneficiary's given name.
+        lastName:
+          type: string
+          description: Beneficiary's family name.
+        accountNumber:
+          type: string
+          description: Beneficiary's bank account number.
+        bankCode:
+          type: string
+          description: Beneficiary's bank/institution code.
+
+    WhitelistIpRequest:
+      type: object
+      description: Body for PATCH /merchants/whitelist-ip-address. Validated in-controller; not fully harvested.
+      x-todo: "Exact whitelist-ip fields not harvested. Source: src/components/merchants/merchantsAPI.ts:36"
+      properties:
+        ipAddress:
+          type: string
+          description: The IP address to add to the API allowlist.
+
+    SaveKycRequest:
+      type: object
+      description: Body for POST /merchants/kyc. Validated in-controller; not fully harvested.
+      x-todo: "Exact merchant KYC fields not harvested. Source: src/components/merchants/merchantsAPI.ts:66"
+      properties:
+        kycData:
+          description: The KYC payload for the merchant.
+
+    KycUploadRequest:
+      type: object
+      description: Multipart body for POST /merchants/kyc/upload. Handled in-controller; not fully harvested.
+      x-todo: "Exact KYC upload fields not harvested. Source: src/components/merchants/merchantsAPI.ts:85"
+      properties:
+        file:
+          type: string
+          format: binary
+          description: The KYC document file.
+
+    ValidateKycRequest:
+      type: object
+      description: Body for POST /merchants/kyc/validate. Validated in-controller; not fully harvested.
+      x-todo: "Exact KYC validate fields not harvested. Source: src/components/merchants/merchantsAPI.ts:103"
+      properties:
+        kycData:
+          description: The KYC payload to validate.
+
+    KycFollowupResponseRequest:
+      type: object
+      description: Body for PATCH /merchants/kyc/followups/response. Validated in-controller; not fully harvested.
+      x-todo: "Exact KYC follow-up response fields not harvested. Source: src/components/merchants/merchantsAPI.ts:123"
+      properties:
+        response:
+          description: The merchant's response to the KYC follow-up.
+
+    KycUpgradeRequest:
+      type: object
+      description: Body for POST /merchants/kyc-upgrades/requests. Validated in-controller; not fully harvested.
+      x-todo: "Exact KYC upgrade request fields not harvested. Source: src/components/merchants/merchantsAPI.ts:145"
+      properties:
+        targetLevel:
+          description: The KYC level the merchant wants to upgrade to.
+
+    ConfirmOtpRequest:
+      type: object
+      description: Body for OTP-confirm endpoints (API-key regeneration, IP-whitelist verify).
+      required: [otp]
+      properties:
+        otp:
+          type: string
+          description: The one-time password to confirm the action.
+
+    RegenerateApiKeyWithUsernameRequest:
+      type: object
+      description: Body for POST /merchants/regenerate-api-key-with-username. Validated in-controller; not fully harvested.
+      x-todo: "Exact regenerate-with-username fields not harvested. Source: src/components/merchants/merchantsAPI.ts:225"
+      properties:
+        username:
+          type: string
+          description: The username used to authorize the key regeneration.
+
+    IpWhitelistChangeRequest:
+      type: object
+      description: Body for POST /merchants/ip-whitelist/requests. Validated in-controller; not fully harvested.
+      x-todo: "Exact IP-whitelist change fields not harvested. Source: src/components/ipWhitelistChange/ipWhitelistChangeAPI.ts:8"
+      properties:
+        ipAddress:
+          type: string
+          description: The IP address to change the allowlist to.
+
+    CreateBusinessRequest:
+      type: object
+      description: Body for POST /business. Validated in-controller; not fully harvested.
+      x-todo: "Exact business create fields not harvested. Source: src/components/businesses/businessesAPI.ts:8"
+      properties:
+        name:
+          type: string
+          description: The business name.
+        country:
+          type: string
+          description: The business country (ISO-3166 alpha-2).
+
+    UpdateBusinessRequest:
+      type: object
+      description: Body for PATCH /business/{businessID}. Validated in-controller; not fully harvested.
+      x-todo: "Exact business update fields not harvested. Source: src/components/businesses/businessesAPI.ts:56"
+      properties:
+        name:
+          type: string
+          description: The business name.
+
+    BusinessSettingsRequest:
+      type: object
+      description: >
+        Body for the various PATCH /business/{businessID}/*-settings endpoints
+        (email-settings, checkout-settings, settings, settlement-settings). Field set is
+        specific per endpoint and validated in-controller; not fully harvested.
+      x-todo: "Exact business settings fields not harvested per settings endpoint. Source: src/components/businesses/businessesAPI.ts:34,45,106,117"
+      properties:
+        settings:
+          description: The settings payload for the target settings group.
+
+    CreateSubAccountRequest:
+      type: object
+      description: Body for POST /business/{businessID}/sub-accounts. Validated in-controller; not fully harvested.
+      x-todo: "Exact sub-account create fields not harvested. Source: src/components/subAccounts/subAccountsAPI.ts:8"
+      properties:
+        name:
+          type: string
+          description: The sub-account name.
+
+    UpdateSubAccountRequest:
+      type: object
+      description: Body for PATCH /business/{businessID}/sub-accounts/{subAccountID}. Validated in-controller; not fully harvested.
+      x-todo: "Exact sub-account update fields not harvested. Source: src/components/subAccounts/subAccountsAPI.ts:47"
+      properties:
+        name:
+          type: string
+          description: The sub-account name.
+
+    CreateSettlementAccountRequest:
+      type: object
+      description: Body for POST /business/{businessID}/settlement-accounts. Validated in-controller; not fully harvested.
+      x-todo: "Exact settlement-account create fields not harvested. Source: src/routes/settlementAccounts.ts:28"
+      properties:
+        currency:
+          type: string
+          description: The settlement currency (uppercased).
+        accountNumber:
+          type: string
+          description: The settlement bank account number.
+        bankCode:
+          type: string
+          description: The settlement bank/institution code.
+
+    CreateVirtualCardRequest:
+      type: object
+      description: Body for POST /issuing. Validated in-controller; not fully harvested.
+      x-todo: "Exact virtual-card create fields not harvested. Source: src/components/virtualCards/issuingAPI.ts:7"
+      properties:
+        currency:
+          type: string
+          description: The card currency.
+        amount:
+          type: number
+          description: The initial funding amount.
+
+    CardAmountRequest:
+      type: object
+      description: Body for POST /issuing/{id}/fund and /issuing/{id}/withdraw. Validated in-controller; not fully harvested.
+      x-todo: "Exact card fund/withdraw fields not harvested. Source: src/components/virtualCards/issuingAPI.ts:37,47"
+      properties:
+        amount:
+          type: number
+          description: The amount to fund or withdraw.
+
+    ChangePasswordRequest:
+      type: object
+      description: Body for PATCH /users/password/change. Validated in-controller; not fully harvested.
+      x-todo: "Exact change-password fields not harvested. Source: src/components/users/usersAPI.ts:16"
+      properties:
+        currentPassword:
+          type: string
+          description: The user's current password.
+        newPassword:
+          type: string
+          description: The user's new password.
+
+    CreateNpsRequest:
+      type: object
+      description: Body for POST /nps. Validated in-controller; not fully harvested.
+      x-todo: "Exact NPS fields not harvested. Source: src/components/nps/npsAPI.ts:16"
+      properties:
+        score:
+          type: integer
+          description: The NPS score (0-10).
+        comment:
+          type: string
+          description: Optional free-text feedback.
+
+    UpdateReferralCodeRequest:
+      type: object
+      description: Body for PATCH /referral/update-referral-code. Validated in-controller; not fully harvested.
+      x-todo: "Exact referral-code fields not harvested. Source: src/components/referrals/apis/merchantReferralAPI.ts:48"
+      properties:
+        referralCode:
+          type: string
+          description: The new custom referral code.
+
+    RequestPosTerminalRequest:
+      type: object
+      description: Body for POST /pos/request-terminal. Validated in-controller; not fully harvested.
+      x-todo: "Exact POS terminal request fields not harvested. Source: src/components/pos/apis/posAPI.ts:8"
+      properties:
+        quantity:
+          type: integer
+          description: Number of terminals requested.
+
+    RegisterPosAgentRequest:
+      type: object
+      description: Body for POST /pos/register-agent. Validated in-controller; not fully harvested.
+      x-todo: "Exact POS agent register fields not harvested. Source: src/components/pos/apis/posAPI.ts:16"
+      properties:
+        name:
+          type: string
+          description: The agent's name.
+
+    CreateTeamUserRequest:
+      type: object
+      description: Body for POST /user-management/users. Validated in-controller; not fully harvested.
+      x-todo: "Exact team-user create fields not harvested. Source: src/components/userManagement/users/usersAPI.ts:6"
+      properties:
+        firstName:
+          type: string
+          description: The team member's given name.
+        lastName:
+          type: string
+          description: The team member's family name.
+        email:
+          type: string
+          format: email
+          description: The team member's email (invitation is sent here).
+
+    UpdateUserRolesRequest:
+      type: object
+      description: Body for PUT /user-management/users/{id}/roles. Validated in-controller; not fully harvested.
+      x-todo: "Exact update-user-roles fields not harvested. Source: src/components/userManagement/users/usersAPI.ts:50"
+      properties:
+        roleIds:
+          type: array
+          items:
+            type: integer
+          description: The role ids to assign to the user.
+
+    Enable2faRequest:
+      type: object
+      description: Body for PATCH /user-management/users/enable-2fa. Validated in-controller; not fully harvested.
+      x-todo: "Exact enable-2fa fields not harvested. Source: src/components/userManagement/users/usersAPI.ts:89"
+      properties:
+        otp:
+          type: string
+          description: The OTP or verification code confirming 2FA setup.
+
+    Disable2faRequest:
+      type: object
+      description: Body for PATCH /user-management/users/disable-2fa (validateOTP guard, event disable_2fa).
+      required: [otp]
+      properties:
+        otp:
+          type: string
+          description: The OTP confirming the disable-2FA action. Required.
+
+    SwitchEnvironmentRequest:
+      type: object
+      description: Body for PATCH /user-management/users/environments.
+      properties:
+        environment:
+          type: string
+          description: The environment to switch to.
+          enum: [test, live]
+
+    CreateRoleRequest:
+      type: object
+      description: Body for POST /user-management/roles. Validated in-controller; not fully harvested.
+      x-todo: "Exact role create fields not harvested. Source: src/components/userManagement/roles/api/rolesAPI.ts"
+      properties:
+        name:
+          type: string
+          description: The role name.
+        permissions:
+          type: array
+          items:
+            type: string
+          description: The permission keys granted by the role.
+
+    UpdateRoleRequest:
+      type: object
+      description: Body for PUT /user-management/roles/{id}. Validated in-controller; not fully harvested.
+      x-todo: "Exact role update fields not harvested. Source: src/components/userManagement/roles/api/rolesAPI.ts"
+      properties:
+        name:
+          type: string
+          description: The role name.
+        permissions:
+          type: array
+          items:
+            type: string
+          description: The permission keys granted by the role.
+
+    ExportRequest:
+      type: object
+      description: >
+        Body for the role/role-users export endpoints. Field set validated in-controller;
+        not fully harvested.
+      x-todo: "Exact export request fields not harvested. Source: src/components/userManagement/roles/api/rolesAPI.ts (export)"
+      properties:
+        format:
+          type: string
+          description: The export file format.

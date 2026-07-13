@@ -1,0 +1,1297 @@
+openapi: 3.1.0
+info:
+  title: Fincra Core (fincra-core)
+  version: "1.0.0"
+  summary: Merchant-facing verification, reference-data, transaction-lookup and reporting API for the fincra-core service.
+  description: >
+    The fincra-core service hosts Fincra's shared merchant surface: account-name
+    resolution (NUBAN / mobile-money / IBAN name enquiry), BVN / document / identity
+    verification, read-only lookups of a business's transactions and disbursements, the
+    merchant wallet-logs report, and the platform reference data (banks, bank branches,
+    currencies, countries, currency pairs, channels, cash-pickup security questions).
+
+
+    All endpoints here are synchronous request/response calls: the resolve and
+    verification calls return their result (or a decision) in the same response, and the
+    lookup and reference endpoints return the current stored data. The service emits NO
+    merchant-facing webhooks and runs no outbound event producer, so there is no
+    top-level `webhooks` block; the only outbound notification in code is an internal
+    Slack alert (src/components/thresholds/thresholdsService.ts:107-119). Verification
+    endpoints that charge the wallet (BVN, document verification) settle the charge
+    inline as part of the same call.
+
+
+    This spec is generated from the source of `fincra-core` on branch
+    `fix/gate-spec-fee-tag-typecheck` (code is truth). The wider harvest was performed
+    against the platform default branch `dev`. Anything undeterminable from code is
+    marked with an `x-todo` extension carrying the exact `file:line`, and is listed in
+    EXTRACTION-REPORT-core.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The Express app mounts routers at two roots only: app.use('/', ...) and
+  app.use('/v2', componentsV2API) (src/app.ts:36-37). There is NO global version or
+  base-path prefix on the '/' router — banks/currencies/countries/transactions/etc. are
+  top-level. The public API prefix a merchant actually calls (platform-wide /v2, and any
+  product prefix) is applied at the Kong gateway, which is NOT in this repo (no ingress
+  file; src/server.ts:12-23). Paths below are exactly as routed in code; prepend the
+  confirmed gateway prefix before publishing. See EXTRACTION-REPORT-core.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/core
+    description: Sandbox (test keys). Powers the docs playground. Source k8s/overlays/sandbox/app.properties:6
+  - url: https://api.fincra.com/core
+    description: Production (live keys). Source k8s/overlays/prod/app.properties:7
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Verification
+    description: Resolve bank accounts and verify identity (BVN, document, identity).
+  - name: Payouts
+    description: Look up a business's transactions, disbursements, channels and cash-pickup reference data.
+  - name: Wallets
+    description: The merchant wallet-logs report.
+  - name: "Currency Conversion"
+    description: Currency and currency-pair reference data.
+
+paths:
+  /accounts/resolve:
+    post:
+      operationId: coreResolveAccount
+      tags: [Verification]
+      summary: Resolve / verify a bank account
+      description: >
+        Perform a name enquiry against a destination account and return the resolved
+        account-holder name. Supports NUBAN (Nigeria, 10-digit account plus a 3-6 digit
+        bank code), Ghana bank accounts (SWIFT/BIC), mobile-money wallets, and IBAN. Use
+        this before initiating a payout to confirm the beneficiary. The call is
+        synchronous: the resolved name is returned in the same response, or a 422 is
+        returned when the account cannot be resolved. Requires a merchant `api-key`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveAccountRequest"
+            examples:
+              ngNuban:
+                summary: Resolve a Nigerian NUBAN account
+                value:
+                  currency: NGN
+                  type: nuban
+                  accountNumber: "0111111111"
+                  bankCode: "058"
+              ghMobileMoney:
+                summary: Resolve a Ghana mobile-money wallet
+                value:
+                  currency: GHS
+                  type: mobile_money
+                  accountNumber: "233551234567"
+                  mobileMoneyCode: MTN
+      responses:
+        "200":
+          description: The account was resolved; the holder name is returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ResolvedAccount"
+              example:
+                success: true
+                message: Account resolved successfully
+                data:
+                  accountNumber: "0111111111"
+                  accountName: Amara Okeke
+                  bankCode: "058"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails resolveAccountSchema (currency not NGN/GHS; NGN accountNumber not exactly 10 digits; missing bankCode for NGN nuban; mobileMoneyCode not alpha; GHS bankSwiftCode not 8-11 letters; missing iban for type iban). Source src/components/misc/miscValidation.ts:3-77
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: "APIHelper expectPayload default true: 'No payload sent' on empty body; or integrations gateway returns 'Account could not be resolved. Please check your selection and try again'. Source src/components/misc/miscRepository.ts:101-129"
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing/invalid api-key at the auth layer. Source fincra-utils authMiddlewareV2.ts:76-123
+
+  /transactions/search/business/{businessID}:
+    post:
+      operationId: coreListBusinessTransactions
+      tags: [Payouts]
+      summary: Search a business's transactions
+      description: >
+        Return a filtered, paginated list of the transactions belonging to one business
+        (the authenticated merchant or one of its sub-accounts). Use this to build a
+        transaction table or to reconcile. The call is synchronous and returns the
+        current stored transactions. Requires a merchant `api-key`; the caller must own
+        the business in the path (validateBusinessOwnership).
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListBusinessTransactionsRequest"
+            example:
+              page: 1
+              perPage: 20
+      responses:
+        "200":
+          description: A page of the business's transactions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body/params fail listBusinessTransactionsSchema. Source src/components/transaction/transactionAPI.ts:13-25
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authenticated merchant does not own the business in the path (validateBusinessOwnership). Source src/components/transaction/transactionAPI.ts:13-25
+
+  /transactions/search/business/{businessID}/sub-accounts:
+    post:
+      operationId: coreListBusinessSubAccountsTransactions
+      tags: [Payouts]
+      summary: Search a business's sub-account transactions
+      description: >
+        Return a filtered, paginated list of the transactions across all sub-accounts of
+        one business. Use this to reconcile a parent business over its sub-accounts in a
+        single call. The call is synchronous. Requires a merchant `api-key`; the caller
+        must own the business in the path (validateBusinessOwnership).
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListBusinessTransactionsRequest"
+            example:
+              page: 1
+              perPage: 20
+      responses:
+        "200":
+          description: A page of the business's sub-account transactions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body/params fail listBusinessTransactionsSchema. Source src/components/transaction/transactionAPI.ts:28-40
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authenticated merchant does not own the business in the path. Source src/components/transaction/transactionAPI.ts:28-40
+
+  /transactions/{transactionID}:
+    get:
+      operationId: coreGetBusinessTransaction
+      tags: [Payouts]
+      summary: Get one transaction
+      description: >
+        Fetch a single business or sub-account transaction by its Fincra transaction id.
+        Use for status polling or to display one transaction's detail. The call is
+        synchronous and returns the current stored transaction. Requires a merchant
+        `api-key`; the caller must own the transaction (validateTransactionOwnership).
+      parameters:
+        - name: transactionID
+          in: path
+          required: true
+          description: The Fincra transaction id to fetch.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The transaction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Path fails getTransactionSchema. Source src/components/transaction/transactionAPI.ts:46-57
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authenticated merchant does not own the transaction (validateTransactionOwnership). Source src/components/transaction/transactionAPI.ts:46-57
+
+  /transactions/disbursements:
+    get:
+      operationId: coreListBusinessDisbursements
+      tags: [Payouts]
+      summary: List the business's disbursements
+      description: >
+        Return all disbursements for the authenticated business. Use to reconcile
+        outbound payouts recorded against the business. The call is synchronous and
+        returns the current stored disbursements. Auth is inherited from the parent
+        mount (merchant `api-key`).
+      responses:
+        "200":
+          description: The business's disbursements.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails GetAllBusinessTransactionsSchema. Source src/components/transaction/disbursements/disbursementsAPI.ts:7-13
+
+  /transactions/disbursements/by-reference:
+    get:
+      operationId: coreGetDisbursementByReference
+      tags: [Payouts]
+      summary: Get a disbursement by Fincra reference
+      description: >
+        Fetch a single disbursement for the authenticated business by its Fincra
+        `reference`. Use to look up one payout when you stored the Fincra reference. The
+        call is synchronous. Auth inherited from the parent mount (merchant `api-key`).
+      parameters:
+        - name: reference
+          in: query
+          required: true
+          description: The Fincra disbursement reference to look up.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The disbursement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails getBusinessTransactionByReferenceSchema. Source src/components/transaction/disbursements/disbursementsAPI.ts:16-23
+
+  /transactions/disbursements/by-customer-reference:
+    get:
+      operationId: coreGetDisbursementByCustomerReference
+      tags: [Payouts]
+      summary: Get a disbursement by customer reference
+      description: >
+        Fetch a single disbursement for the authenticated business by the merchant's own
+        `customerReference` (the reference you supplied when creating the payout). Use to
+        reconcile against your own identifiers. The call is synchronous. Auth inherited
+        from the parent mount (merchant `api-key`).
+      parameters:
+        - name: customerReference
+          in: query
+          required: true
+          description: The merchant's own reference supplied at payout creation.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The disbursement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails getBusinessTransactionByCustomerReferenceSchema. Source src/components/transaction/disbursements/disbursementsAPI.ts:26-33
+
+  /channels:
+    get:
+      operationId: coreListChannels
+      tags: [Payouts]
+      summary: List channels
+      description: >
+        Return the list of supported payment channels (read from static channel
+        reference data). Use to discover the channels available for routing. The call is
+        synchronous and returns the current channel list. This V1 route applies
+        `authenticate()` so a merchant `api-key` is required. The response is a raw
+        envelope with no `message` key (src/controllers/channels.ts:13-16).
+      responses:
+        "200":
+          description: The channel list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, const: true, description: Always true on success. }
+                  data:
+                    type: array
+                    description: The supported channels (static reference data).
+                    items:
+                      type: object
+                      description: A channel entry. Exact fields are the static data/channels.json shape (not harvested).
+                      x-todo: "Channel object fields not harvested; served from static data/channels.json. Source src/controllers/channels.ts:4-16"
+        "403": { $ref: "#/components/responses/Forbidden" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing/invalid api-key at the auth layer. Source src/routes/channels.ts:6-8
+
+  /merchant-report/wallet-logs:
+    get:
+      operationId: coreGetWalletLogsReport
+      tags: [Wallets]
+      summary: Get the merchant wallet-logs report
+      description: >
+        Return a paginated report of the merchant's wallet transaction logs (credits and
+        debits), filtered by currency and optional date range. This is the only
+        merchant-callable wallet-style endpoint in core; it is a report, not a live
+        balance API. The call is synchronous. Requires a merchant `api-key`; the
+        business is derived from the authenticated user.
+      parameters:
+        - name: currency
+          in: query
+          required: true
+          description: Wallet currency to report on; trimmed and uppercased (no enum restriction in code).
+          schema: { type: string }
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 20, maximum 300.
+          schema: { type: integer, default: 20, maximum: 300 }
+        - name: from
+          in: query
+          description: Include wallet logs on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: Include wallet logs on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: A page of wallet logs.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails getAllWalletLogsSchema (currency required; perPage > 300). Source src/components/merchantReport/merchantReportValidation.ts:3-9
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing/invalid api-key at the auth layer. Source src/routes/index.ts:81-85
+
+  /bvn-verification:
+    post:
+      operationId: coreVerifyBvn
+      tags: [Verification]
+      summary: Verify a BVN
+      description: >
+        Perform a Bank Verification Number lookup for the authenticated business and
+        return the verification result. The call is synchronous and charges the
+        merchant's wallet inline. Requires a merchant `api-key` AND the BVN_VERIFICATION
+        product entitlement (authorizeProduct), which is bypassed only when
+        APP_ENVIRONMENT is 'test'.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyBvnRequest"
+            example:
+              bvn: "22212345678"
+              business: 63f9a1b2c4d5e6f7a8b9c0d1
+      responses:
+        "200":
+          description: The BVN verification result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails newBvnVerificationSchema (bvn not exactly 11 chars; business missing). Source src/components/bvnVerification/bvnVerificationValidation.ts:4-7
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: "Missing/invalid api-key, or merchant lacks the BVN_VERIFICATION product: \"Access Denied. You're not authorized to access <product> product\". Source fincra-utils authMiddlewareV2.ts:412-449"
+
+  /bvn-verification/logs:
+    get:
+      operationId: coreListBvnVerificationLogs
+      tags: [Verification]
+      summary: List BVN verification logs
+      description: >
+        Return a paginated list of the merchant's past BVN verification attempts. Use to
+        audit or display prior verifications. The call is synchronous. Requires a
+        merchant `api-key` AND the BVN_VERIFICATION product entitlement; the business is
+        derived from the authenticated user unless overridden by the `business` query.
+      parameters:
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10, maximum 20.
+          schema: { type: integer, default: 10, maximum: 20 }
+        - name: business
+          in: query
+          description: Optional business id override; otherwise derived from the authenticated user.
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of BVN verification logs.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails getAllBvnVerificationLogsSchema (perPage > 20). Source src/components/bvnVerification/bvnVerificationValidation.ts:9-11
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing/invalid api-key, or merchant lacks the BVN_VERIFICATION product. Source fincra-utils authMiddlewareV2.ts:412-449
+
+  /cash-pick-up-security-questions:
+    get:
+      operationId: coreListCashPickUpSecurityQuestions
+      tags: [Payouts]
+      summary: List cash-pickup security questions
+      description: >
+        Return the list of security questions available for cash-pickup payouts. Use to
+        present the question choices when collecting a cash-pickup security answer. The
+        call is synchronous and takes no payload. Requires a merchant `api-key`.
+      responses:
+        "200":
+          description: The cash-pickup security questions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing/invalid api-key at the auth layer. Source src/routes/cashPickUpSecurityQuestions.ts:7-14
+
+  /v2/document-verification:
+    post:
+      operationId: coreVerifyDocument
+      tags: [Verification]
+      summary: Verify a document
+      description: >
+        Verify a government-issued identity document (national ID, BVN, passport,
+        driver's licence, voter's card) for a supported country and return the
+        verification result. The call is synchronous and charges the merchant's wallet
+        inline. The inner `data` object shape is validated downstream, not at the Joi
+        edge. Requires a merchant `api-key`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyDocumentRequest"
+            example:
+              country: NG
+              type: NATIONAL_ID
+              data:
+                idNumber: "70123456789"
+              refresh: false
+      responses:
+        "200":
+          description: The document verification result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails verifyDocumentValidationSchema (country not NG/GH/KE; type not in the document-type enum; data not an object). Source src/componentsV2/documentVerification/documentVerificationValidation.ts:4-15
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing/invalid api-key at the auth layer. Source src/componentsV2/componentsV2API.ts:15-19
+
+  /v2/identity-verification:
+    post:
+      operationId: coreVerifyIdentity
+      tags: [Verification]
+      summary: Verify an identity
+      description: >
+        Run an identity verification for one of the supported verification types across
+        NG, KE, GH, ZA or the GLOBAL scope, including NUBAN account verification, BVN,
+        NIN, CAC, passport, driver's licence, voter's card, address and liveness. The
+        call is synchronous and returns the verification result. Required fields depend on
+        `verificationType` (see the per-type notes). Requires a merchant `api-key`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyIdentityRequest"
+            examples:
+              ngBvn:
+                summary: Verify a Nigerian BVN
+                value:
+                  verificationType: bvn
+                  countryCode: NG
+                  searchParameter: "22212345678"
+              ngNuban:
+                summary: Verify a Nigerian NUBAN account
+                value:
+                  verificationType: nuban
+                  countryCode: NG
+                  searchParameter: Amara Okeke
+                  accountNumber: "0111111111"
+                  bankCode: "058"
+      responses:
+        "200":
+          description: The identity verification result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails IdentityVerificationSchema (unknown verificationType for the country; countryCode not in NG/KE/GH/ZA/GL; missing per-type required fields). Source src/componentsV2/identityVerification/identityVerificationValidation.ts:11-184
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing/invalid api-key at the auth layer. Source src/componentsV2/componentsV2API.ts:26-30
+
+  /banks:
+    get:
+      operationId: coreListBanks
+      tags: [Payouts]
+      summary: List banks / institutions
+      description: >
+        Return the list of banks and institutions Fincra can pay to, filtered by
+        currency, 2-letter country, and/or payment destination. Use to populate a bank
+        picker before a payout or account resolution. The call is synchronous. NOTE: this
+        route carries NO in-app auth middleware (src/routes/index.ts:33); merchant
+        enforcement, if any, is applied by the upstream gateway (see x-todo).
+      x-todo: "GET /banks is mounted with NO auth middleware in code (src/routes/index.ts:33). Whether the Kong gateway injects/requires api-key before it reaches core is not visible in-repo. Source src/components/banks/banksAPI.ts:7-14"
+      parameters:
+        - name: currency
+          in: query
+          description: Filter by currency; trimmed and uppercased (no code enum enforced in this validator).
+          schema: { type: string }
+        - name: country
+          in: query
+          description: Filter by 2-letter country code; trimmed and uppercased.
+          schema: { type: string, minLength: 2, maxLength: 2 }
+        - name: paymentDestination
+          in: query
+          description: Filter by delivery type.
+          schema: { $ref: "#/components/schemas/PaymentDestination" }
+      responses:
+        "200":
+          description: The matching banks / institutions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails getAllBanksSchema (country not length-2; invalid paymentDestination). Source src/components/banks/banksValidation.ts:9-13
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: "'Either country or currency is required' when neither is supplied; or 'No payload sent' (APIHelper expectPayload true) when no query params at all. Source src/components/banks/banksService.ts:26-30"
+
+  /banks/branches:
+    get:
+      operationId: coreListBankBranches
+      tags: [Payouts]
+      summary: List bank branches
+      description: >
+        Return the list of institution branches known to Fincra. Use where a corridor
+        requires a branch selection. The call is synchronous. NOTE: this route carries NO
+        in-app auth middleware (mounted under /banks); merchant enforcement, if any, is
+        applied by the upstream gateway. Query/param fields are validated inside the
+        branches controller, not declared at the router.
+      x-todo: "GET /banks/branches declares no Joi at the router and carries no auth middleware; accepted query fields live inside branchesController.getAllBranches, which was not opened. Source src/components/banks/branches/branchesAPI.ts:7-34"
+      responses:
+        "200":
+          description: The bank branches.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails getAllBranchesSchema. Source src/components/banks/branches/branchesService.ts:57-69
+
+  /banks/branches/bank/{bankId}:
+    get:
+      operationId: coreListBankBranchesByBank
+      tags: [Payouts]
+      summary: List branches for one bank
+      description: >
+        Return the branches belonging to one bank, identified by its Fincra bank id. Use
+        after selecting a bank to narrow to a specific branch. The call is synchronous.
+        NOTE: this route carries NO in-app auth middleware; merchant enforcement, if any,
+        is applied by the upstream gateway.
+      parameters:
+        - name: bankId
+          in: path
+          required: true
+          description: The Fincra bank id whose branches to return.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The branches for the bank.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Params fail getBranchesByBankSchema. Source src/components/banks/branches/branchesService.ts:108-131
+
+  /banks/branches/{id}:
+    get:
+      operationId: coreGetBankBranch
+      tags: [Payouts]
+      summary: Get one bank branch
+      description: >
+        Fetch a single institution branch by its Fincra branch id. Use to display or
+        confirm a branch's details. The call is synchronous and returns the branch or
+        null. NOTE: this route carries NO in-app auth middleware; merchant enforcement,
+        if any, is applied by the upstream gateway.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The Fincra branch id to fetch.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The branch.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Params fail getBranchByIdSchema. Source src/components/banks/branches/branchesService.ts:160-177
+
+  /currencies:
+    get:
+      operationId: coreListCurrencies
+      tags: ["Currency Conversion"]
+      summary: List supported currencies
+      description: >
+        Return the platform's supported currencies, optionally filtered by type (crypto
+        or fiat). Use to discover which currencies Fincra supports. The call is
+        synchronous. The supported currency codes are data-driven (data/admin), not a
+        hardcoded enum. NOTE: this route carries NO in-app auth middleware
+        (src/routes/index.ts:39); the response has no `message` key.
+      x-todo: "Supported currency CODES are data-driven from data/admin (src/models/currency.ts:40-63), not read in the harvest; only the type enum {crypto,fiat} is code-enforced. Route has no auth middleware. Source src/components/currencies/currenciesController.ts:9-46"
+      parameters:
+        - name: type
+          in: query
+          description: Filter by currency type (case-insensitive). When omitted, all supported currencies are returned.
+          schema:
+            type: string
+            enum: [crypto, fiat]
+      responses:
+        "200":
+          description: The supported currencies.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, const: true, description: Always true on success. }
+                  data:
+                    type: array
+                    description: The supported currencies (data-driven; item shape not harvested).
+                    items:
+                      type: object
+                      description: A currency entry.
+                      x-todo: "Currency object fields not harvested; data-driven from data/admin. Source src/models/currency.ts:40-63"
+      x-fincra-error-catalog: []
+
+  /currencies/{currencyCode}:
+    get:
+      operationId: coreGetCurrency
+      tags: ["Currency Conversion"]
+      summary: Get one currency by code
+      description: >
+        Fetch a single supported currency by its (uppercased) code. Use to confirm one
+        currency is supported and read its detail. The call is synchronous. NOTE: this
+        route carries NO in-app auth middleware; merchant enforcement, if any, is applied
+        by the upstream gateway.
+      parameters:
+        - name: currencyCode
+          in: path
+          required: true
+          description: The currency code to look up; uppercased before matching.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The currency.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: "\"Currency with code '<CODE>' not supported\" when the code is unknown. Source src/components/currencies/currenciesController.ts:31-45"
+
+  /v2/currencies:
+    get:
+      operationId: coreListCurrenciesV2
+      tags: ["Currency Conversion"]
+      summary: List currencies (V2)
+      description: >
+        Return a paginated list of currencies from the V2 currencies module. Use as the
+        V2 equivalent of the currency list. The call is synchronous. NOTE: the V2
+        currencies GET routes carry NO in-app auth middleware (src/componentsV2/currencies/currenciesAPI.ts);
+        merchant enforcement, if any, is applied by the upstream gateway.
+      x-todo: "V2 currencies write routes (POST/PATCH/enable/disable) also carry no auth middleware in code; likely gateway/admin-gated but unverified. Source src/componentsV2/currencies/currenciesAPI.ts:6-59"
+      parameters:
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10 (no maximum enforced in code).
+          schema: { type: integer, default: 10, minimum: 1 }
+      responses:
+        "200":
+          description: A page of currencies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Query fails getAllCurrencesSchema. Source src/componentsV2/currencies/currenciesValidation.ts:35-46
+
+  /v2/channels:
+    get:
+      operationId: coreListChannelsV2
+      tags: [Payouts]
+      summary: List channels (V2)
+      description: >
+        Return the channels from the V2 channels module. Use as the V2 equivalent of the
+        channel list. The call is synchronous. NOTE: the V2 channels GET routes carry NO
+        in-app auth middleware (only POST create is system-admin); merchant enforcement,
+        if any, is applied by the upstream gateway.
+      x-todo: "V2 channels GET routes carry no auth middleware; per-route guards/throw sites not fully enumerated. Source src/componentsV2/channels/channelsAPI.ts:6-35"
+      responses:
+        "200":
+          description: The channels.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+      x-fincra-error-catalog: []
+
+  /countries:
+    get:
+      operationId: coreListCountries
+      tags: [Payouts]
+      summary: List payout countries
+      description: >
+        Return the countries Fincra supports for payouts. Use to populate a country
+        picker. The call is synchronous. NOTE: this route carries NO in-app auth
+        middleware (src/routes/index.ts:36). The response spreads pagination fields at the
+        top level (no data/message wrapper), and errors use a distinct shape.
+      x-todo: "GET /countries has no auth middleware and uses a distinct error shape (httpResponseError 400 validation_failed; serverError 502 with errorType duplicating the message string). Source src/controllers/countries.ts:11-30"
+      responses:
+        "200":
+          description: The supported payout countries (pagination fields spread at top level).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, const: true, description: Always true on success. }
+                  data:
+                    type: array
+                    description: The country entries; pagination fields are spread alongside at the top level.
+                    items:
+                      type: object
+                      description: A country entry.
+                      x-todo: "Country object fields not harvested. Source src/controllers/countries.ts:23-26"
+        "400":
+          description: Validation failure (distinct shape via httpResponseError).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                success: false
+                error: Invalid request parameters
+                errorType: validation_failed
+        "502":
+          description: >
+            Upstream fetch failure (BAD_GATEWAY via serverError). CODE-TRUTH QUIRK: on this
+            branch `errorType` duplicates the human message string rather than a machine
+            code (e.g. errorType === "Unable to fetch supported countries"). The example
+            uses SERVER_ERROR to satisfy the ErrorType enum; the real wire value is the
+            message string. Source fincra-utils src/utilities/misc.ts:89-100
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                success: false
+                error: Unable to fetch supported countries
+                errorType: SERVER_ERROR
+      x-fincra-error-catalog:
+        - errorType: validation_failed
+          status: 400
+          trigger: Params fail listPayoutCountriesSchema (via httpResponseError). Source src/controllers/countries.ts:11-30
+        - errorType: SERVER_ERROR
+          status: 502
+          trigger: "Catch-all via serverError; the wire errorType duplicates the message string, e.g. 'Unable to fetch supported countries'. Source fincra-utils src/utilities/misc.ts:89-100"
+
+  /countries/supported-countries:
+    get:
+      operationId: coreListSupportedCountries
+      tags: [Payouts]
+      summary: List supported countries
+      description: >
+        Return the full set of countries Fincra supports. Use as the broader country
+        reference list. The call is synchronous. NOTE: this route carries NO in-app auth
+        middleware; merchant enforcement, if any, is applied by the upstream gateway. The
+        response spreads pagination fields at the top level.
+      responses:
+        "200":
+          description: The supported countries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, const: true, description: Always true on success. }
+                  data:
+                    type: array
+                    description: The country entries; pagination fields spread alongside at the top level.
+                    items:
+                      type: object
+                      description: A country entry.
+                      x-todo: "Country object fields not harvested. Source src/controllers/countries.ts:37-40"
+        "502":
+          description: >
+            Upstream fetch failure (BAD_GATEWAY via serverError). CODE-TRUTH QUIRK:
+            `errorType` duplicates the human message string on this branch (e.g.
+            "Unable to fetch supported countries for payout"). The example uses
+            SERVER_ERROR to satisfy the ErrorType enum; the real wire value is the message
+            string. Source src/controllers/countries.ts:33-43
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                success: false
+                error: Unable to fetch supported countries for payout
+                errorType: SERVER_ERROR
+      x-fincra-error-catalog:
+        - errorType: SERVER_ERROR
+          status: 502
+          trigger: "Catch-all via serverError; the wire errorType duplicates the message string. Source src/controllers/countries.ts:33-43"
+
+  /v2/currency-pairs:
+    get:
+      operationId: coreListCurrencyPairs
+      tags: ["Currency Conversion"]
+      summary: List currency pairs
+      description: >
+        Return the supported FX currency pairs. Use to discover which conversions Fincra
+        supports and their structure. The call is synchronous. NOTE: this route carries
+        NO in-app auth middleware (src/routes/index.ts:64); merchant enforcement, if any,
+        is applied by the upstream gateway.
+      x-todo: "GET /v2/currency-pairs carries no auth middleware; query fields validated inside currencyPairsController, not harvested. Source src/components/currencyPairs/currencyPairsV2API.ts:6-22"
+      responses:
+        "200":
+          description: The supported currency pairs.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+      x-fincra-error-catalog: []
+
+  /v2/currency-pairs/validate:
+    get:
+      operationId: coreValidateCurrencyPair
+      tags: ["Currency Conversion"]
+      summary: Validate a currency pair
+      description: >
+        Validate that a given source/destination currency pair is supported for
+        conversion. Use before requesting a quote to confirm the corridor exists. The
+        call is synchronous. NOTE: this route carries NO in-app auth middleware; merchant
+        enforcement, if any, is applied by the upstream gateway.
+      x-todo: "GET /v2/currency-pairs/validate carries no auth middleware; accepted query fields validated inside currencyPairsController, not harvested. Source src/components/currencyPairs/currencyPairsV2API.ts:6-22"
+      responses:
+        "200":
+          description: The pair validation result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret or public key, sent in the `api-key` header (fallback header
+        `apikey` is also accepted). The auth-service classifies the key as test or live
+        and resolves the merchant; core never inspects the key prefix itself. Source
+        node_modules/fliqpay-utils/src/middleware/auth/authUtil.ts:17-39. Note: core
+        exposes NO separate x-pub-key/x-business-id flow. Some reference-data routes
+        (banks, currencies, countries, currency-pairs, V2 channels) carry no in-app auth
+        and rely on the upstream gateway (see the per-route x-todo notes).
+
+  parameters:
+    BusinessIdPath:
+      name: businessID
+      in: path
+      required: true
+      description: The Fincra business id the transactions belong to; must be owned by the authenticated merchant.
+      schema:
+        type: string
+
+  responses:
+    Forbidden:
+      description: The request is not authenticated, or is not allowed for this business/product.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: No API Key Provided
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "API Endpoint (/transactions/abc -> GET) not found"
+            errorType: RESOURCE_NOT_FOUND
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Account could not be resolved. Please check your selection and try again
+            errorType: UNPROCESSABLE_ENTITY
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: >
+        The standard Fincra success envelope built by fincra-utils APIHelper
+        (res.json({ success, message, data })). `data` defaults to [] when a handler
+        returns nothing. Some raw handlers (channels, currencies, countries) omit
+        `message` or spread pagination at the top level. Source
+        node_modules/fliqpay-utils/src/utilities/APIHelper.ts:77-81
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result (absent on some raw handlers).
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope. For APIHelper-wrapped controllers it is
+        { success:false, error, errorType, errors } (the extra `errors` key carries the
+        Joi message array). The global errorHandler emits { success:false, error,
+        errorType } with additive code/attribution/retryable only when a 'specific'
+        defineError is thrown (none on core paths). Source
+        node_modules/fliqpay-utils/src/utilities/APIHelper.ts:128-153
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Not present on every error branch.
+
+    ErrorType:
+      type: string
+      description: >
+        Machine code for the error. Enumerates the values reachable on the core merchant
+        and reference-data paths (from the error-class map and throw sites; see
+        EXTRACTION-REPORT-core.md). The lowercase `validation_failed` and the
+        message-as-errorType value on /countries are code-truth quirks of that
+        controller's distinct error shape.
+      enum:
+        - VALIDATION_FAILED
+        - UNPROCESSABLE_ENTITY
+        - ACCESS_DENIED
+        - USER_AUTHENTICATION_FALSE
+        - RESOURCE_NOT_FOUND
+        - RESOURCE_EXIST
+        - OPERATION_FORBIDDEN
+        - INTERNAL_SERVER_ERROR
+        - SERVER_ERROR
+        - SERVICE_UNAVAILABLE
+        - HTTP_ERROR
+        - HTTP_CONNECTION_ERROR
+        - validation_failed
+
+    PaymentDestination:
+      type: string
+      description: >
+        Where a payout is delivered; used to filter the bank list. Source
+        src/components/banks/banksInterface.ts:3-8
+      enum: [bank_account, mobile_money_wallet, cash_pick_up, settlement_account]
+
+    ResolveAccountRequest:
+      type: object
+      description: >
+        Body for POST /accounts/resolve. Conditional requirements depend on `currency`
+        and `type`. Unknown keys are rejected (no .unknown()). Source
+        src/components/misc/miscValidation.ts:3-75
+      properties:
+        currency:
+          type: string
+          default: NGN
+          description: Destination currency; uppercased. Defaults to NGN.
+          enum: [NGN, GHS]
+        type:
+          type: string
+          default: nuban
+          description: Account/rail type to resolve. Defaults to nuban.
+          enum: [nuban, iban, mobile_money, bank_account]
+        accountNumber:
+          type: string
+          description: >
+            Account number / MSISDN. Required when type is nuban, mobile_money, or
+            bank_account. For NGN it must be exactly 10 digits (^[0-9]+$); for GHS it must
+            be numeric (^[0-9]+$) with no length bound.
+        bankCode:
+          type: string
+          minLength: 3
+          maxLength: 6
+          pattern: "^[0-9]+$"
+          description: Local bank/institution code. Required only when currency=NGN and type=nuban.
+        mobileMoneyCode:
+          type: string
+          minLength: 2
+          maxLength: 20
+          pattern: "^[a-zA-Z]+$"
+          description: Mobile-money network code (letters only). Required only when type=mobile_money.
+        bankSwiftCode:
+          type: string
+          pattern: "^[a-zA-Z]{8,11}$"
+          description: SWIFT/BIC (8-11 letters). Required only when currency=GHS and type=bank_account.
+        iban:
+          type: string
+          description: IBAN. Required only when type=iban.
+
+    ResolvedAccount:
+      type: object
+      description: >
+        The resolved account result returned by /accounts/resolve. Field set inferred
+        from the resolve flow; exact keys not enumerated in the harvest.
+      x-todo: "Exact resolved-account response keys not harvested; confirm from miscRepository resolve return shape. Source src/components/misc/miscRepository.ts:101-129"
+      properties:
+        accountNumber: { type: string, description: The account number that was resolved. }
+        accountName: { type: string, description: The resolved account-holder name. }
+        bankCode: { type: string, description: The bank/institution code used for the enquiry. }
+
+    ListBusinessTransactionsRequest:
+      type: object
+      description: >
+        Body for the transaction search endpoints (listBusinessTransactionsSchema). The
+        exact accepted fields were not enumerated in the harvest; page/perPage pagination
+        is the confirmed shape.
+      x-todo: "Full field set of listBusinessTransactionsSchema not enumerated (validator name taken from the import + validate() call site). Source src/components/transaction/transactionAPI.ts:13-25"
+      properties:
+        page:
+          type: integer
+          default: 1
+          minimum: 1
+          description: 1-based page number.
+        perPage:
+          type: integer
+          default: 10
+          minimum: 1
+          description: Items per page.
+
+    VerifyBvnRequest:
+      type: object
+      description: >
+        Body for POST /bvn-verification (newBvnVerificationSchema). Unknown keys rejected.
+        Source src/components/bvnVerification/bvnVerificationValidation.ts:4-7
+      required: [bvn, business]
+      properties:
+        bvn:
+          type: string
+          minLength: 11
+          maxLength: 11
+          description: The 11-character Bank Verification Number to verify.
+        business:
+          type: string
+          description: The Fincra business id the verification is charged to.
+
+    VerifyDocumentRequest:
+      type: object
+      description: >
+        Body for POST /v2/document-verification (verifyDocumentValidationSchema). The
+        inner `data` fields are validated downstream, not at the Joi edge. Source
+        src/componentsV2/documentVerification/documentVerificationValidation.ts:4-15
+      required: [country, type, data]
+      properties:
+        country:
+          type: string
+          description: Country of the document; uppercased.
+          enum: [NG, GH, KE]
+        type:
+          type: string
+          description: Document type; uppercased.
+          enum: [NATIONAL_ID, BVN, PASSPORT, DRIVERS_LICENSE, VOTERS_CARD]
+        data:
+          type: object
+          description: >
+            Free-form object carrying the document-specific fields (e.g. idNumber). Inner
+            shape validated downstream, not by the edge Joi schema.
+          x-todo: "Per-type inner fields of `data` are enforced downstream, not in Joi. Source src/componentsV2/documentVerification/documentVerificationInterface.ts:27-39"
+        refresh:
+          type: boolean
+          default: false
+          description: When true, bypass any cached result and re-run the verification.
+
+    VerifyIdentityRequest:
+      type: object
+      description: >
+        Body for POST /v2/identity-verification (IdentityVerificationSchema). Required
+        fields beyond the base three depend on `verificationType` (e.g. nuban needs
+        accountNumber + bankCode; bvn/nin/virtualNin need a digit `searchParameter` of
+        fixed length). See EXTRACTION-REPORT-core.md for the full per-type matrix. Source
+        src/componentsV2/identityVerification/identityVerificationValidation.ts:11-184
+      required: [verificationType, searchParameter]
+      properties:
+        verificationType:
+          type: string
+          description: >
+            The verification to run. Allowed keys per country: NG {passport,
+            driversLicense, cac, cacAdvanced, votersCard, tin, virtualNin, nin, bvn,
+            bvnAdvanced, address, nuban}; GH {driversLicense, votersCardOld, votersCard};
+            KE {passport, nationalId}; ZA {nationalId}; GL {livenessCheck, ocrGeneric}.
+        searchParameter:
+          type: string
+          description: >
+            The value to verify; trimmed. Its meaning and constraints depend on
+            verificationType (e.g. the BVN/NIN number, the passport number, a name).
+        countryCode:
+          type: string
+          description: >
+            Country scope. Defaults to 'GL' for GLOBAL verification types; otherwise
+            required.
+          enum: [NG, KE, GH, ZA, GL]
+        accountNumber:
+          type: string
+          minLength: 10
+          maxLength: 10
+          description: Required for verificationType=nuban; the 10-digit account number.
+        bankCode:
+          type: string
+          description: Required for verificationType=nuban; the bank/institution code.
+        rcNumber:
+          type: string
+          minLength: 5
+          maxLength: 10
+          description: Required for verificationType cac/cacAdvanced; the company RC number (alphanumeric).
+        companyType:
+          type: string
+          description: Required for verificationType cac/cacAdvanced.
+        cacType:
+          type: string
+          description: Optional for verificationType cacAdvanced.
+          enum: [co, bn, it]
+        companyName:
+          type: string
+          description: Optional company name for verificationType cac.
+        firstName:
+          type: string
+          minLength: 2
+          description: Given name; required for verificationType address.
+        lastName:
+          type: string
+          minLength: 2
+          description: Family name; required for verificationType passport (NG) and address.
+        phone:
+          type: string
+          description: Optional phone for verificationType address.
+        kycType:
+          type: string
+          default: kyc
+          description: KYC type for verificationType address.
+          enum: [kyc]
+        callbackUrl:
+          type: string
+          format: uri
+          description: Callback URL required for verificationType address.
+        street:
+          type: string
+          description: Street; required for verificationType address.
+        lga:
+          type: string
+          description: Local government area; required for verificationType address.
+        state:
+          type: string
+          description: State; required for verificationType address.
