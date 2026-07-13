@@ -421,51 +421,51 @@
         "groups": [
           {
             "group": "Payouts",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-disbursements.yaml"
+            "openapi": "/api-reference/openapi/fincra-disbursements.yaml"
           },
           {
             "group": "Payments",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-collections.yaml"
+            "openapi": "/api-reference/openapi/fincra-collections.yaml"
           },
           {
             "group": "Currency Conversion",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-fx-conversions.yaml"
+            "openapi": "/api-reference/openapi/fincra-fx-conversions.yaml"
           },
           {
             "group": "Verification & reference",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-core.yaml"
+            "openapi": "/api-reference/openapi/fincra-core.yaml"
           },
           {
             "group": "Wallets",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-wallets.yaml"
+            "openapi": "/api-reference/openapi/fincra-wallets.yaml"
           },
           {
             "group": "Virtual Accounts",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-profile.yaml"
+            "openapi": "/api-reference/openapi/fincra-profile.yaml"
           },
           {
             "group": "Checkout",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/checkout-core.yaml"
+            "openapi": "/api-reference/openapi/checkout-core.yaml"
           },
           {
             "group": "Authentication",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-auth.yaml"
+            "openapi": "/api-reference/openapi/fincra-auth.yaml"
           },
           {
             "group": "Webhooks",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-notifications.yaml"
+            "openapi": "/api-reference/openapi/fincra-notifications.yaml"
           },
           {
             "group": "Settlements",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/settlements-service.yaml"
+            "openapi": "/api-reference/openapi/settlements-service.yaml"
           },
           {
             "group": "Cards",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-card-issuing.yaml"
+            "openapi": "/api-reference/openapi/fincra-card-issuing.yaml"
           },
           {
             "group": "Direct Debit",
-            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/mandate-management.yaml"
+            "openapi": "/api-reference/openapi/mandate-management.yaml"
           }
         ]
       }

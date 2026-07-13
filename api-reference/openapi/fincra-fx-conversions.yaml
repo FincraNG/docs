@@ -1,0 +1,1045 @@
+openapi: 3.1.0
+info:
+  title: Fincra Currency Conversion (fincra-fx-conversions)
+  version: "1.0.0"
+  summary: Merchant-facing currency-conversion API for the fincra-fx-conversions service.
+  description: >
+    Convert funds between currencies in a Fincra wallet by consuming a previously
+    issued `quoteReference`, then settle the conversion immediately or defer it.
+    Merchants initiate a conversion, settle a deferred (post-funded) conversion, and
+    read conversions back by id, Fincra reference, or their own merchant reference.
+
+
+    This service CONSUMES quotes; it does NOT issue them. There is no create-quote or
+    get-exchange-rate endpoint here. A quote (with its exchange rate, source and
+    destination currencies, and corridor structure) is created and stored by a separate
+    upstream quotes service and cached in Redis; this service looks it up by
+    `quoteReference`. Quote validity is enforced purely as Redis key presence: a miss
+    surfaces as `QUOTE_EXPIRED` ("Quote does not exist or has expired. Please generate a
+    new quote."). The exact quote-expiry window (TTL, in seconds/minutes) is owned by the
+    upstream quotes service and is not defined in this repository (see the extraction
+    report, QUOTE-TTL). The only expiry set in this service is the post-funded settlement
+    deadline: `now + (postFundingConfig.maxDeferralPeriod || 1)` hours (default 1 hour).
+
+
+    Accepted currency pairs / corridors are not hardcoded here. The accepted pair and
+    routing come from the consumed quote's `corridorStructure`; currency codes are
+    validated dynamically against the core service (`/v2/currencies/{code}`, unsupported
+    codes return `CURRENCY_NOT_FOUND`). There is therefore no fixed currency-pair
+    allow-list to enumerate from source.
+
+
+    Conversions are asynchronous. A create call returns the conversion with
+    `status: processing`; the terminal state (`successful` / `failed`) is delivered to
+    the merchant's configured webhook URL as the `conversion.{status}` event (gated on
+    the business's `enableWebhook` setting) and can also be polled via the get-by-key
+    endpoints.
+
+
+    This spec is generated from the source of `fincra-fx-conversions` on branch
+    `fix/fx-restore-bake-pipeline-and-vi` (code is truth). Anything undeterminable from
+    code is marked with an `x-todo` extension carrying the exact `file:line`, and is
+    listed in EXTRACTION-REPORT-fx-conversions.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every route at "/" with NO version/base-path prefix
+  (src/server.ts:25, src/routes/index.ts:10-33). The public API prefix a merchant calls
+  (the platform-wide /v2 and a conversions segment) is applied at the Kong gateway,
+  which is not in this repo. Paths below are exactly as routed in code; prepend the
+  confirmed gateway prefix before publishing. See EXTRACTION-REPORT-fx-conversions.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/conversions
+    description: Sandbox (test keys). Powers the docs playground. Source k8s/overlays/sandbox/app.properties:6
+  - url: https://api.fincra.com/conversions
+    description: Production (live keys). Source k8s/overlays/prod/app.properties:7
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Currency Conversion
+    description: Initiate currency conversions from a quote, settle deferred conversions, and look them up.
+
+paths:
+  /initiate:
+    post:
+      operationId: conversionsInitiateConversion
+      tags: [Currency Conversion]
+      summary: Initiate a currency conversion
+      description: >
+        Create a currency conversion by consuming a `quoteReference` that was issued by
+        the upstream quotes service. Use this to convert funds held in one currency wallet
+        into another. The quote carries the exchange rate, the source and destination
+        currencies, and the corridor structure; this endpoint does not create a quote or
+        return a rate of its own.
+
+
+        `quoteReference` is looked up in Redis at initiation. If it is missing or has
+        expired the call fails with `QUOTE_EXPIRED` and the merchant must generate a fresh
+        quote. `settlementType` selects immediate settlement (`IMMEDIATE`, the default) or
+        a deferred/post-funded conversion (`DEFERRED`); deferred conversions get a
+        settlement deadline of `now + maxDeferralPeriod` hours (default 1 hour) and are
+        later settled via `conversionsSettleConversion`. `customerReference` must be unique
+        per merchant; a repeat value returns `DUPLICATE_CUSTOMER_REFERENCE`.
+
+
+        The call is asynchronous: it returns the created conversion with
+        `status: processing`. The terminal state arrives via the `conversion.successful` or
+        `conversion.failed` webhook and can be polled with `conversionsGetConversionByReference`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiateConversionRequest"
+            examples:
+              immediateConversion:
+                summary: Immediate conversion from a quote
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  quoteReference: qer_8c2a1f04b7
+                  customerReference: conv-req-3f81a9c2
+                  settlementType: IMMEDIATE
+              deferredConversion:
+                summary: Deferred (post-funded) conversion, settled later
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  quoteReference: qer_5d19b7c033
+                  customerReference: conv-req-7b1204de
+                  transactionReference: txn-9d55e0af
+                  transactionType: conversion
+                  settlementType: DEFERRED
+      responses:
+        "200":
+          description: Conversion created and processing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Conversion"
+              example:
+                success: true
+                message: Conversion initiated successfully
+                data:
+                  id: 90210
+                  reference: CV-1a2b3c4d5e
+                  customerReference: conv-req-3f81a9c2
+                  status: processing
+                  sourceCurrency: NGN
+                  destinationCurrency: USD
+                  amountCharged: 1650000
+                  amountReceived: 1000
+                  fee: 2500
+                  rate: 1650
+                  createdAt: "2026-07-12T09:15:00.000Z"
+                  updatedAt: "2026-07-12T09:15:00.000Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          description: The conversion trade could not be executed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+              example:
+                success: false
+                error: We are unable to process your conversion at this time.
+                errorType: TRADE_EXECUTION_FAILED
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/ServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Request body fails Joi validation (missing quoteReference/customerReference, business not 24 chars, bad enum).
+        - errorType: DUPLICATE_CUSTOMER_REFERENCE
+          status: 422
+          trigger: A prior conversion with the same customerReference exists for this merchant.
+        - errorType: QUOTE_EXPIRED
+          status: 400
+          trigger: quoteReference is missing or expired in Redis (pure conversion). The merchant must generate a new quote.
+        - errorType: QUOTE_NOT_FOUND
+          status: 404
+          trigger: Stored quote not found (non-pure conversion; 404 from the quotes service).
+        - errorType: QUOTE_RETRIEVAL_FAILED
+          status: 503
+          trigger: The quotes service failed to return the stored quote (getStoredQuote error).
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 503
+          trigger: saveQuote failed while persisting the quote to the quotes service.
+        - errorType: WALLET_NOT_FOUND
+          status: 404
+          trigger: The merchant has no wallet in the required source currency.
+        - errorType: POST_FUNDING_LIMIT_EXCEEDED
+          status: 400
+          trigger: Wallet balance is insufficient and the business's post-funding open-position limit is exceeded.
+        - errorType: NO_ENOUGH_MONEY_IN_WALLET
+          status: 400
+          trigger: Wallet balance is insufficient and no post-funding config applies.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: insertAndFetch DB failure while saving the conversion, or updateOnProcessing DB failure updating status.
+        - errorType: WALLET_DEBIT_FAILED
+          status: 503
+          trigger: The wallet-debit HTTP call to the wallets service failed.
+        - errorType: TRADE_PRECONDITION_FAILED
+          status: 500
+          trigger: Conversion or quote missing immediately before the trade is placed.
+        - errorType: TRADE_INITIATION_FAILED
+          status: 500
+          trigger: The trade service threw while initiating the trade.
+        - errorType: TRADE_EXECUTION_FAILED
+          status: 410
+          trigger: The trade did not execute successfully (isTradeSuccessful returned false).
+        - errorType: TRADE_PRECONDITION_FAILED
+          status: 422
+          trigger: Degenerate or non-finite rate inputs, or channel-vs-quoted rate deviation beyond 0.10%.
+        - errorType: CURRENCY_NOT_FOUND
+          status: 404
+          trigger: A corridor currency code is not supported by the core service.
+        - errorType: CURRENCY_LOOKUP_FAILED
+          status: 503
+          trigger: The core-service currency lookup failed for a reason other than 404.
+        - errorType: INVALID_CORRIDOR_STRUCTURE
+          status: 503
+          trigger: Market price could not be determined (no conversion action / missing standard treasury order).
+
+  /{id}/amend:
+    post:
+      operationId: conversionsSettleConversion
+      tags: [Currency Conversion]
+      summary: Settle a deferred conversion
+      description: >
+        Settle a scheduled/deferred (post-funded) conversion by debiting the merchant's
+        source wallet for the outstanding amount. Use this to complete a conversion that
+        was initiated with `settlementType: DEFERRED` before its post-funded settlement
+        deadline (`now + maxDeferralPeriod` hours, default 1 hour) elapses. The request
+        `type` must be the literal `settle`.
+
+
+        The path `id` is constrained to digits (the numeric conversion id). Settlement is
+        asynchronous: the terminal state is delivered via the `conversion.successful` /
+        `conversion.failed` webhook and can be polled with the get-by-key endpoints.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra conversion id (the path is constrained to digits).
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettleConversionRequest"
+            example:
+              type: settle
+      responses:
+        "200":
+          description: Deferred conversion settlement accepted.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Conversion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/ServerError"
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Request body fails Joi validation (type not equal to "settle", id not a number).
+        - errorType: CONVERSION_NOT_FOUND
+          status: 404
+          trigger: No conversion exists for the supplied id.
+        - errorType: CONVERSION_CANNOT_BE_AMENDED
+          status: 422
+          trigger: The conversion is not an amendable post-funded conversion (wrong funding_type/status/settlement_status).
+        - errorType: WALLET_NOT_FOUND
+          status: 404
+          trigger: The merchant has no source wallet at settlement time.
+        - errorType: NO_ENOUGH_MONEY_IN_WALLET
+          status: 400
+          trigger: Wallet balance is insufficient to settle this conversion.
+        - errorType: POST_FUNDING_POSITION_UPDATE_ERROR
+          status: 500
+          trigger: The core service failed to lock/unlock the post-funding position.
+
+  /:
+    get:
+      operationId: conversionsListConversions
+      tags: [Currency Conversion]
+      summary: List conversions
+      description: >
+        Return a paginated list of the merchant's currency conversions. Supports filtering
+        by currency (code or numeric id), amount, status, date and settlement-date ranges,
+        merchant reference, and free-text search. Use this to build a conversions table or
+        to reconcile. Pagination is page-based via `page` and `perPage`. This read reflects
+        the current state of each conversion, including any terminal state already delivered
+        by the `conversion.{status}` webhook.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: subAccount
+          in: query
+          description: Restrict to a single 24-character sub-account business id.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10, minimum: 1 }
+        - name: amountCharged
+          in: query
+          description: Filter by the amount charged (source amount) on the conversion.
+          schema: { type: number }
+        - name: amountReceived
+          in: query
+          description: Filter by the amount received (destination amount settled).
+          schema: { type: number }
+        - name: sourceCurrencyId
+          in: query
+          description: Filter by the numeric core-service id of the source currency.
+          schema: { type: integer }
+        - name: destinationCurrencyId
+          in: query
+          description: Filter by the numeric core-service id of the destination currency.
+          schema: { type: integer }
+        - name: sourceCurrency
+          in: query
+          description: Filter by source currency code (uppercased; accepts any uppercased string, not enum-bound).
+          schema: { type: string }
+        - name: destinationCurrency
+          in: query
+          description: Filter by destination currency code (uppercased; accepts any uppercased string, not enum-bound).
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          description: Include conversions created on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include conversions created on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: settlementDateFrom
+          in: query
+          description: Include conversions settled on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: settlementDateTo
+          in: query
+          description: Include conversions settled on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          description: Filter by one or more conversion statuses.
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/ConversionStatus" }
+        - name: merchantReference
+          in: query
+          description: Filter by the merchant's own reference (customerReference).
+          schema: { type: string }
+        - name: searchQuery
+          in: query
+          description: Free-text search across conversion fields.
+          schema: { type: string }
+        - name: includeSubAccounts
+          in: query
+          description: Include conversions of sub-accounts. Defaults to false.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: A page of conversions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ConversionPage"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails validation (e.g. business not 24 chars, bad status enum value).
+
+  /export:
+    post:
+      operationId: conversionsExportConversions
+      tags: [Currency Conversion]
+      summary: Export conversions
+      description: >
+        Export the merchant's conversions using the same filter surface as the list
+        endpoint (minus pagination; the date range defaults to the last 30 days when not
+        supplied). Use this to produce a downloadable file for reconciliation or reporting.
+        This is a synchronous read-and-export over the merchant's conversion history and
+        has no paired webhook.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportConversionsRequest"
+            example:
+              business: 63f9a1b2c4d5e6f7a8b9c0d1
+              status: [successful]
+              sourceCurrency: NGN
+              destinationCurrency: USD
+              dateFrom: "2026-06-01"
+              dateTo: "2026-06-30"
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The export body fails Joi validation (missing business, status items not valid enum).
+
+  /{id}:
+    get:
+      operationId: conversionsGetConversionById
+      tags: [Currency Conversion]
+      summary: Get a conversion by id
+      description: >
+        Fetch a single conversion by its numeric Fincra id. Use this for status polling of
+        an asynchronous conversion when you stored the numeric id. For the string
+        reference use `conversionsGetConversionByReference`. The returned status reflects
+        any terminal state already delivered by the `conversion.{status}` webhook.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra conversion id (the path is constrained to digits).
+          schema: { type: integer, minimum: 1 }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The conversion.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Conversion"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      x-fincra-error-catalog:
+        - errorType: CONVERSION_NOT_FOUND
+          status: 404
+          trigger: No conversion exists for the supplied id.
+
+  /reference/{reference}:
+    get:
+      operationId: conversionsGetConversionByReference
+      tags: [Currency Conversion]
+      summary: Get a conversion by Fincra reference
+      description: >
+        Fetch a single conversion by its Fincra-issued `reference`. This is the primary way
+        to poll for the final state of an asynchronous conversion when you did not receive,
+        or want to reconcile against, the `conversion.{status}` webhook.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra conversion reference returned on create.
+          schema: { type: string }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The conversion.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Conversion"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      x-fincra-error-catalog:
+        - errorType: CONVERSION_NOT_FOUND
+          status: 404
+          trigger: No conversion exists for the supplied Fincra reference.
+
+  /customer-reference/{merchantReference}:
+    get:
+      operationId: conversionsGetConversionByMerchantReference
+      tags: [Currency Conversion]
+      summary: Get a conversion by merchant reference
+      description: >
+        Fetch a single conversion by the merchant's own reference (`customerReference`, the
+        idempotency key you supplied on create). Use this to reconcile against your own
+        system's identifiers or to poll for the terminal state of an asynchronous conversion.
+      parameters:
+        - name: merchantReference
+          in: path
+          required: true
+          description: The merchant's customerReference supplied at creation.
+          schema: { type: string }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The conversion.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Conversion"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+      x-fincra-error-catalog:
+        - errorType: CONVERSION_NOT_FOUND
+          status: 404
+          trigger: No conversion exists for the supplied merchant reference.
+
+  /post-funding-configs:
+    get:
+      operationId: conversionsGetPostFundingConfigs
+      tags: [Currency Conversion]
+      summary: Get post-funding configuration
+      description: >
+        Return the authenticated business's post-funding (deferred-settlement)
+        configuration, which governs deferred conversions: whether post-funding is enabled,
+        the maximum open-position limit, the current open position, and the maximum
+        deferral period (hours) that determines a deferred conversion's settlement deadline.
+        The business is resolved from the authenticated key (no request parameters). This is
+        a read-only lookup with no paired webhook.
+      responses:
+        "200":
+          description: The business's post-funding configuration(s).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        description: The post-funding configuration records for the business (one per currency).
+                        items:
+                          $ref: "#/components/schemas/PostFundingConfig"
+      x-fincra-error-catalog: []
+      x-todo: "This route has no per-route authMiddleware and no Joi validator; it is authed only by authenticate() at the mount (src/routes/index.ts:21-25) and reads business-scoped config via currentUser. Merchant-vs-internal classification is a judgment call. The response data shape is inferred from PostFundingConfig fields (createPostFundingConfigSchema); the exact serialized keys were not harvested. Source: src/components/postFundingConfig/postFundingConfigAPI.ts:7-15"
+
+webhooks:
+  conversion.successful:
+    post:
+      operationId: webhookConversionSuccessful
+      tags: [Currency Conversion]
+      summary: conversion.successful
+      description: >
+        Delivered to the merchant's configured webhook URL when a pure conversion
+        (`transaction_type === 'conversion'`) reaches the terminal `successful` state.
+        Delivery requires `enableWebhook` on the business. The event name is
+        `conversion.successful`. Return a 2xx to acknowledge receipt.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversionWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  conversion.failed:
+    post:
+      operationId: webhookConversionFailed
+      tags: [Currency Conversion]
+      summary: conversion.failed
+      description: >
+        Delivered to the merchant's configured webhook URL when a pure conversion reaches
+        the terminal `failed` state. Delivery requires `enableWebhook` on the business. The
+        event name is `conversion.failed`. Return a 2xx to acknowledge receipt.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversionWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  conversion.processing:
+    post:
+      operationId: webhookConversionProcessing
+      tags: [Currency Conversion]
+      summary: conversion.processing
+      description: >
+        Delivered to the merchant's configured webhook URL when a pure conversion enters
+        the `processing` state. Delivery requires `enableWebhook` on the business. The event
+        name is `conversion.processing`. Return a 2xx to acknowledge receipt.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversionWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret key, sent in the `api-key` header (fallback header `apikey` is also
+        accepted). The auth-service classifies the key as test or live and resolves the
+        merchant. Conversion routes additionally require the CONVERSION product entitlement
+        (authorizeProduct(CONVERSION)), which is bypassed in the sandbox/test environment.
+        Service-to-service callers may instead present a `service-secret-key` header. Source
+        ../fincra-utils/src/middleware/auth/authUtil.ts:16-18,
+        ../fincra-utils/src/middleware/auth/authMiddlewareV2.ts:76-123. This service exposes
+        NO x-pub-key/public-key flow.
+
+  parameters:
+    BusinessQuery:
+      name: business
+      in: query
+      required: true
+      description: The 24-character Fincra business id the conversions belong to.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+    BusinessQueryOptional:
+      name: business
+      in: query
+      required: false
+      description: >
+        Optional 24-character Fincra business id. When omitted, the business is resolved
+        from the authenticated key.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+
+  responses:
+    BadRequest:
+      description: The request could not be processed as sent. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Quote does not exist or has expired. Please generate a new quote.
+            errorType: QUOTE_EXPIRED
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Conversion not found. Please check the ID or reference
+            errorType: CONVERSION_NOT_FOUND
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Customer reference already exists. Please use a unique reference.
+            errorType: DUPLICATE_CUSTOMER_REFERENCE
+    ServiceUnavailable:
+      description: A downstream dependency (quotes service, wallets service, or core service) was unavailable.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Unable to debit wallet at this time.
+            errorType: WALLET_DEBIT_FAILED
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` is [] when a handler returns nothing.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope, built by fincra-utils APIHelper
+        (node_modules/fliqpay-utils/dist/utilities/APIHelper.js:90-106). Alongside the three
+        contract keys it may also ship an `errors` detail key (e.g. per-field Joi messages).
+        The DB-error branch (HTTP 500, INTERNAL_SERVER_ERROR) omits `errors`.
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Not present on every error branch.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable on
+        the currency-conversion paths (grepped from throw sites; see
+        EXTRACTION-REPORT-fx-conversions.md).
+      enum:
+        - VALIDATION_FAILED
+        - UNPROCESSABLE_ENTITY
+        - DUPLICATE_CUSTOMER_REFERENCE
+        - QUOTE_EXPIRED
+        - QUOTE_NOT_FOUND
+        - QUOTE_RETRIEVAL_FAILED
+        - WALLET_NOT_FOUND
+        - POST_FUNDING_LIMIT_EXCEEDED
+        - NO_ENOUGH_MONEY_IN_WALLET
+        - WALLET_DEBIT_FAILED
+        - TRADE_PRECONDITION_FAILED
+        - TRADE_INITIATION_FAILED
+        - TRADE_EXECUTION_FAILED
+        - CONVERSION_NOT_FOUND
+        - CONVERSION_CANNOT_BE_AMENDED
+        - POST_FUNDING_POSITION_UPDATE_ERROR
+        - CURRENCY_NOT_FOUND
+        - CURRENCY_LOOKUP_FAILED
+        - INVALID_CORRIDOR_STRUCTURE
+        - INTERNAL_SERVER_ERROR
+
+    ConversionStatus:
+      type: string
+      description: >
+        Lifecycle state of a conversion (ConversionStatus enum,
+        src/components/conversions/interfaces/conversionsEnum.ts:1-5). Terminal states are
+        successful and failed.
+      enum: [processing, successful, failed]
+
+    TransactionType:
+      type: string
+      description: >
+        The kind of transaction a conversion is associated with (TransactionType enum,
+        src/components/conversions/interfaces/conversionsEnum.ts:19-23).
+      enum: [collection, disbursement, conversion]
+
+    SettlementType:
+      type: string
+      description: >
+        How the conversion settles: IMMEDIATE settles at once; DEFERRED creates a
+        post-funded conversion that must be settled before its deferral deadline
+        (SettlementType enum, src/components/conversions/interfaces/conversionsEnum.ts:45-48).
+      enum: [IMMEDIATE, DEFERRED]
+
+    InitiateConversionRequest:
+      type: object
+      description: >
+        Body for POST /initiate (intiateConversionSchema,
+        src/components/conversions/conversionsSchema.ts:8-20). Consumes a quoteReference
+        issued by the upstream quotes service; the accepted currency pair is carried on the
+        resolved quote's corridorStructure, not validated here.
+      required: [business, quoteReference, customerReference]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your 24-character Fincra business id (Mongo ObjectId).
+        quoteReference:
+          type: string
+          description: >
+            The reference of a quote issued by the upstream quotes service, looked up in
+            Redis at initiation. If missing or expired the call returns QUOTE_EXPIRED.
+        customerReference:
+          type: string
+          description: >
+            Your unique reference for this conversion; the idempotency key. Reusing a value
+            returns DUPLICATE_CUSTOMER_REFERENCE. Trimmed on input.
+        transactionReference:
+          type: string
+          description: Optional reference of the originating transaction this conversion relates to.
+        transactionType:
+          $ref: "#/components/schemas/TransactionType"
+        settlementType:
+          allOf:
+            - $ref: "#/components/schemas/SettlementType"
+          description: >
+            Optional. Selects immediate or deferred settlement. Defaults to IMMEDIATE.
+          default: IMMEDIATE
+
+    SettleConversionRequest:
+      type: object
+      description: >
+        Body for POST /{id}/amend (amendConversionSchema,
+        src/components/conversions/conversionsSchema.ts:22-26). The business is injected from
+        the authenticated user and the id from the path; only `type` is supplied by the caller.
+      required: [type]
+      properties:
+        type:
+          type: string
+          const: settle
+          description: Must be the literal "settle" to settle a deferred conversion.
+
+    ExportConversionsRequest:
+      type: object
+      description: >
+        Body for POST /export (exportConversionsSchema,
+        src/components/conversions/conversionsSchema.ts:96-117). Same filter surface as the
+        list endpoint minus pagination; when no date range is supplied it defaults to the
+        last 30 days.
+      required: [business, status]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your 24-character Fincra business id.
+        subAccount:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Restrict the export to a single 24-character sub-account business id.
+        status:
+          type: array
+          description: One or more conversion statuses to include (each item required).
+          items: { $ref: "#/components/schemas/ConversionStatus" }
+        amountCharged:
+          type: number
+          description: Filter by the amount charged (source amount).
+        amountReceived:
+          type: number
+          description: Filter by the amount received (destination amount settled).
+        sourceCurrencyId:
+          type: integer
+          description: Filter by the numeric core-service id of the source currency.
+        destinationCurrencyId:
+          type: integer
+          description: Filter by the numeric core-service id of the destination currency.
+        sourceCurrency:
+          type: string
+          description: Filter by source currency code (uppercased; accepts any uppercased string).
+        destinationCurrency:
+          type: string
+          description: Filter by destination currency code (uppercased; accepts any uppercased string).
+        dateFrom:
+          type: string
+          format: date
+          description: Created-on-or-after filter (ISO-8601).
+        dateTo:
+          type: string
+          format: date
+          description: Created-on-or-before filter (ISO-8601).
+        settlementDateFrom:
+          type: string
+          format: date
+          description: Settled-on-or-after filter (ISO-8601).
+        settlementDateTo:
+          type: string
+          format: date
+          description: Settled-on-or-before filter (ISO-8601).
+        merchantReference:
+          type: string
+          description: Filter by the merchant's own reference (customerReference).
+        searchQuery:
+          type: string
+          description: Free-text search across conversion fields.
+        includeSubAccounts:
+          type: boolean
+          default: false
+          description: Include conversions of sub-accounts. Defaults to false.
+
+    Conversion:
+      type: object
+      description: >
+        A currency conversion as returned by the read endpoints and carried in the webhook
+        `data`. Field set is taken from the webhook data builder
+        (src/components/conversions/services/conversionsNotificationHandler.ts:171-197). The
+        exact serialized shape returned by the read endpoints was not separately harvested;
+        see EXTRACTION-REPORT-fx-conversions.md (RESP-1).
+      properties:
+        business:
+          type: string
+          description: The 24-character business id the conversion belongs to.
+        id:
+          type: integer
+          description: Numeric Fincra conversion id.
+        reference:
+          type: string
+          description: Fincra conversion reference.
+        customerReference:
+          type: string
+          description: Your reference (idempotency key) supplied at creation.
+        status:
+          $ref: "#/components/schemas/ConversionStatus"
+        sourceCurrency:
+          type: string
+          description: Currency debited from your wallet (uppercased code).
+        destinationCurrency:
+          type: string
+          description: Currency the conversion delivers (uppercased code).
+        amountCharged:
+          type: number
+          description: Amount charged in the source currency (source_amount).
+        amountReceived:
+          type: number
+          description: Amount received in the destination currency (destination_amount_settled).
+        fee:
+          type: number
+          description: Fincra fee in the source currency (source_fee).
+        rate:
+          type: number
+          description: The quoted exchange rate applied (destination_quoted_rate).
+        price:
+          type: number
+          description: The price associated with the conversion.
+        settledAt:
+          type: string
+          format: date-time
+          description: When the conversion was settled (present only when settled).
+        settlementId:
+          type: string
+          description: The settlement id (present only when settled, when available).
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp.
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp.
+
+    ConversionPage:
+      type: object
+      description: >
+        A page of conversions. Envelope of the list endpoint's data field. Pagination is
+        page-based via `page` + `perPage` (defaults 1 / 10).
+      x-todo: "Exact pagination envelope keys (e.g. count/totalPages) not harvested; confirm from the list serializer. Source: src/components/conversions/serializers/lists.ts; src/components/conversions/services/conversionsService.ts:239-250"
+      properties:
+        conversions:
+          type: array
+          description: The conversions on this page.
+          items: { $ref: "#/components/schemas/Conversion" }
+        page:
+          type: integer
+          description: Current 1-based page number.
+        perPage:
+          type: integer
+          description: Items per page.
+
+    PostFundingConfig:
+      type: object
+      description: >
+        A business's post-funding (deferred-settlement) configuration. Field set is taken
+        from createPostFundingConfigSchema
+        (src/components/postFundingConfig/postFundingConfigValidation.ts:4-15); the exact
+        serialized read shape was not separately harvested.
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: The 24-character business id this configuration belongs to.
+        currency:
+          type: string
+          description: The currency code this post-funding configuration applies to.
+        isEnabled:
+          type: boolean
+          description: Whether post-funding (deferred settlement) is enabled. Defaults to true.
+        maxOpenPositionLimit:
+          type: number
+          description: The maximum post-funding open-position limit permitted for the business.
+        currentOpenPosition:
+          type: number
+          description: The business's current outstanding post-funding open position.
+        maxDeferralPeriod:
+          type: number
+          description: >
+            Maximum deferral period in hours. A deferred conversion's settlement deadline is
+            now + maxDeferralPeriod hours (default fallback 1 hour if unset).
+
+    ConversionWebhookEvent:
+      type: object
+      description: >
+        The webhook envelope Fincra POSTs to your endpoint for conversion events. `event` is
+        `conversion.{status}` (e.g. conversion.successful). Source
+        src/components/conversions/services/conversionsNotificationHandler.ts:95-101,171-203.
+      required: [event, data]
+      properties:
+        event:
+          type: string
+          description: The event name, one of conversion.processing / conversion.successful / conversion.failed.
+          enum: [conversion.processing, conversion.successful, conversion.failed]
+        type:
+          type: string
+          const: conversion
+          description: The transaction type; always "conversion" for these events.
+        business:
+          type: string
+          description: The Mongo business id the event belongs to.
+        callbackURL:
+          type: string
+          description: The merchant webhook URL the event was sent to (business.callbackURL).
+        data:
+          $ref: "#/components/schemas/Conversion"
