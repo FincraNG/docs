@@ -18,7 +18,9 @@
         "groups": [
           {
             "group": "Home",
-            "pages": ["index"]
+            "pages": [
+              "index"
+            ]
           },
           {
             "group": "Get Started",
@@ -39,7 +41,9 @@
           },
           {
             "group": "Glossary",
-            "pages": ["glossary"]
+            "pages": [
+              "glossary"
+            ]
           }
         ]
       },
@@ -72,7 +76,10 @@
           },
           {
             "group": "Direct Charge API",
-            "pages": ["payments/direct-charge", "payments/accept-a-payment"]
+            "pages": [
+              "payments/direct-charge",
+              "payments/accept-a-payment"
+            ]
           },
           {
             "group": "Virtual Accounts",
@@ -105,11 +112,15 @@
           },
           {
             "group": "Test and Go Live",
-            "pages": ["payments/integration-checklist"]
+            "pages": [
+              "payments/integration-checklist"
+            ]
           },
           {
             "group": "Troubleshooting",
-            "pages": ["payments/error-codes"]
+            "pages": [
+              "payments/error-codes"
+            ]
           }
         ]
       },
@@ -123,7 +134,9 @@
               {
                 "group": "How Fincra Payouts Work",
                 "root": "payouts/how-payouts-work",
-                "pages": ["payouts/currency-precision"]
+                "pages": [
+                  "payouts/currency-precision"
+                ]
               },
               {
                 "group": "Payout Coverage",
@@ -174,11 +187,15 @@
           },
           {
             "group": "Test and Go Live",
-            "pages": ["payouts/integration-checklist"]
+            "pages": [
+              "payouts/integration-checklist"
+            ]
           },
           {
             "group": "Troubleshooting",
-            "pages": ["payouts/error-codes"]
+            "pages": [
+              "payouts/error-codes"
+            ]
           }
         ]
       },
@@ -215,7 +232,10 @@
               {
                 "group": "Choose Your FX Solution",
                 "root": "conversion/choose-your-fx-solution",
-                "pages": ["conversion/quotes", "conversion/rates"]
+                "pages": [
+                  "conversion/quotes",
+                  "conversion/rates"
+                ]
               }
             ]
           },
@@ -231,11 +251,15 @@
           },
           {
             "group": "Troubleshooting",
-            "pages": ["conversion/error-codes"]
+            "pages": [
+              "conversion/error-codes"
+            ]
           },
           {
             "group": "Test and Go Live",
-            "pages": ["conversion/integration-checklist"]
+            "pages": [
+              "conversion/integration-checklist"
+            ]
           }
         ]
       },
@@ -260,7 +284,9 @@
           },
           {
             "group": "Collect",
-            "pages": ["direct-debit/collect-a-payment"]
+            "pages": [
+              "direct-debit/collect-a-payment"
+            ]
           },
           {
             "group": "Use Cases",
@@ -273,11 +299,15 @@
           },
           {
             "group": "Troubleshooting",
-            "pages": ["direct-debit/troubleshooting"]
+            "pages": [
+              "direct-debit/troubleshooting"
+            ]
           },
           {
             "group": "Go Live",
-            "pages": ["direct-debit/integration-checklist"]
+            "pages": [
+              "direct-debit/integration-checklist"
+            ]
           }
         ]
       },
@@ -286,7 +316,9 @@
         "groups": [
           {
             "group": "Verification",
-            "pages": ["verification/overview"]
+            "pages": [
+              "verification/overview"
+            ]
           },
           {
             "group": "Account Number Verification",
@@ -294,17 +326,24 @@
               {
                 "group": "Verify a Beneficiary Account",
                 "root": "verification/verify-a-beneficiary-account",
-                "pages": ["verification/nigeria", "verification/ghana"]
+                "pages": [
+                  "verification/nigeria",
+                  "verification/ghana"
+                ]
               }
             ]
           },
           {
             "group": "Customer Validation",
-            "pages": ["verification/verify-a-bvn"]
+            "pages": [
+              "verification/verify-a-bvn"
+            ]
           },
           {
             "group": "Card BIN Lookup",
-            "pages": ["verification/resolve-a-card-bin"]
+            "pages": [
+              "verification/resolve-a-card-bin"
+            ]
           }
         ]
       },
@@ -348,7 +387,10 @@
           },
           {
             "group": "Sandbox Environment",
-            "pages": ["sandbox/overview", "sandbox/testing"]
+            "pages": [
+              "sandbox/overview",
+              "sandbox/testing"
+            ]
           }
         ]
       },
@@ -357,7 +399,9 @@
         "groups": [
           {
             "group": "Support",
-            "pages": ["support"]
+            "pages": [
+              "support"
+            ]
           }
         ]
       },
@@ -366,7 +410,62 @@
         "groups": [
           {
             "group": "Changelog",
-            "pages": ["changelog"]
+            "pages": [
+              "changelog"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Payouts",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-disbursements.yaml"
+          },
+          {
+            "group": "Payments",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-collections.yaml"
+          },
+          {
+            "group": "Currency Conversion",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-fx-conversions.yaml"
+          },
+          {
+            "group": "Verification & reference",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-core.yaml"
+          },
+          {
+            "group": "Wallets",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-wallets.yaml"
+          },
+          {
+            "group": "Virtual Accounts",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-profile.yaml"
+          },
+          {
+            "group": "Checkout",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/checkout-core.yaml"
+          },
+          {
+            "group": "Authentication",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-auth.yaml"
+          },
+          {
+            "group": "Webhooks",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-notifications.yaml"
+          },
+          {
+            "group": "Settlements",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/settlements-service.yaml"
+          },
+          {
+            "group": "Cards",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/fincra-card-issuing.yaml"
+          },
+          {
+            "group": "Direct Debit",
+            "openapi": "https://raw.githubusercontent.com/FincraNG/fincra-openapi/dev/openapi/mandate-management.yaml"
           }
         ]
       }

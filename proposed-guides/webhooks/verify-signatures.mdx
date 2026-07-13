@@ -1,0 +1,80 @@
+---
+title: "Verify webhook signatures"
+description: "Confirm that a webhook really came from Fincra before you trust its payload."
+---
+
+Anyone can POST JSON to your webhook URL. Before you act on an event — especially one
+that moves money in your system — verify it was signed by Fincra.
+
+<Warning>
+  Never act on a webhook you have not verified. Treat an unverified payload as untrusted
+  input.
+</Warning>
+
+## How verification works
+
+Fincra signs each outbound webhook with **HMAC-SHA512** and sends the hex digest in the
+`signature` request header. Recompute the HMAC over the **raw request body** using your
+**webhook secret key** (from your dashboard, under API Keys & Webhooks), hex-encode it,
+and compare it to the `signature` header in constant time. If they differ, reject the
+request with a `401` and do not process it.
+
+<Note>
+  Fincra signs the exact JSON body it delivers (`{ event, data }`). Hashing the raw bytes
+  you receive reproduces the same digest — so read the raw body before any JSON
+  middleware re-serializes it (which would reorder keys and change the hash).
+</Note>
+
+## Verify the signature
+
+<Tabs>
+  <Tab title="Node.js">
+    ```javascript
+    import crypto from "node:crypto";
+
+    // Mount with the RAW body, e.g. express.raw({ type: "application/json" })
+    function verifyFincraWebhook(req) {
+      const signature = req.headers["signature"];
+      const expected = crypto
+        .createHmac("sha512", process.env.FINCRA_WEBHOOK_SECRET)
+        .update(req.rawBody)              // raw bytes as received
+        .digest("hex");
+      const ok =
+        typeof signature === "string" &&
+        signature.length === expected.length &&
+        crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+      if (!ok) return { verified: false };
+      return { verified: true, event: JSON.parse(req.rawBody) };
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import hashlib, hmac, os
+
+    def verify_fincra_webhook(raw_body: bytes, headers) -> bool:
+        signature = headers.get("signature")
+        expected = hmac.new(
+            os.environ["FINCRA_WEBHOOK_SECRET"].encode(),
+            raw_body,                     # raw bytes as received
+            hashlib.sha512,
+        ).hexdigest()
+        return bool(signature) and hmac.compare_digest(signature, expected)
+    ```
+  </Tab>
+</Tabs>
+
+## Handling result
+
+<Steps>
+  <Step title="Verify first">Reject with `401` if the signature does not match. Do not parse or act.</Step>
+  <Step title="Acknowledge fast">On success, return `2xx` within ~10 seconds; process asynchronously.</Step>
+  <Step title="Be idempotent">The same event can arrive more than once (retries run at 5m/30m/2h/6h/24h); key on `data.reference`.</Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" href="/webhooks/overview">The event envelope and delivery model.</Card>
+  <Card title="Errors" href="/errors">The shared error envelope.</Card>
+</CardGroup>

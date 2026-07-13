@@ -1,0 +1,298 @@
+---
+title: "Send a payout"
+description: "Disburse funds from your Fincra wallet to a bank account or mobile-money wallet, and confirm the result with webhooks."
+---
+
+Send money from your Fincra wallet to a beneficiary — a bank account (NUBAN and other
+local rails), a mobile-money wallet, a crypto wallet, or a cash-pickup location. This
+page covers the single-payout flow; anyone building disbursements starts here.
+
+Payouts are asynchronous: the API accepts the request and returns `status: processing`,
+then delivers the final result to your webhook. Design for that from the start.
+
+## Prerequisites
+
+- A Fincra account and your **secret API key** for the environment you are testing in.
+- A funded wallet in your `sourceCurrency` (in sandbox, test wallets are pre-funded).
+- Your 24-character `business` id.
+- A webhook URL configured on your dashboard, with `enableWebhook` turned on, so you
+  receive `payout.successful` / `payout.failed`.
+
+<Info>
+  All examples use the sandbox base URL `https://sandboxapi.fincra.com`. Switch to
+  `https://api.fincra.com` with your live key for production.
+</Info>
+
+## Send the payout
+
+<Steps>
+  <Step title="Build the request">
+    At minimum you need the source and destination currency, the amount, your
+    `business` id, a unique `customerReference`, the `paymentDestination`, and the
+    `beneficiary`. The example below pays a Nigerian bank account (NUBAN).
+  </Step>
+  <Step title="Call the payouts endpoint">
+    Send the request with your secret key in the `api-key` header. See the reference:
+    [`POST /payouts`](/api-reference/openapi/fincra-disbursements#tag/payouts/post/payouts).
+
+    <Tabs>
+      <Tab title="cURL">
+        ```bash
+        curl https://sandboxapi.fincra.com/disbursements/payouts \
+          -H "api-key: $FINCRA_SECRET_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "sourceCurrency": "NGN",
+            "destinationCurrency": "NGN",
+            "amount": 5000,
+            "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+            "customerReference": "payout-req-3f81a9c2",
+            "description": "Payout to supplier",
+            "paymentDestination": "bank_account",
+            "beneficiary": {
+              "type": "individual",
+              "firstName": "Amara",
+              "lastName": "Okeke",
+              "accountHolderName": "Amara Okeke",
+              "accountNumber": "0111111111",
+              "bankCode": "058",
+              "country": "NG"
+            }
+          }'
+        ```
+      </Tab>
+      <Tab title="Node.js">
+        ```javascript
+        // node 18+ (native fetch)
+        const res = await fetch("https://sandboxapi.fincra.com/disbursements/payouts", {
+          method: "POST",
+          headers: {
+            "api-key": process.env.FINCRA_SECRET_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sourceCurrency: "NGN",
+            destinationCurrency: "NGN",
+            amount: 5000,
+            business: "63f9a1b2c4d5e6f7a8b9c0d1",
+            customerReference: "payout-req-3f81a9c2",
+            description: "Payout to supplier",
+            paymentDestination: "bank_account",
+            beneficiary: {
+              type: "individual",
+              firstName: "Amara",
+              lastName: "Okeke",
+              accountHolderName: "Amara Okeke",
+              accountNumber: "0111111111",
+              bankCode: "058",
+              country: "NG",
+            },
+          }),
+        });
+        const payout = await res.json();
+        ```
+      </Tab>
+      <Tab title="Python">
+        ```python
+        import os, requests
+
+        res = requests.post(
+            "https://sandboxapi.fincra.com/disbursements/payouts",
+            headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+            json={
+                "sourceCurrency": "NGN",
+                "destinationCurrency": "NGN",
+                "amount": 5000,
+                "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+                "customerReference": "payout-req-3f81a9c2",
+                "description": "Payout to supplier",
+                "paymentDestination": "bank_account",
+                "beneficiary": {
+                    "type": "individual",
+                    "firstName": "Amara",
+                    "lastName": "Okeke",
+                    "accountHolderName": "Amara Okeke",
+                    "accountNumber": "0111111111",
+                    "bankCode": "058",
+                    "country": "NG",
+                },
+            },
+        )
+        payout = res.json()
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Handle the processing response">
+    A 200 means the payout was accepted and is now processing — not that money has
+    landed. Store `data.reference`; you will match the webhook against it.
+
+    ```json
+    {
+      "success": true,
+      "message": "Payout initiated successfully",
+      "data": {
+        "reference": "PO-1a2b3c4d5e",
+        "customerReference": "payout-req-3f81a9c2",
+        "status": "processing",
+        "sourceCurrency": "NGN",
+        "destinationCurrency": "NGN",
+        "amountReceived": 5000,
+        "fee": 10.75,
+        "recipient": { "name": "Amara Okeke", "accountNumber": "0111111111", "type": "individual" }
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Request fields
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `sourceCurrency` | string | Yes | Currency debited from your wallet, uppercased (e.g. `NGN`). Accepts any uppercased string; supported values are listed under Currency in the reference. |
+| `destinationCurrency` | string | Yes | Currency the beneficiary receives. For cross-currency payouts you must also pass `quoteReference`. |
+| `amount` | number | Yes | Amount in major units of `sourceCurrency`. Must be a whole number for zero-decimal currencies: `UGX`, `XAF`, `XOF`, `RWF`. |
+| `business` | string | Yes | Your business id. Exactly 24 characters. |
+| `customerReference` | string | Yes | Your unique reference. This is the idempotency key — reusing it returns `DUPLICATE_CUSTOMER_REFERENCE`. |
+| `paymentDestination` | enum | Yes | One of `bank_account`, `mobile_money_wallet`, `crypto_wallet`, `cash_pick_up`, `settlement_account`. |
+| `beneficiary.accountNumber` | string | Yes | NUBAN (10 digits) for bank accounts, or the MSISDN for mobile money. |
+| `beneficiary.accountHolderName` | string | Cond. | Required when `paymentDestination` is `bank_account`. |
+| `beneficiary.bankCode` | string | Cond. | Local institution code (e.g. NG NIP code `058`). |
+| `beneficiary.mobileMoneyCode` / `mobileMoneyId` | string / integer | Cond. | Required for `mobile_money_wallet`; forbidden otherwise. |
+| `quoteReference` | string | Cond. | Required for cross-currency payouts; obtained from the conversion service. |
+
+## Other rails
+
+<Tabs>
+  <Tab title="Ghana mobile money (GHS)">
+    ```json
+    {
+      "sourceCurrency": "GHS",
+      "destinationCurrency": "GHS",
+      "amount": 250,
+      "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+      "customerReference": "payout-req-7b1204de",
+      "paymentDestination": "mobile_money_wallet",
+      "beneficiary": {
+        "type": "individual",
+        "firstName": "Kwame",
+        "lastName": "Mensah",
+        "accountNumber": "233551234567",
+        "mobileMoneyCode": "MTN",
+        "mobileMoneyId": 1,
+        "country": "GH"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Cross-currency (NGN to USD)">
+    ```json
+    {
+      "sourceCurrency": "NGN",
+      "destinationCurrency": "USD",
+      "amount": 250000,
+      "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+      "customerReference": "payout-req-9d55e0af",
+      "quoteReference": "qer_8c2a1f04b7",
+      "paymentDestination": "bank_account",
+      "customerName": "Global Traders LLC",
+      "files": "https://sandbox-files.fincra.com/invoice-9d55.pdf",
+      "beneficiary": {
+        "type": "corporate",
+        "accountHolderName": "Global Traders LLC",
+        "accountNumber": "1234567890",
+        "bankSwiftCode": "CHASUS33",
+        "country": "US"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  For `destinationCurrency: USD`, `customerName` and a supporting `files` document are
+  required, and correspondent/intermediary bank details may be needed for the corridor.
+</Note>
+
+## Error handling
+
+Errors use the shared envelope: `{ "success": false, "error": "...", "errorType": "..." }`.
+Branch on `errorType`, not on the human `error` string. All payout errors are `422`
+except access (`403`) and not-found (`404`).
+
+| errorType | HTTP | What it means | What your code should do |
+| --- | --- | --- | --- |
+| `VALIDATION_FAILED` | 422 | A field failed validation; `errors` lists the fields. | Fix the payload; do not retry unchanged. |
+| `DUPLICATE_CUSTOMER_REFERENCE` | 422 | You have already used this `customerReference`. | Treat as already-submitted; fetch the existing payout by merchant reference instead of retrying. |
+| `NO_ENOUGH_MONEY_IN_WALLET` | 422 | Wallet balance is below the amount + fees. | Top up, then retry with a new `customerReference`. |
+| `DISBURSEMENT_CHANNEL_ERROR` / `TRANSACTION_NOT_INITIATED` | 422 | The downstream rail rejected or did not start the payout. | Safe to retry with a new `customerReference` after checking status. |
+| `ACCESS_DENIED` | 403 | The `business` does not match your key. | Check the `business` id and key environment. |
+
+A duplicate-reference failure looks like this:
+
+```json
+{
+  "success": false,
+  "error": "Cannot continue, Duplicate Customer Reference Passed",
+  "errorType": "DUPLICATE_CUSTOMER_REFERENCE"
+}
+```
+
+<Warning>
+  Never retry a payout with the same `customerReference` after a timeout without first
+  fetching its status — the original may have succeeded. Use a fresh reference only once
+  you have confirmed the first did not go through.
+</Warning>
+
+## Confirm with webhooks
+
+The `200` was only an acknowledgement. Fincra sends the terminal result to your webhook
+URL as `payout.successful` or `payout.failed`. Match on `data.reference`.
+
+```json
+{
+  "event": "payout.successful",
+  "type": "disbursement",
+  "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+  "data": {
+    "reference": "PO-1a2b3c4d5e",
+    "customerReference": "payout-req-3f81a9c2",
+    "status": "successful",
+    "amountReceived": 5000,
+    "recipient": { "name": "Amara Okeke", "accountNumber": "0111111111", "type": "individual" }
+  }
+}
+```
+
+Always [verify the webhook signature](/webhooks/verify-signatures) before trusting the
+payload. If you miss an event, replay it with
+[`POST /payouts/resend-webhook`](/api-reference/openapi/fincra-disbursements#tag/payouts/post/payouts/resend-webhook)
+or poll
+[`GET /payouts/reference/{reference}`](/api-reference/openapi/fincra-disbursements#tag/payouts/get/payouts/reference/{reference}).
+
+## Test it in sandbox
+
+<Steps>
+  <Step title="Use your sandbox secret key">Set `FINCRA_SECRET_KEY` to your test key.</Step>
+  <Step title="Send the NGN bank-account example above">Use a 10-digit NUBAN and bank code `058`. Expect a `200` with `status: processing`.</Step>
+  <Step title="Watch your webhook">Within moments you should receive `payout.successful` for the reference you stored. Sandbox does not move real money.</Step>
+  <Step title="Poll to confirm">Call `GET /payouts/reference/{reference}` and confirm `status` is `successful`.</Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quotes and fees" href="/payouts/quotes-and-fees">
+    Get a `quoteReference` for cross-currency payouts and preview fees.
+  </Card>
+  <Card title="Beneficiaries" href="/payouts/beneficiaries">
+    Bank, mobile-money, and crypto beneficiary shapes in detail.
+  </Card>
+  <Card title="Verify webhook signatures" href="/webhooks/verify-signatures">
+    Validate that a webhook really came from Fincra.
+  </Card>
+  <Card title="Payout status and requery" href="/payouts/payout-status-and-requery">
+    Poll and reconcile when a webhook is delayed.
+  </Card>
+</CardGroup>

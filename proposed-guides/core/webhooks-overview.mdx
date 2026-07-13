@@ -1,0 +1,86 @@
+---
+title: "Webhooks"
+description: "Receive asynchronous results from Fincra, understand the event envelope, and recover missed events."
+---
+
+Most money movement on Fincra is asynchronous: an API call is accepted and returns
+`processing`, and the terminal result is delivered to your webhook URL. Build your
+integration around webhooks from the start — do not rely on the initial response alone.
+
+## Set up
+
+Configure your webhook URL on the Fincra dashboard and enable webhooks for the business.
+Fincra POSTs a JSON event to that URL when a transaction reaches a terminal state.
+
+<Info>
+  Delivery only happens when webhooks are enabled on the business
+  (`settings.enableWebhook`). If you are not receiving events, check this first.
+</Info>
+
+## The event envelope
+
+Events share one shape. The `event` name is `<resource>.<status>`.
+
+```json
+{
+  "event": "payout.successful",
+  "type": "disbursement",
+  "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+  "data": {
+    "reference": "PO-1a2b3c4d5e",
+    "customerReference": "payout-req-3f81a9c2",
+    "status": "successful",
+    "amountReceived": 5000,
+    "recipient": { "name": "Amara Okeke", "accountNumber": "0111111111", "type": "individual" }
+  }
+}
+```
+
+| Field | Description |
+| --- | --- |
+| `event` | The event name, e.g. `payout.successful`. Switch on this. |
+| `type` | Transaction type (e.g. `disbursement`). |
+| `business` | The business id the event belongs to. |
+| `data` | The resource payload; the `reference` matches the one from your create call. |
+
+## Events
+
+| Event | Fired when |
+| --- | --- |
+| `payout.successful` / `payout.failed` | A payout reaches its terminal state. |
+| `refund.successful` / `refund.failed` | A refund completes or fails. |
+| `settlement.successful` / `settlement.failed` | A settlement completes or fails. |
+
+<Note>
+  Collection and conversion events are documented on their product pages. Each service's
+  API-reference page lists the exact events it emits, taken from the emitter code.
+</Note>
+
+## Respond correctly
+
+- Return a `2xx` quickly to acknowledge receipt. Do the heavy work asynchronously.
+- Match events to your records on `data.reference` (Fincra's) or
+  `data.customerReference` (yours).
+- Events can arrive more than once — make your handler **idempotent**.
+- Always [verify the signature](/webhooks/verify-signatures) before trusting a payload.
+
+## Recover missed events
+
+If your endpoint was down, replay payout webhooks with
+[`POST /payouts/resend-webhook`](/api-reference/openapi/fincra-disbursements#tag/payouts/post/payouts/resend-webhook),
+or reconcile by polling the get-by-reference endpoint for the product.
+
+## Test it in sandbox
+
+<Steps>
+  <Step title="Point your webhook at a tunnel">Use a public URL (e.g. an ngrok tunnel) and set it on the dashboard.</Step>
+  <Step title="Trigger a sandbox payout">Follow the [quickstart](/quickstart). Within moments you should receive `payout.successful`.</Step>
+  <Step title="Verify and acknowledge">Verify the signature, return `200`, and confirm your handler is idempotent by replaying the event.</Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Verify signatures" href="/webhooks/verify-signatures">Confirm an event really came from Fincra.</Card>
+  <Card title="Errors" href="/errors">The shared error envelope.</Card>
+</CardGroup>

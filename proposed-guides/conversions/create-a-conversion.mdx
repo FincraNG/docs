@@ -1,0 +1,120 @@
+---
+title: "Create a conversion"
+description: "Convert between currencies in your Fincra wallet against a locked quote, and confirm the result with webhooks."
+---
+
+Convert funds from one currency to another in your wallet — for example NGN to USD
+before a cross-border payout. Conversions run against a **quote** you lock first, so the
+rate is fixed for the life of that quote.
+
+## The model
+
+A conversion consumes a `quoteReference`. You obtain the quote (rate + expiry) from the
+quote service, then initiate the conversion with that reference **before it expires**.
+
+<Warning>
+  Quotes expire. If the `quoteReference` has expired when you call initiate, the request
+  fails with `QUOTE_EXPIRED` — fetch a fresh quote and retry. The exact expiry window is
+  set by the quote service, not this endpoint.
+</Warning>
+
+## Prerequisites
+
+- Your secret API key and 24-character `business` id.
+- Funds in the source-currency wallet.
+- A valid, unexpired `quoteReference` for the pair you are converting.
+
+## Initiate the conversion
+
+See the reference: [`POST /initiate`](/api-reference/openapi/fincra-fx-conversions#tag/currency-conversion/post/initiate).
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl https://sandboxapi.fincra.com/conversions/initiate \
+      -H "api-key: $FINCRA_SECRET_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+        "quoteReference": "qer_8c2a1f04b7",
+        "customerReference": "conv-req-4a7c21"
+      }'
+    ```
+  </Tab>
+  <Tab title="Node.js">
+    ```javascript
+    const res = await fetch("https://sandboxapi.fincra.com/conversions/initiate", {
+      method: "POST",
+      headers: {
+        "api-key": process.env.FINCRA_SECRET_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        business: "63f9a1b2c4d5e6f7a8b9c0d1",
+        quoteReference: "qer_8c2a1f04b7",
+        customerReference: "conv-req-4a7c21",
+      }),
+    });
+    const conversion = await res.json();
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os, requests
+    res = requests.post(
+        "https://sandboxapi.fincra.com/conversions/initiate",
+        headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+        json={
+            "business": "63f9a1b2c4d5e6f7a8b9c0d1",
+            "quoteReference": "qer_8c2a1f04b7",
+            "customerReference": "conv-req-4a7c21",
+        },
+    )
+    conversion = res.json()
+    ```
+  </Tab>
+</Tabs>
+
+## Request fields
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `business` | string | Yes | Your 24-character business id. |
+| `quoteReference` | string | Yes | The locked quote to convert against. Must be unexpired. |
+| `customerReference` | string | Yes | Your unique reference for this conversion; the idempotency key. |
+| `transactionReference` | string | No | An associated transaction reference, when chaining to a payout. |
+
+## Confirm with webhooks
+
+The conversion is asynchronous. The result arrives at your webhook:
+
+| Event | Meaning |
+| --- | --- |
+| `conversion.successful` | Funds converted and credited to the destination wallet. |
+| `conversion.processing` | In flight. |
+| `conversion.failed` | Conversion failed; `data.reason` explains why. |
+
+Reconcile by fetching the conversion by reference if a webhook is delayed.
+
+## Error handling
+
+| errorType | HTTP | What to do |
+| --- | --- | --- |
+| `QUOTE_EXPIRED` | 422 | The quote is no longer valid. Fetch a fresh quote and retry. |
+| `VALIDATION_FAILED` | 422 | Fix the payload. |
+| `ACCESS_DENIED` | 403 | Check the `business` id and key environment. |
+
+## Test it in sandbox
+
+<Steps>
+  <Step title="Lock a sandbox quote">Get a `quoteReference` for the pair (e.g. NGN → USD) from the quote service.</Step>
+  <Step title="Initiate immediately">Call `POST /conversions/initiate` before the quote expires.</Step>
+  <Step title="Watch the webhook">Expect `conversion.successful`; then chain into a cross-currency payout with the resulting balance.</Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Send a payout" href="/payouts/send-a-payout">Use the converted balance for a cross-currency payout.</Card>
+  <Card title="Webhooks" href="/webhooks/overview">Receive and verify conversion events.</Card>
+</CardGroup>

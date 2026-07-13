@@ -1,0 +1,110 @@
+---
+title: "Collections overview"
+description: "How money comes into your Fincra wallet, how to reconcile it, and how to handle refunds and chargebacks."
+---
+
+Collections are inbound payments that credit your Fincra wallet. This page explains the
+model and the API surface for tracking, reconciling, and disputing them. Anyone
+receiving money starts here.
+
+<Note>
+  Collections are **created upstream** — a payer sends money to a virtual (reserved)
+  account, a pay-with-transfer flow, or a mobile-money instruction set up through the
+  relevant product. This service does not expose a "create a charge" endpoint; you
+  observe collections as they arrive and act on them.
+</Note>
+
+## The model
+
+<Steps>
+  <Step title="A payer sends money">Into a virtual account or via a supported inbound rail tied to your business.</Step>
+  <Step title="Fincra credits your wallet and fires a webhook">You receive a `collection.successful` event (verify its signature).</Step>
+  <Step title="You reconcile">Look the collection up by reference, merchant reference, or channel reference and match it to your order.</Step>
+  <Step title="You act if needed">Initiate a refund, or accept/reject a chargeback.</Step>
+</Steps>
+
+## Reconcile a collection
+
+Match incoming money to your records. Look up by whichever reference you hold. See the
+reference: [`GET /reference/{reference}`](/api-reference/openapi/fincra-collections#tag/payments/get/reference/{reference}).
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl "https://sandboxapi.fincra.com/collections/reference/COL-9f81a2c3" \
+      -H "api-key: $FINCRA_SECRET_KEY"
+    ```
+  </Tab>
+  <Tab title="Node.js">
+    ```javascript
+    const res = await fetch(
+      "https://sandboxapi.fincra.com/collections/reference/COL-9f81a2c3",
+      { headers: { "api-key": process.env.FINCRA_SECRET_KEY } },
+    );
+    const collection = await res.json();
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os, requests
+    res = requests.get(
+        "https://sandboxapi.fincra.com/collections/reference/COL-9f81a2c3",
+        headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+    )
+    collection = res.json()
+    ```
+  </Tab>
+</Tabs>
+
+You can also fetch by your own reference
+(`/merchant-reference/{merchantReference}`), by numeric id (`/{id}`), or by the
+provider's reference (`/channel-reference`). Lists are paginated (`page`, `perPage`).
+
+## Refunds
+
+Return a collection to the payer. This is asynchronous; the result arrives via a
+`refund.*` webhook. See [`POST /refund`](/api-reference/openapi/fincra-collections#tag/refunds/post/refund).
+
+<Warning>
+  A refund moves money. Send a unique reference and make retries idempotent — do not
+  re-issue a refund on a timeout without first checking its status.
+</Warning>
+
+## Chargebacks
+
+When a payer disputes a card collection, a chargeback is raised. You respond through the
+API: list them, then accept (concede) or reject (contest with evidence). See
+[`PATCH /chargebacks/{id}/accept`](/api-reference/openapi/fincra-collections#tag/chargebacks/patch/chargebacks/{id}/accept)
+and `/reject`.
+
+## Additional-information requests
+
+Compliance may raise an additional-information request on a collection (AML follow-up).
+List open requests on a collection and submit your response via
+`PATCH /{id}/additional-information`.
+
+## Test it in sandbox
+
+Trigger an inbound bank transfer without real money using the simulate endpoint, then
+watch the webhook and reconcile.
+
+<Steps>
+  <Step title="Simulate an inbound transfer">`POST /collections/transfer/simulate` with a sandbox amount and your business id.</Step>
+  <Step title="Receive the webhook">Expect `collection.successful`; verify its signature.</Step>
+  <Step title="Reconcile">Fetch the collection by reference and confirm the amount and status.</Step>
+</Steps>
+
+<Info>
+  Guides for setting up virtual accounts, pay-with-transfer, and mobile-money collection
+  rails live with those products; this page covers what the collections service itself
+  exposes. (Those product specs are on the extraction backlog.)
+</Info>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" href="/webhooks/overview">Receive and verify collection events.</Card>
+  <Card title="Errors" href="/errors">Branch on errorType.</Card>
+  <Card title="Send a payout" href="/payouts/send-a-payout">Move money out.</Card>
+  <Card title="API reference" href="/api-reference/openapi/fincra-collections">Every collections endpoint.</Card>
+</CardGroup>
