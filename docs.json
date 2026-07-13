@@ -6,9 +6,9 @@
     "family": "Google Sans"
   },
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7449FF",
+    "light": "#9B7DFF",
+    "dark": "#7449FF"
   },
   "favicon": "/favicon.png",
   "navigation": {
@@ -383,13 +383,13 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "href": "https://support.fincra.com"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "href": "https://app.fincra.com"
     }
   },
   "contextual": {
