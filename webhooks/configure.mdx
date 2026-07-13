@@ -12,7 +12,7 @@ To process webhooks, you need to:
 Your server must expose a webhook endpoint that can:
 
 - Accept POST requests over HTTPS
-- Respond with a 2xx HTTP status code within **20** seconds
+- Respond with a 2xx HTTP status code within **10** seconds
 - Parse incoming JSON payloads
 - Store the event data before processing
 
@@ -35,7 +35,7 @@ To configure a webhook on your Fincra account:
 
 ### Accept webhook events
 
-Your endpoint must respond with a 2xx HTTP status code within 20 seconds of receiving a webhook event. If Fincra does not receive a
+Your endpoint must respond with a 2xx HTTP status code within 10 seconds of receiving a webhook event. If Fincra does not receive a
 successful response, for example, your server is down or times out, the event is added to the retry queue.
 
 You should also verify that incoming webhooks originated from Fincra before processing them. See [Webhook Verification](/webhooks/verify).
@@ -47,11 +47,10 @@ For details on event types and payloads, see [Payload Structure](/webhooks/paylo
 Before going live, verify that your endpoint can receive and process webhook events from Fincra.
 
 1. Ensure your webhook URL is configured in your sandbox Dashboard.
-2. Send a test event using the POST /sandbox/webhooks/test endpoint.
+2. Trigger a real event in sandbox (for example, initiate a sandbox payout or collection), which emits the matching webhook to your URL. To re-deliver an event you have already generated, use a resend endpoint (`POST /payouts/resend-webhook`, or `POST /notifications/outgoing-webhooks/resend`).
 3. Confirm that your server received the event and responded with a 2xx status code.
 
-The test event sends a realistic payload to your configured webhook URL and returns the delivery result, including the HTTP status code
-your endpoint returned.
+Sandbox events send the same payload shape as production to your configured webhook URL, so you can validate parsing and signature verification end to end before going live.
 
 ### Update your webhook URL
 

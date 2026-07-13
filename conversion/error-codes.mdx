@@ -48,5 +48,5 @@ These errors occur when calling `GET /conversions/reference/{reference}` or `GET
 
 | Error code | Description | Next steps |
 |---|---|---|
-| `RESOURCE_NOT_FOUND` | No conversion was found for the provided reference. | Verify the conversion `reference` is correct. Use the `reference` returned when the conversion was initiated, not the `quoteReference` or `customerReference`. |
+| `CONVERSION_NOT_FOUND` | No conversion was found for the provided reference. | Verify the conversion `reference` is correct. Use the `reference` returned when the conversion was initiated, not the `quoteReference` or `customerReference`. |
 | `VALIDATION_FAILED` | The `business` query parameter is invalid. For example, the business ID is not the expected length. | Check that your business ID is correct. You can find it in your [Fincra dashboard](https://dashboard.fincra.com). |

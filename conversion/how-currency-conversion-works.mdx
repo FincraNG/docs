@@ -83,7 +83,17 @@ For full details on setting up and validating webhooks, see [Webhooks](/webhooks
 
 ## Key things to know
 
-- **Pre-funding required** — You must have sufficient funds in your source currency wallet before converting. Fincra does not offer credit or post-funding for conversions.
+- **Pre-funding is the default** — For a standard conversion you must have sufficient funds in your source currency wallet before converting. Post-funding (deferred settlement) is supported in the platform for eligible merchants (`settlementType: DEFERRED`, settled via the amend endpoint), subject to a configured limit.
+{/* HUMAN: confirm the post-funding business policy before publishing.
+    File: conversion/how-currency-conversion-works.mdx
+    The fx-conversions code implements post-funding: settlementType DEFERRED,
+    POST /conversions/{id}/amend to settle, GET /conversions/post-funding-configs,
+    and error POST_FUNDING_LIMIT_EXCEEDED. The previous wording ("Fincra does not
+    offer credit or post-funding") was a categorical denial that contradicts the code.
+    Decide the correct merchant-facing statement: (a) post-funding is generally
+    available, (b) it is available only to approved/eligible merchants (current
+    wording), or (c) it is internal-only and not a merchant surface. Then keep or edit
+    this line accordingly and remove this note. Do not restore the categorical denial. */}
 - **No same-currency conversions** — Source and destination currencies must be different.
-- **No cancellations or amendments** — Once a conversion is executed, it cannot be reversed or modified.
+- **Amendments are limited** — A deferred conversion can be settled via `POST /conversions/{id}/amend`; a completed standard conversion cannot be reversed or modified.
 - **Supported currency pairs** — Not all currency combinations are available. See [Supported Currency Pairs](/conversion/supported-currency-pairs) for the full list.

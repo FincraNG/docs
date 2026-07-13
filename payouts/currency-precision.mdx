@@ -15,20 +15,23 @@ Fincra follows the ISO 4217 standard for currency representation.
 | Nigerian Naira | NGN | 2 | `1000.50` |
 | Ghanaian Cedi | GHS | 2 | `500.00` |
 | Kenyan Shilling | KES | 2 | `25000.00` |
-| Ugandan Shilling | UGX | 2 | `100000.00` |
+| Ugandan Shilling | UGX | 0 | `100000` |
 | Zambian Kwacha | ZMW | 2 | `750.00` |
 | Tanzanian Shilling | TZS | 2 | `50000.00` |
-| Central African CFA Franc | XAF | 2 | `10000.00` |
-| West African CFA Franc | XOF | 2 | `10000.00` |
+| Central African CFA Franc | XAF | 0 | `10000` |
+| West African CFA Franc | XOF | 0 | `10000` |
+| Rwandan Franc | RWF | 0 | `50000` |
 | South African Rand | ZAR | 2 | `1500.00` |
 | Egyptian Pound | EGP | 2 | `3000.00` |
 | US Dollar | USD | 2 | `100.50` |
 | British Pound | GBP | 2 | `250.75` |
 | Euro | EUR | 2 | `500.25` |
 
-<Note>
-  All payout currencies currently use **2 decimal places**. This table will be updated if precision rules change for specific currencies. Always format your amounts with exactly 2 decimal places to avoid validation errors.
-</Note>
+<Warning>
+  **UGX, XAF, XOF, and RWF are zero-decimal currencies** — send `amount` as a whole
+  number (integer). Sending decimals for these currencies fails validation. All other
+  currencies above use 2 decimal places. Always match the `amount` precision to the currency.
+</Warning>
 
 ## How to use this
 

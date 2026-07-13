@@ -146,7 +146,7 @@ Listen for these events as the primary way to confirm payout outcomes. Use the v
 
 ## Key things to know
 
-- **Sandbox available** — Test your payout integration in sandbox before going live. Use the sandbox base URL: `https://sandbox.fincra.com`.
+- **Sandbox available** — Test your payout integration in sandbox before going live. Use the sandbox base URL: `https://sandboxapi.fincra.com`.
 - **Dashboard + API** — You can send payouts manually from the [Fincra dashboard](https://dashboard.fincra.com) or programmatically via the API.
 - **`customerReference` is critical** — Always include a unique `customerReference` in every payout to prevent duplicate transactions.
 - **Only retry on `failed`** — Never resubmit a payout that is still `processing`. Use the verify endpoint to check status if you haven't received a webhook.

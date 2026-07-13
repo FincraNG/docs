@@ -14,10 +14,16 @@ description: "Initiate and verify a charge using the Fincra Direct Charge API."
 
 **Headers:**
 
-| Header         | Description         |
-| -------------- | ------------------- |
-| `api-key`      | Your API secret key |
-| `Content-Type` | `application/json`  |
+| Header          | Description                                                        |
+| --------------- | ----------------------------------------------------------------- |
+| `x-business-id` | Your 24-character business id (from your dashboard).              |
+| `Content-Type`  | `application/json`                                                 |
+
+<Note>
+  The Direct Charge (server-side charges) API authenticates with `x-business-id`, not the
+  secret `api-key`. Sending only `api-key` returns `401`. This differs from the payout and
+  wallet APIs, which use `api-key`.
+</Note>
 
 **Base request fields:**
 
@@ -40,7 +46,7 @@ Additional fields are required depending on the payment method. See the examples
     ```bash
     curl --request POST \
       --url https://api.fincra.com/checkout-core/charges \
-      --header 'api-key: <YOUR_SECRET_KEY>' \
+      --header 'x-business-id: <YOUR_BUSINESS_ID>' \
       --header 'Content-Type: application/json' \
       --data '{
         "type": "bank_transfer",
@@ -60,7 +66,7 @@ Additional fields are required depending on the payment method. See the examples
     ```bash
     curl --request POST \
       --url https://api.fincra.com/checkout-core/charges \
-      --header 'api-key: <YOUR_SECRET_KEY>' \
+      --header 'x-business-id: <YOUR_BUSINESS_ID>' \
       --header 'Content-Type: application/json' \
       --data '{
         "type": "mobile_money",
@@ -79,7 +85,7 @@ Additional fields are required depending on the payment method. See the examples
     ```bash
     curl --request POST \
       --url https://api.fincra.com/checkout-core/charges \
-      --header 'api-key: <YOUR_SECRET_KEY>' \
+      --header 'x-business-id: <YOUR_BUSINESS_ID>' \
       --header 'Content-Type: application/json' \
       --data '{
         "type": "mobile_money",
@@ -102,7 +108,7 @@ Additional fields are required depending on the payment method. See the examples
     ```bash
     curl --request POST \
       --url https://api.fincra.com/checkout-core/charges \
-      --header 'api-key: <YOUR_SECRET_KEY>' \
+      --header 'x-business-id: <YOUR_BUSINESS_ID>' \
       --header 'Content-Type: application/json' \
       --data '{
         "type": "card",
@@ -114,9 +120,9 @@ Additional fields are required depending on the payment method. See the examples
           "email": "amara@example.com"
         },
         "card": {
-          "number": "4111111111111111",
-          "expiryMonth": "12",
-          "expiryYear": "26",
+          "card_number": "4111111111111111",
+          "expiry_month": "12",
+          "expiry_year": "26",
           "cvv": "123"
         }
       }'
@@ -128,7 +134,7 @@ Additional fields are required depending on the payment method. See the examples
     ```bash
     curl --request POST \
       --url https://api.fincra.com/checkout-core/charges \
-      --header 'api-key: <YOUR_SECRET_KEY>' \
+      --header 'x-business-id: <YOUR_BUSINESS_ID>' \
       --header 'Content-Type: application/json' \
       --data '{
         "type": "eft",
@@ -171,14 +177,14 @@ Always verify the charge server-side before delivering value. Use any of the thr
     ```bash
     curl --request GET \
       --url https://api.fincra.com/checkout-core/charges/reference/order-001 \
-      --header 'api-key: <YOUR_SECRET_KEY>'
+      --header 'x-business-id: <YOUR_BUSINESS_ID>'
     ```
   </Tab>
   <Tab title="By merchant reference">
     ```bash
     curl --request GET \
       --url https://api.fincra.com/checkout-core/charges/merchant-reference/order-001 \
-      --header 'api-key: <YOUR_SECRET_KEY>'
+      --header 'x-business-id: <YOUR_BUSINESS_ID>'
     ```
   </Tab>
   <Tab title="By charge ID">
@@ -187,7 +193,7 @@ Always verify the charge server-side before delivering value. Use any of the thr
     ```bash
     curl --request GET \
       --url 'https://api.fincra.com/checkout-core/charges/<id>/verify?statusCheck=true' \
-      --header 'api-key: <YOUR_SECRET_KEY>'
+      --header 'x-business-id: <YOUR_BUSINESS_ID>'
     ```
   </Tab>
 </Tabs>

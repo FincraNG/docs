@@ -8,7 +8,7 @@ Nigerian bank accounts are verified using the NUBAN (Nigeria Uniform Bank Accoun
 
 | Attribute | Details |
 |---|---|
-| Account type | `bank_account` |
+| Account type | `nuban` |
 | Currency | `NGN` |
 | Name matching | Yes — returns account holder's full name |
 
@@ -21,7 +21,7 @@ Send a `POST` request to `/core/accounts/resolve` with the following parameters:
 | `accountNumber` | string | The beneficiary's NUBAN account number |
 | `bankCode` | string | The bank's unique code |
 | `currency` | string | Must be `NGN` |
-| `type` | string | Must be `bank_account` |
+| `type` | string | Must be `nuban` |
 
 ### Request example
 
@@ -30,7 +30,7 @@ Send a `POST` request to `/core/accounts/resolve` with the following parameters:
   "accountNumber": "8142986562",
   "bankCode": "305",
   "currency": "NGN",
-  "type": "bank_account"
+  "type": "nuban"
 }
 ```
 
