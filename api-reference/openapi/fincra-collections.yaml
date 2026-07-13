@@ -1,0 +1,1581 @@
+openapi: 3.1.0
+info:
+  title: Fincra Payments (fincra-collections)
+  version: "1.0.0"
+  summary: Merchant-facing collections (payins), refunds, and chargebacks API for the fincra-collections service.
+  description: >
+    Read and reconcile inbound payments (collections / payins) that were made to a
+    merchant across Fincra's African and cross-border rails, manage the refunds and
+    reversals raised against them, respond to compliance additional-information
+    requests, and accept or reject chargebacks.
+
+
+    This service is READ / REFUND / RECONCILE only. It does NOT create charges,
+    virtual accounts, mobile-money, or bank-transfer collections: those are created
+    upstream (e.g. checkout-core) and by inbound provider webhooks, then recorded and
+    read here. The one write that mutates money is the refund, which is asynchronous:
+    the create call records the request and the terminal outcome is delivered by the
+    Fincra webhook stream and can be polled with the get-by-reference read endpoints.
+    `POST /transfer/simulate` is a test-mode helper that simulates an inbound
+    pay-with-bank-transfer collection; it does not move real funds.
+
+
+    This spec is generated from the source of `fincra-collections` on branch
+    `restore/bake-build-pipeline` (code is truth). The merchant router `collectionsAPI`
+    is mounted at `/` with NO version prefix; `/v2` carries admin webhooks only.
+    Auth is delegated to the shared `authMiddleware.authenticate()` (fincra-utils
+    authMiddlewareV2), which accepts a merchant api-key header, a bearer token, or a
+    service-secret-key. Two routes are notable exceptions and are marked distinctly
+    below: `GET /payments/{businessID}/{transactionID}` is NOT api-key authed (guarded
+    only by a Mongo Business lookup) and the `/dispute` routes carry NO auth middleware
+    at all. Anything undeterminable from code is marked with an `x-todo` extension
+    carrying the exact `file:line` and is listed in EXTRACTION-REPORT-collections.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The primary merchant router is mounted at "/" with NO version/base-path prefix
+  (src/server.ts:65-66; src/routes/index.ts:23-80); the "/v2" router carries admin
+  webhooks only. The public API prefix a merchant calls (observed platform-wide as
+  /collections and /v2) is applied at the Kong gateway, which is not in this repo.
+  Paths below are exactly as routed in code; prepend the confirmed gateway prefix
+  before publishing. See EXTRACTION-REPORT-collections.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/collections
+    description: Sandbox (test keys). Listed first — powers the docs playground.
+  - url: https://api.fincra.com/collections
+    description: Production (live keys).
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Payments
+    description: List, look up, reconcile, simulate, and dispute inbound collections (payins).
+  - name: Refunds
+    description: Initiate and track refunds / reversals on collections.
+  - name: Chargebacks
+    description: List, look up, accept, and reject chargebacks raised on collections.
+
+paths:
+  /:
+    get:
+      operationId: collectionsListCollections
+      tags: [Payments]
+      summary: List collections
+      description: >
+        Return a paginated list of the merchant's inbound collections (payins), filtered
+        by status, payment method, currency, amount, date range, and reference. Use this
+        to build a collections table or to reconcile received payments against your own
+        records. This is a synchronous read; no webhook is paired with it. Pagination is
+        page-based via `page` and `perPage`.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - { $ref: "#/components/parameters/PageQuery" }
+        - { $ref: "#/components/parameters/PerPageQuery" }
+        - name: sourceAmount
+          in: query
+          description: Filter by the amount received in the source currency.
+          schema: { type: number }
+        - name: destinationAmount
+          in: query
+          description: Filter by the amount credited in the destination currency.
+          schema: { type: number }
+        - name: sourceAmountSettled
+          in: query
+          description: Filter by the settled amount in the source currency.
+          schema: { type: number }
+        - name: destinationAmountSettled
+          in: query
+          description: Filter by the settled amount in the destination currency.
+          schema: { type: number }
+        - name: sourceCurrency
+          in: query
+          description: Filter by source currency (trimmed and uppercased; not enum-bound in code).
+          schema: { type: string }
+        - name: destinationCurrency
+          in: query
+          description: Filter by destination currency (trimmed and uppercased; not enum-bound in code).
+          schema: { type: string }
+        - name: dateInitiatedFrom
+          in: query
+          description: Include collections initiated on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateInitiatedTo
+          in: query
+          description: Include collections initiated on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: settledDateFrom
+          in: query
+          description: Include collections settled on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: settledDateTo
+          in: query
+          description: Include collections settled on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          description: Filter by one or more collection statuses.
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/CollectionStatus" }
+        - name: paymentMethod
+          in: query
+          description: Filter by one or more payment methods.
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/PaymentMethod" }
+        - name: reference
+          in: query
+          description: Filter by the Fincra collection reference.
+          schema: { type: string }
+        - name: searchQuery
+          in: query
+          description: Free-text search across collection fields.
+          schema: { type: string }
+        - name: subAccount
+          in: query
+          description: Filter by a 24-character sub-account id.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: includeSubAccounts
+          in: query
+          description: Include collections belonging to sub-accounts. Defaults to false.
+          schema: { type: boolean, default: false }
+        - name: virtualAccount
+          in: query
+          description: Filter by the 24-character virtual (reserved) account id the payment landed on.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+      responses:
+        "200":
+          description: A page of collections.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CollectionPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails Joi validation (e.g. business not 24 chars, bad status/paymentMethod enum, unknown key).
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The api-key/bearer credential fails auth-service verification.
+
+  /get-all-by-date:
+    get:
+      operationId: collectionsListCollectionsByDate
+      tags: [Payments]
+      summary: List collections ordered by date
+      description: >
+        Return a paginated list of the merchant's collections ordered by date. Same
+        filter set and validation as `collectionsListCollections` (the two share the
+        `getAllCollectionsSchema` validator); the difference is the ordering applied by
+        the handler. Use this when you need date-ordered reconciliation output. This is a
+        synchronous read; no webhook is paired with it.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - { $ref: "#/components/parameters/PageQuery" }
+        - { $ref: "#/components/parameters/PerPageQuery" }
+        - name: sourceCurrency
+          in: query
+          description: Filter by source currency (trimmed and uppercased; not enum-bound in code).
+          schema: { type: string }
+        - name: destinationCurrency
+          in: query
+          description: Filter by destination currency (trimmed and uppercased; not enum-bound in code).
+          schema: { type: string }
+        - name: dateInitiatedFrom
+          in: query
+          description: Include collections initiated on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateInitiatedTo
+          in: query
+          description: Include collections initiated on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          description: Filter by one or more collection statuses.
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/CollectionStatus" }
+        - name: paymentMethod
+          in: query
+          description: Filter by one or more payment methods.
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/PaymentMethod" }
+        - name: reference
+          in: query
+          description: Filter by the Fincra collection reference.
+          schema: { type: string }
+        - name: searchQuery
+          in: query
+          description: Free-text search across collection fields.
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of collections ordered by date.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CollectionPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails Joi validation.
+
+  /export:
+    post:
+      operationId: collectionsExportCollections
+      tags: [Payments]
+      summary: Export collections
+      description: >
+        Export the merchant's collections (same filter set as the list endpoint, minus
+        pagination and the virtualAccount filter) to a file. Use this to produce a
+        downloadable reconciliation report. This is a synchronous request; no webhook is
+        paired with it. On failure to build the file it can surface a FILE_SYSTEM_ERROR.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportCollectionsRequest" }
+            examples:
+              successfulNgnByDateRange:
+                summary: Export successful NGN collections for a date range
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  sourceCurrency: NGN
+                  status: [successful]
+                  paymentMethod: [bank_transfer]
+                  dateInitiatedFrom: "2026-06-01"
+                  dateInitiatedTo: "2026-06-30"
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The request body fails Joi validation (missing business, bad status/paymentMethod enum, unknown key).
+        - errorType: FILE_SYSTEM_ERROR
+          status: 500
+          trigger: The export file could not be produced/written.
+
+  /refund:
+    post:
+      operationId: collectionsInitiateRefund
+      tags: [Refunds]
+      summary: Initiate a refund
+      description: >
+        Initiate a refund / reversal against a settled collection, identified by its
+        transaction reference. Use this to return funds to the payer. The operation is
+        asynchronous: this call records the refund request and the terminal outcome is
+        delivered via the Fincra webhook stream and can be polled with
+        `collectionsGetRefundByReference`. Fails with UNPROCESSABLE_ENTITY if a refund is
+        already initiated or the payment details are incomplete.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InitiateRefundRequest" }
+            examples:
+              refundByReference:
+                summary: Refund a collection by its transaction reference
+                value:
+                  transReference: COL-7f3a1c9e2b
+      responses:
+        "200":
+          description: Refund initiated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The request body fails Joi validation (missing transReference).
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: "Business-rule failure: refund already initiated (collectionsService.ts:251) or payment details incomplete (collectionsService.ts:304)."
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No collection matches the supplied transReference (collectionsService.ts:261).
+    get:
+      operationId: collectionsListRefunds
+      tags: [Refunds]
+      summary: List refunds
+      description: >
+        Return a paginated list of the merchant's refunds / reversals, filtered by
+        currency, amount, status, reference, refund type, and date range. Use this to
+        build a refunds table or to reconcile refunds against their originating
+        collections. This is a synchronous read; no webhook is paired with it.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - { $ref: "#/components/parameters/PageQuery" }
+        - { $ref: "#/components/parameters/PerPageQuery" }
+        - name: currency
+          in: query
+          description: Filter by currency (trimmed; not enum-bound in code).
+          schema: { type: string }
+        - name: amount
+          in: query
+          description: Filter by the original collection amount.
+          schema: { type: number }
+        - name: amountRefunded
+          in: query
+          description: Filter by the amount refunded.
+          schema: { type: number }
+        - name: status
+          in: query
+          description: Filter by refund status (free-form string; not enum-bound in code).
+          schema: { type: string }
+        - name: reference
+          in: query
+          description: Filter by the refund reference.
+          schema: { type: string }
+        - name: searchQuery
+          in: query
+          description: Free-text search across refund fields.
+          schema: { type: string }
+        - name: dateInitiatedFrom
+          in: query
+          description: Include refunds initiated on or after this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: dateInitiatedTo
+          in: query
+          description: Include refunds initiated on or before this date (ISO-8601).
+          schema: { type: string, format: date }
+        - name: refundType
+          in: query
+          description: Filter by refund type (free-form string; not enum-bound in code).
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of refunds.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/RefundPage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: A query parameter fails Joi validation (e.g. business not 24 chars).
+
+  /refund/export:
+    post:
+      operationId: collectionsExportRefunds
+      tags: [Refunds]
+      summary: Export refunds
+      description: >
+        Export the merchant's refunds to a file, using the same filter set as the refunds
+        list endpoint. Use this to produce a downloadable refunds reconciliation report.
+        This is a synchronous request; no webhook is paired with it. On failure to build
+        the file it can surface a FILE_SYSTEM_ERROR.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportRefundsRequest" }
+            examples:
+              refundsByDateRange:
+                summary: Export refunds for a business over a date range
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+                  currency: NGN
+                  dateInitiatedFrom: "2026-06-01"
+                  dateInitiatedTo: "2026-06-30"
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The request body fails Joi validation (missing business).
+        - errorType: FILE_SYSTEM_ERROR
+          status: 500
+          trigger: The export file could not be produced/written.
+
+  /refund/{reference}:
+    get:
+      operationId: collectionsGetRefundByReference
+      tags: [Refunds]
+      summary: Get a refund by reference
+      description: >
+        Fetch a single refund / reversal by its reference. This is the primary way to
+        poll for the terminal state of an asynchronous refund initiated with
+        `collectionsInitiateRefund`. This is a synchronous read; no webhook is paired
+        with it. Returns RESOURCE_NOT_FOUND when the reference matches no refund.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The refund reference.
+          schema: { type: string }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The refund.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Refund" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No refund matches the supplied reference (collectionsService.ts:487).
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The reference is missing or business is not 24 chars.
+
+  /{id}:
+    get:
+      operationId: collectionsGetCollectionById
+      tags: [Payments]
+      summary: Get a collection by id
+      description: >
+        Fetch a single collection by its numeric Fincra id (the route path is constrained
+        to digits only). Use this for status polling when you stored the numeric id; for
+        the string reference use `collectionsGetCollectionByReference`. This is a
+        synchronous read; no webhook is paired with it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra collection id (path is constrained to digits).
+          schema: { type: integer, minimum: 0 }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The collection.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Collection" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No collection matches the supplied id (collectionsService.ts:129,149,171,190).
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: business is supplied but not 24 chars.
+
+  /reference/{reference}:
+    get:
+      operationId: collectionsGetCollectionByReference
+      tags: [Payments]
+      summary: Get a collection by Fincra reference
+      description: >
+        Fetch a single collection by its Fincra-issued `reference`. This is the primary
+        way to look up a specific inbound payment by the reference Fincra assigned it.
+        This is a synchronous read; no webhook is paired with it. Returns
+        RESOURCE_NOT_FOUND when the reference matches no collection.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra collection reference.
+          schema: { type: string }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The collection.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Collection" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No collection matches the supplied reference.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: reference is missing or business is not 24 chars.
+
+  /merchant-reference/{merchantReference}:
+    get:
+      operationId: collectionsGetCollectionByMerchantReference
+      tags: [Payments]
+      summary: Get a collection by merchant reference
+      description: >
+        Fetch a single collection by the merchant's own supplied reference
+        (`merchantReference`). Use this to reconcile an inbound payment against your own
+        system's identifiers. This is a synchronous read; no webhook is paired with it.
+        Returns RESOURCE_NOT_FOUND when no collection carries the reference.
+      parameters:
+        - name: merchantReference
+          in: path
+          required: true
+          description: The merchant-supplied reference on the collection.
+          schema: { type: string }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The collection.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Collection" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No collection matches the supplied merchantReference.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: merchantReference is missing or business is not 24 chars.
+
+  /channel-reference:
+    get:
+      operationId: collectionsGetCollectionByChannelReference
+      tags: [Payments]
+      summary: Get a collection by channel reference
+      description: >
+        Fetch a single collection by the channel / provider reference, supplied as query
+        parameters (`channelName` plus `channelReference`). Use this to reconcile an
+        inbound payment against the identifier assigned by the underlying provider. This
+        is a synchronous read; no webhook is paired with it.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+        - name: channelName
+          in: query
+          required: true
+          description: The provider / channel name that owns the reference.
+          schema: { type: string }
+        - name: channelReference
+          in: query
+          required: true
+          description: The reference assigned by the provider / channel.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The collection.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Collection" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No collection matches the supplied channelName/channelReference pair.
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: channelName or channelReference is missing.
+
+  /{id}/additional-information:
+    get:
+      operationId: collectionsListAdditionalInformation
+      tags: [Payments]
+      summary: List additional-information requests on a collection
+      description: >
+        List the compliance / AML additional-information requests raised by Fincra on a
+        collection, identified by its numeric id. Use this to discover what supporting
+        information a merchant must supply before an inbound payment can complete. This
+        is a synchronous read; no webhook is paired with it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra collection id.
+          schema: { type: integer, minimum: 0 }
+        - $ref: "#/components/parameters/BusinessQueryOptional"
+      responses:
+        "200":
+          description: The additional-information requests on the collection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Response data item shape for additional-information requests not harvested. Source: src/components/collections/controllers/collectionsController.ts:244-257"
+        "400":
+          description: >
+            Divergent branch. When the collection id matches no record, the service throws
+            objection's NotFoundError (not the fincra-utils one), which the shared
+            APIHelper ships as HTTP 400 with NO errorType. This is a known bug (see
+            EXTRACTION-REPORT-collections.md).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+          x-todo: "objection NotFoundError -> HTTP 400 with errorType undefined (intended 404). Source: src/components/collections/services/collectionAdditionalInformationService.ts:19,103"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id is missing/non-numeric or business is not 24 chars.
+    patch:
+      operationId: collectionsRespondAdditionalInformation
+      tags: [Payments]
+      summary: Respond to an additional-information request
+      description: >
+        Submit the merchant's response to a compliance additional-information request
+        raised on a collection, supplying free text, file references, and/or URLs. Use
+        this to satisfy the AML follow-up so the inbound payment can proceed. This is a
+        synchronous request; no webhook is paired with it. Guarded operations can return
+        OPERATION_FORBIDDEN or UNPROCESSABLE_ENTITY when the collection is already
+        completed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra collection id.
+          schema: { type: integer, minimum: 0 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveAdditionalInfoResponseRequest" }
+            examples:
+              respondWithText:
+                summary: Respond to an additional-information request with text and a URL
+                value:
+                  id: 90210
+                  additionalInfoId: 4471
+                  text: Invoice attached; funds are for a software licence renewal.
+                  urls: ["https://sandbox-files.fincra.com/invoice-9d55.pdf"]
+      responses:
+        "200":
+          description: Response saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: id or additionalInfoId is missing/non-numeric.
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: "Collection already completed, you can't request additional info (collectionAdditionalInformationService.ts:114)."
+        - errorType: OPERATION_FORBIDDEN
+          status: 403
+          trigger: The additional-info operation is not allowed for this collection (collectionAdditionalInformationService.ts:42).
+
+  /transfer/simulate:
+    post:
+      operationId: collectionsSimulateBankTransfer
+      tags: [Payments]
+      summary: Simulate a bank-transfer collection
+      description: >
+        Simulate an inbound pay-with-bank-transfer collection in test mode. Use this to
+        trigger a test-mode inbound transfer so you can exercise your collection handling
+        without moving real funds. This is a synchronous helper; it does not create a live
+        charge. `currency` is the only field bound to the platform Currency enum. See
+        EXTRACTION-REPORT-collections.md for the test-vs-live scoping uncertainty.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SimulateCollectionRequest" }
+            examples:
+              ngnBankTransfer:
+                summary: Simulate an NGN pay-with-bank-transfer inbound payment
+                value:
+                  amount: 5000
+                  currency: NGN
+                  paymentMethod: [bank_transfer]
+                  payer:
+                    name: Amara Okeke
+                    accountNumber: "0111111111"
+                    bankName: Guaranty Trust Bank
+                    bankCode: "058"
+                  reference: sim-col-3f81a9c2
+                  narration: Test inbound transfer
+      responses:
+        "200":
+          description: Simulated collection accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The request body fails Joi validation (missing amount/currency/paymentMethod, currency not in Currency enum).
+        - errorType: OPERATION_FORBIDDEN
+          status: 403
+          trigger: The simulate operation is not permitted (collectionsController.ts:287).
+
+  /chargebacks:
+    get:
+      operationId: collectionsListChargebacks
+      tags: [Chargebacks]
+      summary: List chargebacks
+      description: >
+        Return a paginated list of the chargebacks raised on the merchant's collections.
+        Use this to build a chargebacks queue and see which inbound payments are being
+        disputed by the payer's bank. This is a synchronous read; no webhook is paired
+        with it.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - { $ref: "#/components/parameters/PageQuery" }
+        - { $ref: "#/components/parameters/PerPageQuery" }
+        - name: status
+          in: query
+          description: Filter by chargeback status (e.g. rejected). Confirmed via QA sandbox testing (Fincra Sandbox Bug Report, BUG-024).
+          schema: { type: string }
+        - name: collectionId
+          in: query
+          description: Filter to chargebacks on a specific collection id. Confirmed via QA (BUG-024).
+          schema: { type: string }
+        - name: dateCreatedFrom
+          in: query
+          description: Include chargebacks created on or after this date (YYYY-MM-DD). Confirmed via QA (BUG-024).
+          schema: { type: string, format: date }
+        - name: dateCreatedTo
+          in: query
+          description: Include chargebacks created on or before this date (YYYY-MM-DD). Confirmed via QA (BUG-024).
+          schema: { type: string, format: date }
+        - name: searchQuery
+          in: query
+          description: Free-text search across chargeback fields. Confirmed via QA (BUG-024).
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of chargebacks.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Query params confirmed via QA sandbox testing (Fincra Sandbox Bug Report BUG-024): business required, page, perPage, status, collectionId, dateCreatedFrom, dateCreatedTo, searchQuery. Chargeback response ITEM shape still not code-harvested (ChargebacksController.getAll not opened). Source: src/components/chargebacks/apis/chargebacksAPI.ts:6-13"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The api-key/bearer credential fails auth-service verification.
+
+  /chargebacks/export:
+    post:
+      operationId: collectionsExportChargebacks
+      tags: [Chargebacks]
+      summary: Export chargebacks
+      description: >
+        Export the merchant's chargebacks to a file. Use this to produce a downloadable
+        chargebacks report for reconciliation or dispute handling. This is a synchronous
+        request; no webhook is paired with it. On failure to build the file it can
+        surface a FILE_SYSTEM_ERROR.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportChargebacksRequest" }
+            examples:
+              chargebacksForBusiness:
+                summary: Export chargebacks for a business
+                value:
+                  business: 63f9a1b2c4d5e6f7a8b9c0d1
+      responses:
+        "200":
+          description: Export produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Chargeback export validator not harvested (ChargebacksController.export not opened). Source: src/components/chargebacks/apis/chargebacksAPI.ts:15-22"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: FILE_SYSTEM_ERROR
+          status: 500
+          trigger: The export file could not be produced/written.
+
+  /chargebacks/{id}:
+    get:
+      operationId: collectionsGetChargebackById
+      tags: [Chargebacks]
+      summary: Get a chargeback by id
+      description: >
+        Fetch a single chargeback by its numeric id (the route path is constrained to
+        digits only). Use this to see the detail of a disputed inbound payment before you
+        accept or reject it. This is a synchronous read; no webhook is paired with it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra chargeback id (path is constrained to digits).
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: The chargeback.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Chargeback response item shape not harvested (ChargebacksController.getOne not opened). Source: src/components/chargebacks/apis/chargebacksAPI.ts:24-31"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No chargeback matches the supplied id.
+
+  /chargebacks/{id}/accept:
+    patch:
+      operationId: collectionsAcceptChargeback
+      tags: [Chargebacks]
+      summary: Accept a chargeback
+      description: >
+        Accept a chargeback raised on a collection, identified by its numeric id.
+        Accepting concedes the dispute and returns the funds to the payer. Use this when
+        the merchant will not contest the chargeback. This is a synchronous request; no
+        webhook is paired with it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra chargeback id.
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Chargeback accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Accept validator/body shape not harvested (ChargebacksController.accept not opened). Source: src/components/chargebacks/apis/chargebacksAPI.ts:33-40"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No chargeback matches the supplied id.
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: The chargeback is not in a state that can be accepted.
+    x-todo: "PATCH /chargebacks/:id/accept — the request body (if any) was not harvested. Source: src/components/chargebacks/apis/chargebacksAPI.ts:33-40"
+
+  /chargebacks/{id}/reject:
+    patch:
+      operationId: collectionsRejectChargeback
+      tags: [Chargebacks]
+      summary: Reject a chargeback
+      description: >
+        Reject / dispute a chargeback raised on a collection, identified by its numeric
+        id. Rejecting contests the dispute, typically with supporting evidence. Use this
+        when the merchant will fight the chargeback. This is a synchronous request; no
+        webhook is paired with it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric Fincra chargeback id.
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Chargeback rejected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Reject validator/body shape not harvested (ChargebacksController.reject not opened). Source: src/components/chargebacks/apis/chargebacksAPI.ts:42-49"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No chargeback matches the supplied id.
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: The chargeback is not in a state that can be rejected.
+    x-todo: "PATCH /chargebacks/:id/reject — the request body (if any) was not harvested. Source: src/components/chargebacks/apis/chargebacksAPI.ts:42-49"
+
+  /payments/{businessID}/{transactionID}:
+    get:
+      operationId: collectionsGetPaymentByBusinessAndTransaction
+      tags: [Payments]
+      summary: Look up a payment object (legacy, not api-key authed)
+      description: >
+        Legacy payment-object lookup by business id and transaction id. Use this to fetch
+        a payment record by its Mongo identifiers. This is a synchronous read; no webhook
+        is paired with it. SECURITY NOTE: this route is NOT api-key/bearer authed — it is
+        guarded ONLY by a Mongo Business lookup (validateBusiness), so knowing a valid
+        24-character business `_id` is sufficient to reach it. It is effectively a
+        public-by-id lookup and is flagged in EXTRACTION-REPORT-collections.md.
+      security: []
+      parameters:
+        - name: businessID
+          in: path
+          required: true
+          description: The 24-character Mongo Business _id. Knowing this id is the only guard on this route.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: transactionID
+          in: path
+          required: true
+          description: The 24-character Mongo transaction id to look up.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+      responses:
+        "200":
+          description: The payment object.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Payment-object response shape not harvested. Source: src/controllers/payments.ts:12-45"
+        "404":
+          description: The business id matched no Business, or the transaction was not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+          x-todo: "validateBusiness rejects an unknown business _id; exact status/shape not harvested. Source: src/middleware/business.ts:6-19"
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: businessID or transactionID is not exactly 24 chars (getPaymentSchema, src/validations/payment.ts:3-6).
+
+  /dispute:
+    get:
+      operationId: collectionsListDisputes
+      tags: [Payments]
+      summary: List disputes (resolve-payment, no auth middleware)
+      description: >
+        List disputes (the resolve-payment surface). Use this to enumerate disputes raised
+        against collections. This is a synchronous read; no webhook is paired with it.
+        SECURITY NOTE: the /dispute router carries NO auth middleware in code — its auth
+        posture (intentionally public payer-facing, gateway-gated, or an accidental
+        missing guard) is undetermined and flagged in EXTRACTION-REPORT-collections.md.
+      security: []
+      responses:
+        "200":
+          description: The disputes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Dispute list has no validator and the response item shape was not harvested. Source: src/components/dispute/disputeController.ts:8-14"
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      operationId: collectionsCreateDispute
+      tags: [Payments]
+      summary: Create a dispute (resolve-payment, no auth middleware)
+      description: >
+        Create a dispute (resolve-payment) with a proof-of-payment file upload. Use this
+        to submit evidence that a payment was made when it is not reflected on a
+        collection. The body is multipart/form-data validated by the Joi CreateDisputeSchema
+        inside the controller. This is a synchronous request; no webhook is paired with
+        it. SECURITY NOTE: the /dispute router carries NO auth middleware in code; auth
+        posture is undetermined (see EXTRACTION-REPORT-collections.md).
+      security: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/CreateDisputeRequest" }
+      responses:
+        "200":
+          description: Dispute created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: The body fails the Joi CreateDisputeSchema applied in the controller.
+      x-todo: "CreateDisputeSchema field set not harvested beyond the proof-of-payment upload. Source: src/components/dispute/disputeValidation.ts:4; src/components/dispute/disputeController.ts:26-49"
+
+  /dispute/collection:
+    get:
+      operationId: collectionsGetDisputeCollection
+      tags: [Payments]
+      summary: Get dispute collection data (no auth middleware)
+      description: >
+        Fetch the collection data associated with a dispute, looked up by reference. Use
+        this to display the underlying inbound payment while resolving a dispute. This is
+        a synchronous read; no webhook is paired with it. SECURITY NOTE: the /dispute
+        router carries NO auth middleware in code; auth posture is undetermined (see
+        EXTRACTION-REPORT-collections.md).
+      security: []
+      responses:
+        "200":
+          description: The collection data for the dispute.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Dispute-collection query params and response shape not harvested. Source: src/components/dispute/disputeController.ts:16-25"
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant API key in the `api-key` header. The delegated authenticate() middleware
+        (fincra-utils authMiddlewareV2, verified against auth-service /auth/verify-auth)
+        accepts a merchant api-key header, a bearer `authorization` token, or a
+        service-secret-key; the merchant contract here is the api-key. There is NO
+        separate x-pub-key/public-key route guard anywhere in this service; test vs live
+        is determined by the key itself. Source
+        fincra-utils/src/middleware/auth/authMiddlewareV2.ts:44-90. NOTE: two routes are
+        exceptions and set `security: []` — GET /payments/{businessID}/{transactionID}
+        (guarded only by a Business _id lookup) and the /dispute routes (no auth
+        middleware at all).
+
+  parameters:
+    BusinessQuery:
+      name: business
+      in: query
+      required: true
+      description: The 24-character Fincra business id the collections belong to.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+    BusinessQueryOptional:
+      name: business
+      in: query
+      required: false
+      description: Optional 24-character Fincra business id filter.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+    PageQuery:
+      name: page
+      in: query
+      description: 1-based page number. Defaults to 1.
+      schema: { type: integer, default: 1, minimum: 1 }
+    PerPageQuery:
+      name: perPage
+      in: query
+      description: Items per page. Defaults to 10.
+      schema: { type: integer, default: 10, minimum: 1 }
+
+  responses:
+    Forbidden:
+      description: The credential is rejected or not allowed for this business.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Access denied
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Collection not found
+            errorType: RESOURCE_NOT_FOUND
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Refund already initiated
+            errorType: UNPROCESSABLE_ENTITY
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: >
+        The standard Fincra success envelope built by fincra-utils APIHelper
+        (APIHelper.ts:77). `data` is [] when a handler returns nothing.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint. Defaults to [] when the handler returns nothing.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope built by fincra-utils APIHelper
+        (APIHelper.ts:140-145). Alongside the three contract keys it also ships an
+        `errors` detail key (populated for Joi validation arrays, otherwise omitted).
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Not present on every error branch.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable
+        on the collections merchant/public paths (from the fincra-utils BaseError
+        subclasses grepped at the throw sites; see EXTRACTION-REPORT-collections.md).
+        Note: the objection NotFoundError divergence ships NO errorType (see the report).
+      enum:
+        - VALIDATION_FAILED
+        - UNPROCESSABLE_ENTITY
+        - RESOURCE_NOT_FOUND
+        - RESOURCE_EXIST
+        - OPERATION_FORBIDDEN
+        - ACCESS_DENIED
+        - USER_AUTHENTICATION_FALSE
+        - HTTP_ERROR
+        - HTTP_CONNECTION_ERROR
+        - FILE_SYSTEM_ERROR
+        - SERVICE_UNAVAILABLE
+        - INTERNAL_SERVER_ERROR
+        - SERVER_ERROR
+
+    Currency:
+      type: string
+      description: >
+        Platform-supported currency codes (Currencies enum,
+        src/components/collections/collectionsInterface.ts:223-235). Enforced ONLY on the
+        `POST /transfer/simulate` `currency` field; all other currency request fields
+        across the list/export/refund schemas are free-form uppercased strings with no
+        enum (see EXTRACTION-REPORT-collections.md).
+      enum: [NGN, KES, GHS, GBP, EUR, USD, UGX, TZS, ZAR, ZMW, CAD]
+
+    CollectionStatus:
+      type: string
+      description: >
+        Lifecycle state of a collection (CollectionStatus enum,
+        src/components/collections/interfaces/colletionsEnums.ts:19-43). Terminal states
+        include successful, failed, refunded, and reversed.
+      enum:
+        - pending
+        - initiated
+        - processing
+        - successful
+        - failed
+        - reversal-initiated
+        - awaiting-reversal
+        - awaiting-refund
+        - refunded
+        - reversed
+
+    PaymentMethod:
+      type: string
+      description: >
+        How the inbound payment was made (PaymentMethod enum,
+        src/components/collections/interfaces/colletionsEnums.ts:19-30).
+      enum:
+        - virtual_account
+        - manual_funding
+        - pos
+        - mobile_money
+        - card
+        - bank_transfer
+        - payattitude
+        - wallet_transfer
+        - direct_debit
+        - palmpay
+
+    PartyDetails:
+      type: object
+      description: A payer or payee on a simulated bank-transfer collection.
+      required: [name, accountNumber]
+      properties:
+        name:
+          type: string
+          description: The account holder's name. Required.
+        accountNumber:
+          type: string
+          description: The account number. Required.
+        bankName:
+          type: string
+          description: The bank name.
+        bankCode:
+          type: string
+          description: The bank / institution code.
+
+    ExportCollectionsRequest:
+      type: object
+      description: >
+        Body for POST /export (exportCollectionsSchema). Same shape as the list filters
+        minus pagination and virtualAccount. Unknown keys are rejected (no .unknown()).
+      required: [business]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your 24-character Fincra business id. Required.
+        sourceAmount:
+          type: number
+          description: Filter by the amount received in the source currency.
+        destinationAmount:
+          type: number
+          description: Filter by the amount credited in the destination currency.
+        sourceAmountSettled:
+          type: number
+          description: Filter by the settled amount in the source currency.
+        destinationAmountSettled:
+          type: number
+          description: Filter by the settled amount in the destination currency.
+        sourceCurrency:
+          type: string
+          description: Filter by source currency (trimmed and uppercased; not enum-bound).
+        destinationCurrency:
+          type: string
+          description: Filter by destination currency (trimmed and uppercased; not enum-bound).
+        dateInitiatedFrom:
+          type: string
+          format: date
+          description: Include collections initiated on or after this date.
+        dateInitiatedTo:
+          type: string
+          format: date
+          description: Include collections initiated on or before this date.
+        settledDateFrom:
+          type: string
+          format: date
+          description: Include collections settled on or after this date.
+        settledDateTo:
+          type: string
+          format: date
+          description: Include collections settled on or before this date.
+        status:
+          type: array
+          description: Filter by one or more collection statuses.
+          items: { $ref: "#/components/schemas/CollectionStatus" }
+        paymentMethod:
+          type: array
+          description: Filter by one or more payment methods.
+          items: { $ref: "#/components/schemas/PaymentMethod" }
+        reference:
+          type: string
+          description: Filter by the Fincra collection reference.
+        searchQuery:
+          type: string
+          description: Free-text search across collection fields.
+        subAccount:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Filter by a 24-character sub-account id.
+        includeSubAccounts:
+          type: boolean
+          default: false
+          description: Include collections belonging to sub-accounts. Defaults to false.
+
+    ExportRefundsRequest:
+      type: object
+      description: >
+        Body for POST /refund/export (exportReversalsSchema). Identical field set to the
+        refunds list filters.
+      required: [business]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your 24-character Fincra business id. Required.
+        page:
+          type: integer
+          default: 1
+          minimum: 1
+          description: 1-based page number. Defaults to 1.
+        perPage:
+          type: integer
+          default: 10
+          minimum: 1
+          description: Items per page. Defaults to 10.
+        currency:
+          type: string
+          description: Filter by currency (trimmed; not enum-bound).
+        amount:
+          type: number
+          description: Filter by the original collection amount.
+        amountRefunded:
+          type: number
+          description: Filter by the amount refunded.
+        status:
+          type: string
+          description: Filter by refund status (free-form; not enum-bound).
+        reference:
+          type: string
+          description: Filter by the refund reference.
+        searchQuery:
+          type: string
+          description: Free-text search across refund fields.
+        dateInitiatedFrom:
+          type: string
+          format: date
+          description: Include refunds initiated on or after this date.
+        dateInitiatedTo:
+          type: string
+          format: date
+          description: Include refunds initiated on or before this date.
+        refundType:
+          type: string
+          description: Filter by refund type (free-form; not enum-bound).
+
+    ExportChargebacksRequest:
+      type: object
+      description: >
+        Body for POST /chargebacks/export. The exact validator was not harvested
+        (ChargebacksController.export not opened); `business` is the confirmed
+        merchant-scoping field used across this service.
+      required: [business]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your 24-character Fincra business id.
+      x-todo: "Chargeback export request schema not harvested. Source: src/components/chargebacks/apis/chargebacksAPI.ts:15-22"
+
+    InitiateRefundRequest:
+      type: object
+      description: >
+        Body for POST /refund (reverseCollectionsSchema). A single-field body: the
+        transaction reference of the collection to refund.
+      required: [transReference]
+      properties:
+        transReference:
+          type: string
+          description: The transaction reference of the collection to refund. Trimmed. Required.
+
+    SaveAdditionalInfoResponseRequest:
+      type: object
+      description: >
+        Body for PATCH /{id}/additional-information (saveAdditionalInfoResponseSchema).
+        `id` and `additionalInfoId` are required; text/files/urls are optional.
+      required: [id, additionalInfoId]
+      properties:
+        id:
+          type: integer
+          description: Numeric Fincra collection id the request was raised on. Required.
+        additionalInfoId:
+          type: integer
+          description: Numeric id of the specific additional-information request being answered. Required.
+        text:
+          type: string
+          description: Free-text response to the compliance request.
+        files:
+          description: Attached file(s). Unvalidated by Joi (accepts any).
+        urls:
+          type: array
+          description: URLs pointing to supporting documents.
+          items: { type: string }
+
+    SimulateCollectionRequest:
+      type: object
+      description: >
+        Body for POST /transfer/simulate (simulateCollectionSchema). Simulates an inbound
+        pay-with-bank-transfer collection in test mode. `currency` is the only field bound
+        to the Currency enum; `amount` has no min/max in code.
+      required: [amount, currency, paymentMethod]
+      properties:
+        amount:
+          type: number
+          description: The inbound amount to simulate, in major units of `currency`. Required. No min/max enforced.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        paymentMethod:
+          type: array
+          description: The payment method(s) to simulate. Each value must be a valid PaymentMethod. Required.
+          items: { $ref: "#/components/schemas/PaymentMethod" }
+        payer:
+          $ref: "#/components/schemas/PartyDetails"
+        payee:
+          $ref: "#/components/schemas/PartyDetails"
+        reference:
+          type: string
+          description: An optional reference to attach to the simulated collection.
+        narration:
+          type: string
+          description: An optional narration for the simulated collection.
+
+    CreateDisputeRequest:
+      type: object
+      description: >
+        Multipart body for POST /dispute (resolve-payment). Validated by the Joi
+        CreateDisputeSchema inside the controller, with proof-of-payment files uploaded
+        via filesUploader. The full field set was not harvested.
+      properties:
+        proofOfPayment:
+          type: string
+          format: binary
+          description: The proof-of-payment file uploaded with the dispute.
+      x-todo: "CreateDisputeSchema field set not harvested beyond the proof-of-payment upload. Source: src/components/dispute/disputeValidation.ts:4; src/components/dispute/disputeController.ts:26-49"
+
+    Collection:
+      type: object
+      description: >
+        A collection (inbound payment / payin) as returned by the read endpoints. The
+        exact serialized field set was not fully harvested; the fields below are the
+        merchant-facing identifiers and money fields consistently referenced across the
+        service.
+      x-todo: "Collection read-serializer field set not fully harvested. Source: src/components/collections/controllers/collectionsController.ts:42-243"
+      properties:
+        id:
+          type: integer
+          description: Numeric Fincra collection id.
+        reference:
+          type: string
+          description: Fincra-issued collection reference.
+        merchantReference:
+          type: string
+          description: The merchant's own reference on the collection.
+        status:
+          $ref: "#/components/schemas/CollectionStatus"
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        sourceCurrency:
+          type: string
+          description: Currency the payer paid in.
+        destinationCurrency:
+          type: string
+          description: Currency credited to the merchant.
+        sourceAmount:
+          type: number
+          description: Amount received in the source currency.
+        destinationAmount:
+          type: number
+          description: Amount credited in the destination currency.
+
+    CollectionPage:
+      type: object
+      description: >
+        A page of collections. The exact pagination envelope keys were not harvested from
+        the list serializer; page/perPage are echoed from the request.
+      x-todo: "Exact list pagination envelope keys not harvested. Source: src/components/collections/controllers/collectionsController.ts:42-77"
+      properties:
+        collections:
+          type: array
+          description: The collections on this page.
+          items: { $ref: "#/components/schemas/Collection" }
+        page:
+          type: integer
+          description: Current 1-based page number.
+        perPage:
+          type: integer
+          description: Items per page.
+
+    Refund:
+      type: object
+      description: >
+        A refund / reversal on a collection as returned by the read endpoints. The exact
+        serialized field set was not fully harvested.
+      x-todo: "Refund read-serializer field set not fully harvested. Source: src/components/collections/controllers/collectionsController.ts:114-171"
+      properties:
+        reference:
+          type: string
+          description: The refund reference.
+        currency:
+          type: string
+          description: Refund currency.
+        amount:
+          type: number
+          description: The original collection amount.
+        amountRefunded:
+          type: number
+          description: The amount refunded to the payer.
+        status:
+          type: string
+          description: Refund status (free-form; not enum-bound in code).
+        refundType:
+          type: string
+          description: The refund type (free-form; not enum-bound in code).
+
+    RefundPage:
+      type: object
+      description: >
+        A page of refunds. The exact pagination envelope keys were not harvested from the
+        list serializer; page/perPage are echoed from the request.
+      x-todo: "Exact refunds pagination envelope keys not harvested. Source: src/components/collections/controllers/collectionsController.ts:114-132"
+      properties:
+        refunds:
+          type: array
+          description: The refunds on this page.
+          items: { $ref: "#/components/schemas/Refund" }
+        page:
+          type: integer
+          description: Current 1-based page number.
+        perPage:
+          type: integer
+          description: Items per page.

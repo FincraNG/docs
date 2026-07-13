@@ -1,0 +1,923 @@
+openapi: 3.1.0
+info:
+  title: Fincra Direct Debit (mandate-management)
+  version: "1.0.0"
+  summary: Merchant-facing Direct Debit mandate and collection API for the mandate-management service.
+  description: >
+    Set up NIBSS e-mandates on a customer's bank account and debit (collect) against
+    an approved mandate. The merchant surface is small: create a mandate, look one up
+    by reference, list mandates, create a mandate payment, and poll a payment by
+    reference.
+
+
+    Mandate approval and payment settlement are both asynchronous. Creating a mandate
+    returns `status: initiated`; the provider (NIBSS) approves or declines it later,
+    surfaced by the `mandate.approved` / `mandate.declined` webhook and via the
+    get-by-reference endpoint (a background cron re-queries provider status). Creating a
+    payment returns `status: processing` and the terminal state is delivered by the
+    `direct_debit.success` / `direct_debit.failed` webhook, and can be polled with
+    `mandatesGetPaymentByReference`, which triggers a live provider re-query.
+
+
+    This spec is generated from the source of `mandate-management` on branch `master`
+    (code is truth). Anything undeterminable from code is marked with an `x-todo`
+    extension carrying the exact `file:line`, and is listed in EXTRACTION-REPORT-mandate.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every route at "/" with NO version/base-path prefix
+  (src/main.ts:12-28 sets no global prefix). The public API prefix a merchant calls
+  (the platform-wide /v2 and any product path) is applied at the Kong gateway, which is
+  not in this repo. Paths below are exactly as routed in code; prepend the confirmed
+  gateway prefix before publishing. See EXTRACTION-REPORT-mandate.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com/v2/mandate-mgt
+    description: Sandbox (test keys). Powers the docs playground.
+  - url: https://api.fincra.com/v2/mandate-mgt
+    description: Production (live keys).
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Direct Debit
+    description: Create and manage Direct Debit mandates and mandate-backed collections.
+
+paths:
+  /mandates:
+    post:
+      operationId: mandatesCreateMandate
+      tags: [Direct Debit]
+      summary: Create a mandate
+      description: >
+        Set up a Direct Debit e-mandate on a customer's bank account via NIBSS. Use this
+        to establish the standing authorization you later debit against. The customer
+        object identifies the account holder; `startDate` and `endDate` bound the
+        mandate's active window and must both be future dates (at least tomorrow, UTC
+        start of day).
+
+
+        The call is asynchronous with respect to approval: on success it returns the
+        mandate with `status: initiated`. NIBSS later approves or declines it; the
+        terminal state arrives via the `mandate.approved` / `mandate.declined` webhook
+        and can be polled with `mandatesGetMandateByReference`. Currency, when supplied,
+        must be NGN.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMandateRequest"
+            examples:
+              ngMandateSetup:
+                summary: NGN mandate on a Nigerian bank account
+                value:
+                  amount: 50000
+                  currency: NGN
+                  description: Monthly subscription mandate
+                  startDate: "2026-08-01"
+                  endDate: "2027-08-01"
+                  businessAddress: 12 Kofo Abayomi Street, Victoria Island, Lagos
+                  customer:
+                    bankCode: "058"
+                    accountNumber: "0111111111"
+                    accountName: Amara Okeke
+                    email: amara.okeke@example.ng
+                    address: 27 Awolowo Road, Ikoyi, Lagos
+                    phone: "+2348031234567"
+      responses:
+        "201":
+          description: Mandate created; approval pending.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Mandate"
+              example:
+                success: true
+                message: Mandate created successfully
+                data:
+                  amount: 50000
+                  description: Monthly subscription mandate
+                  responseDescription: Mandate request submitted
+                  startDate: "2026-08-01T00:00:00.000Z"
+                  endDate: "2027-08-01T00:00:00.000Z"
+                  status: initiated
+                  reference: mr_9f0a1b2c3d4e5f60
+                  createdAt: "2026-07-12T09:30:00.000Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Request body fails ValidationPipe (missing/mistyped field, non-future startDate/endDate, currency other than NGN).
+        - errorType: NO_API_KEY_PROVIDED
+          status: 401
+          trigger: The api-key header is missing.
+        - errorType: NO_BUSINESS_ID_PROVIDED
+          status: 401
+          trigger: The x-business-id header is missing.
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The business has no accessibleFeatures or the mandate_management product is not granted.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: NIBSS responseCode is not '00' or no mandateCode was returned ("Error creating/getting mandate").
+        - errorType: SERVICE_UNAVAILABLE
+          status: 503
+          trigger: The NIBSS createEMandateRequest call threw ("Unable to process request from provider").
+    get:
+      operationId: mandatesListMandates
+      tags: [Direct Debit]
+      summary: List mandates
+      description: >
+        Return a paginated list of the merchant's mandates, most recent first. Use this
+        to build a mandates table or to reconcile. Supports free-text search and
+        filtering by date range, status, mandate code, subscriber code, and reference;
+        results are always scoped to the authenticated business. Pagination is page-based
+        via `page` and `perPage`.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1. Not strictly typed by code (arrives as a string).
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10. Not strictly typed by code (arrives as a string).
+          schema: { type: integer, default: 10, minimum: 1 }
+        - name: search
+          in: query
+          description: Free-text search across customer account name, account number, and address.
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          description: Include mandates created on or after this date.
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include mandates created on or before this date.
+          schema: { type: string, format: date }
+        - name: mandateCode
+          in: query
+          description: Filter by NIBSS mandate code.
+          schema: { type: string }
+        - name: subscriberCode
+          in: query
+          description: Filter by NIBSS subscriber code.
+          schema: { type: string }
+        - name: reference
+          in: query
+          description: Filter by the Fincra mandate reference.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by mandate status.
+          schema: { $ref: "#/components/schemas/MandateStatus" }
+      responses:
+        "200":
+          description: A page of mandates.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandatePage"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      x-fincra-error-catalog:
+        - errorType: NO_API_KEY_PROVIDED
+          status: 401
+          trigger: The api-key header is missing.
+        - errorType: NO_BUSINESS_ID_PROVIDED
+          status: 401
+          trigger: The x-business-id header is missing.
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The business has no accessibleFeatures or the mandate_management product is not granted.
+
+  /mandates/reference/{reference}:
+    get:
+      operationId: mandatesGetMandateByReference
+      tags: [Direct Debit]
+      summary: Get a mandate by reference
+      description: >
+        Fetch a single mandate by its Fincra-issued `reference`, scoped to the
+        authenticated business. This is the primary way to poll a mandate's approval
+        state after creation, since a background cron re-queries NIBSS and updates the
+        stored `status`. There is no merchant lookup by id, mandate code, or subscriber
+        code; reference is the only exposed key.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: reference
+          in: path
+          required: true
+          description: The Fincra mandate reference returned on create (mr_ prefixed).
+          schema: { type: string }
+      responses:
+        "200":
+          description: The mandate.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Mandate"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No mandate with that reference exists for the authenticated business ("Mandate not found").
+
+  /mandates/payment:
+    post:
+      operationId: mandatesCreateMandatePayment
+      tags: [Direct Debit]
+      summary: Create a mandate payment
+      description: >
+        Debit (collect) against an approved mandate. Use this to draw funds from the
+        customer's account under a standing Direct Debit authorization. The referenced
+        mandate must be approved, must match the payer account number, must carry a
+        biller id, must have sufficient liquidity, and the current date must fall inside
+        the mandate's active window.
+
+
+        The call is asynchronous: on success it returns the payment with
+        `status: processing` (or `failed` if the provider rejected it immediately). The
+        terminal state is delivered by the `direct_debit.success` / `direct_debit.failed`
+        webhook, and can be polled with `mandatesGetPaymentByReference`. An optional
+        `reference` acts as your idempotency key; reusing it returns a duplicate error.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMandatePaymentRequest"
+            examples:
+              collectOnMandate:
+                summary: NGN collection against an approved mandate
+                value:
+                  amount: 15000
+                  currency: NGN
+                  description: July subscription debit
+                  mandateReference: mr_9f0a1b2c3d4e5f60
+                  bankCode: "058"
+                  accountNumber: "0111111111"
+                  reference: collect-req-7b1204de
+                  settlementDestination: wallet
+                  feeBearer: business
+                  metadata:
+                    invoiceId: INV-2026-07-0042
+      responses:
+        "201":
+          description: Mandate payment created and processing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/MandatePaymentResult"
+              example:
+                success: true
+                message: Payment initiated successfully
+                data:
+                  reference: fcr-p-8c2a1f04b7
+                  amount: 15000
+                  currency: NGN
+                  amountExpected: 15000
+                  amountReceived: 15000
+                  status: processing
+                  actionRequired: false
+                  varianceType: none
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "Request body fails ValidationPipe, or a business rule fails: 'Business must be specified', 'Mandate does not have enough liquidity for payment.', 'Mandate not within date constraints...'."
+        - errorType: NO_API_KEY_PROVIDED
+          status: 401
+          trigger: The api-key header is missing.
+        - errorType: NO_BUSINESS_ID_PROVIDED
+          status: 401
+          trigger: The x-business-id header is missing.
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: The business has no accessibleFeatures or the mandate_management product is not granted.
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: "No approved mandate matches the reference/account ('Mandate not found'), or the mandate has an empty billerId ('Mandate not Approved')."
+        - errorType: DUPLICATE_PAYMENT_REFERENCE
+          status: 409
+          trigger: A prior payment with the same merchant reference exists ("Duplicate payment reference").
+        - errorType: SERVICE_UNAVAILABLE
+          status: 503
+          trigger: The NIBSS disburseViaMandate call threw ("Unable to process from provider").
+
+  /payments/reference/{reference}:
+    get:
+      operationId: mandatesGetPaymentByReference
+      tags: [Direct Debit]
+      summary: Get a mandate payment by reference
+      description: >
+        Fetch a single mandate payment by its `reference`, scoped to the authenticated
+        business. This is the primary way to poll for the final state of an asynchronous
+        collection. If the payment is already `success` or `failed` it is returned as-is;
+        otherwise the service performs a live NIBSS transaction-status re-query and
+        updates the stored status before returning. Status-query errors are swallowed and
+        the current payment state is still returned with 200.
+      parameters:
+        - $ref: "#/components/parameters/BusinessIdHeader"
+        - name: reference
+          in: path
+          required: true
+          description: The payment reference (fcr-p- prefixed, or the merchant reference).
+          schema: { type: string }
+      responses:
+        "200":
+          description: The payment.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Payment"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-fincra-error-catalog:
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No payment with that reference exists for the authenticated business ("Payment not found").
+
+webhooks:
+  mandate.approved:
+    post:
+      operationId: webhookMandateApproved
+      tags: [Direct Debit]
+      summary: mandate.approved
+      description: >
+        Delivered to the merchant's configured webhook URL when the every-5-minutes
+        requery cron resolves a mandate to approved (NIBSS status 1, workFlowStatus 8).
+        Delivery requires `settings.enableWebhook` on the business. Return a 2xx to
+        acknowledge receipt.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MandateWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  mandate.declined:
+    post:
+      operationId: webhookMandateDeclined
+      tags: [Direct Debit]
+      summary: mandate.declined
+      description: >
+        Delivered when the requery cron resolves a mandate to declined (NIBSS
+        workFlowStatus 3). Delivery requires `settings.enableWebhook` on the business.
+        Return a 2xx to acknowledge receipt.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MandateWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  direct_debit.success:
+    post:
+      operationId: webhookDirectDebitSuccess
+      tags: [Direct Debit]
+      summary: direct_debit.success
+      description: >
+        Delivered when a NIBSS disbursement backing a mandate payment completes
+        successfully, via the transaction-status requery path. Delivery requires
+        `settings.enableWebhook` on the business. Return a 2xx to acknowledge receipt.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DirectDebitWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+  direct_debit.failed:
+    post:
+      operationId: webhookDirectDebitFailed
+      tags: [Direct Debit]
+      summary: direct_debit.failed
+      description: >
+        Delivered when a NIBSS disbursement backing a mandate payment fails, via the
+        transaction-status requery path. Delivery requires `settings.enableWebhook` on
+        the business. Return a 2xx to acknowledge receipt.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DirectDebitWebhookEvent" }
+      responses:
+        "200":
+          description: Return 2xx to acknowledge receipt.
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret or public key, sent in the `api-key` header. Every merchant
+        endpoint additionally requires the `x-business-id` header identifying the
+        business. BusinessProductsGuard calls the Profile service to resolve the
+        business, then checks that its accessibleFeatures include the
+        `mandate_management` product. Source src/utils/guards/business-products.guards.ts:15-100.
+
+  parameters:
+    BusinessIdHeader:
+      name: x-business-id
+      in: header
+      required: true
+      description: The Fincra business id, required alongside api-key on every merchant endpoint.
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: A required auth header (api-key or x-business-id) is missing.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: api-key must be provided in the header
+            errorType: NO_API_KEY_PROVIDED
+    Forbidden:
+      description: Authenticated but not authorized for the mandate_management product.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Access Denied. You're not authorized to access product
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist for this business.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Mandate not found
+            errorType: RESOURCE_NOT_FOUND
+    Conflict:
+      description: A resource with the supplied reference already exists.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Duplicate payment reference
+            errorType: DUPLICATE_PAYMENT_REFERENCE
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Mandate does not have enough liquidity for payment.
+            errorType: VALIDATION_FAILED
+    ServiceUnavailable:
+      description: The downstream provider (NIBSS) could not be reached or threw.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Unable to process request from provider
+            errorType: SERVICE_UNAVAILABLE
+    ServerError:
+      description: Unexpected server error or a provider response that could not be reconciled.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Error creating/getting mandate
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` carries the endpoint payload.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope. No global exception filter exists in this
+        service (src/main.ts:12-28), so errors are the raw NestJS HttpException body.
+        Alongside the contract keys it may ship an `errors` detail array on validation
+        failures.
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field validation messages).
+            Not present on every error branch.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable
+        on the mandate-management merchant paths (see EXTRACTION-REPORT-mandate.md). The
+        service has no global exception filter, so these are normalized names for the
+        NestJS HttpException branches, not literal code constants.
+      enum:
+        - VALIDATION_FAILED
+        - DUPLICATE_PAYMENT_REFERENCE
+        - RESOURCE_NOT_FOUND
+        - ACCESS_DENIED
+        - NO_API_KEY_PROVIDED
+        - NO_BUSINESS_ID_PROVIDED
+        - SERVICE_UNAVAILABLE
+        - INTERNAL_SERVER_ERROR
+
+    Currency:
+      type: string
+      description: >
+        Currency accepted on mandate-management request bodies. The request DTOs bind
+        currency to SupportedCurrency, which contains only NGN
+        (src/api/mandates/mandates.dto.ts:81-84); a broader Currency enum exists in code
+        but is not accepted on merchant requests.
+      enum: [NGN]
+
+    MandateStatus:
+      type: string
+      description: >
+        Lifecycle state of a mandate. There is no `cancelled` value in code; a mandate is
+        created `initiated` and resolved to `approved` or `declined` by the requery cron.
+      enum: [initiated, approved, declined]
+
+    SettlementDestination:
+      type: string
+      description: Where a mandate payment settles. Source src/integrations/fincra/fincra.interface.ts:4-7.
+      enum: [bank_account, wallet]
+
+    FeeBearer:
+      type: string
+      description: Who bears the collection fee. Source src/api/payments/payments.enum.ts:12-15.
+      enum: [customer, business]
+
+    Customer:
+      type: object
+      description: The account holder the mandate authorizes debits against.
+      required: [bankCode, accountNumber, accountName, email, address, phone]
+      properties:
+        bankCode:
+          type: string
+          description: The customer's bank code (NG NIP institution code). Required.
+        accountNumber:
+          type: string
+          description: The customer's bank account number, digits only (NUBAN is 10 digits). Required.
+        accountName:
+          type: string
+          description: Name on the customer's account. Required.
+        email:
+          type: string
+          format: email
+          description: The customer's email address. Required and validated.
+        address:
+          type: string
+          description: The customer's postal address. Required.
+        phone:
+          type: string
+          description: The customer's mobile phone number, validated as a mobile phone. Required.
+
+    CreateMandateRequest:
+      type: object
+      description: >
+        Body for POST /mandates. Unknown keys are stripped by the global ValidationPipe
+        (whitelist). `startDate` and `endDate` must be future dates (at least tomorrow,
+        UTC start of day).
+      required: [amount, description, startDate, endDate, businessAddress, customer]
+      properties:
+        amount:
+          type: number
+          minimum: 1
+          multipleOf: 0.01
+          description: Mandate amount in major units of NGN, up to 2 decimal places, minimum 1. Required.
+        description:
+          type: string
+          description: Free-text description of the mandate. Required.
+        startDate:
+          type: string
+          format: date
+          description: Mandate activation date; must be tomorrow or later (UTC start of day). Required.
+        endDate:
+          type: string
+          format: date
+          description: Mandate expiry date; must be a future date under the same rule. Required.
+        businessAddress:
+          type: string
+          description: The merchant's business address recorded on the mandate. Required.
+        customer:
+          $ref: "#/components/schemas/Customer"
+        currency:
+          $ref: "#/components/schemas/Currency"
+
+    CreateMandatePaymentRequest:
+      type: object
+      description: >
+        Body for POST /mandates/payment. Debits an approved mandate identified by
+        `mandateReference`; the payer account must match the mandate's account number.
+        Unknown keys are stripped by the global ValidationPipe.
+      required: [amount, currency, description, mandateReference, bankCode, accountNumber]
+      properties:
+        amount:
+          type: number
+          minimum: 1
+          description: Amount to collect in major units of NGN, minimum 1; rounded to 2 decimal places. Required.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        description:
+          type: string
+          description: Free-text narration for the collection. Required.
+        mandateReference:
+          type: string
+          description: The reference of the approved mandate to debit. Required.
+        bankCode:
+          type: string
+          description: The payer's bank code. Required.
+        accountNumber:
+          type: string
+          description: The payer's account number; must match the mandate's account number. Required.
+        reference:
+          type: string
+          description: Your unique reference for this collection; the idempotency key. Reusing it returns a duplicate error.
+        redirectUrl:
+          type: string
+          format: uri
+          description: Optional URL to redirect to after the collection flow.
+        settlementDestination:
+          $ref: "#/components/schemas/SettlementDestination"
+        feeBearer:
+          $ref: "#/components/schemas/FeeBearer"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Optional free-form key/value metadata echoed back on the payment.
+
+    Mandate:
+      type: object
+      description: >
+        A mandate as returned by the create and get-by-reference endpoints and carried in
+        the mandate webhook `data`. Source src/api/mandates/mandates.service.ts:251-270
+        (transformMandatesToDto).
+      properties:
+        amount:
+          type: number
+          description: The mandate amount in NGN.
+        description:
+          type: string
+          description: The mandate description supplied at creation.
+        responseDescription:
+          type: string
+          description: Provider response description for the mandate request.
+        startDate:
+          type: string
+          format: date-time
+          description: Mandate activation date.
+        endDate:
+          type: string
+          format: date-time
+          description: Mandate expiry date.
+        status:
+          $ref: "#/components/schemas/MandateStatus"
+        reference:
+          type: string
+          description: The Fincra mandate reference (mr_ prefixed).
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp.
+
+    MandatePage:
+      type: object
+      description: >
+        The list envelope returned by GET /mandates. Source
+        src/api/mandates/mandates.service.ts:248.
+      required: [results, total, perPage, page]
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/Mandate" }
+          description: The mandates on this page, ordered by creation date descending.
+        total:
+          type: integer
+          description: Total number of mandates matching the filter.
+        perPage:
+          type: integer
+          description: Items per page.
+        page:
+          type: integer
+          description: Current page number.
+
+    MandatePaymentResult:
+      type: object
+      description: >
+        The transformed payment returned by POST /mandates/payment
+        (transformPaymentResponse Create shape,
+        src/api/payments/payments.service.ts:574-609). Differs from the persisted Payment
+        entity returned by the get-by-reference endpoint.
+      properties:
+        reference:
+          type: string
+          description: The charge/collection reference for this payment.
+        amount:
+          type: number
+          description: The amount collected, rounded to 2 decimal places.
+        currency:
+          type: string
+          description: The collection currency (NGN).
+        amountExpected:
+          type: number
+          description: The amount expected for this collection.
+        amountReceived:
+          type: number
+          description: The amount received so far.
+        varianceType:
+          type: string
+          description: Variance classification between expected and received amounts.
+        message:
+          type: string
+          description: "Set to INCORRECT_AMOUNT when a variance exists; otherwise omitted."
+        actionRequired:
+          type: boolean
+          description: Whether merchant action is required to progress the payment.
+        status:
+          type: string
+          description: "Payment status, typically processing (or failed on immediate provider rejection)."
+        mandateCode:
+          type: string
+          description: Mandate code on the transformed create response (omitted; not populated on this shape).
+
+    Payment:
+      type: object
+      description: >
+        The persisted payment entity returned by GET /payments/reference/{reference}.
+        Source src/api/payments/entities/payment.entity.ts:72-163. Returned raw (not run
+        through the create transform), so it retains mandateCode and lacks
+        amountExpected/message/actionRequired.
+      properties:
+        id:
+          type: string
+          description: The payment id.
+        businessId:
+          type: string
+          description: The business the payment belongs to.
+        amount:
+          type: number
+          description: The collection amount.
+        currency:
+          type: string
+          description: The collection currency (NGN).
+        convertedAmount:
+          type: number
+          description: The converted amount where a conversion applies.
+        amountReceived:
+          type: number
+          description: The amount received.
+        convertedCurrency:
+          type: string
+          description: The converted currency where a conversion applies.
+        paymentMethods:
+          type: array
+          items: { type: string }
+          description: The available payment methods (direct_debit).
+        defaultPaymentMethod:
+          type: string
+          description: The default payment method for the payment.
+        settlementDestination:
+          $ref: "#/components/schemas/SettlementDestination"
+        settlementTime:
+          type: string
+          description: The settlement time classification.
+        feeBearer:
+          $ref: "#/components/schemas/FeeBearer"
+        reference:
+          type: string
+          description: The internal payment reference (fcr-p- prefixed).
+        merchantReference:
+          type: string
+          description: The merchant-supplied reference (idempotency key).
+        status:
+          type: string
+          description: The payment status.
+        varianceType:
+          type: string
+          description: Variance classification between expected and received amounts.
+        mandateCode:
+          type: string
+          description: The NIBSS mandate code the payment was drawn against.
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp.
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp.
+
+    MandateWebhookEvent:
+      type: object
+      description: >
+        The webhook envelope Fincra POSTs to the merchant for mandate lifecycle events.
+        Source src/api/mandates/mandates.service.ts:332-350 and
+        src/integrations/fincra/fincra.interface.ts:137-143.
+      required: [event, type, data]
+      properties:
+        event:
+          type: string
+          description: The event name (status lower-cased).
+          enum: [mandate.approved, mandate.declined]
+        type:
+          type: string
+          description: The event family.
+          enum: [mandate]
+        callbackURL:
+          type: string
+          description: The merchant webhook URL the event was sent to.
+        business:
+          type: string
+          description: The business id the event belongs to.
+        data:
+          $ref: "#/components/schemas/Mandate"
+
+    DirectDebitWebhookEvent:
+      type: object
+      description: >
+        The webhook envelope Fincra POSTs to the merchant for direct-debit collection
+        outcomes. Source src/api/payments/payments.service.ts:403-426 and
+        src/integrations/fincra/fincra.interface.ts:137-143.
+      required: [event, type, data]
+      properties:
+        event:
+          type: string
+          description: The event name.
+          enum: [direct_debit.success, direct_debit.failed]
+        type:
+          type: string
+          description: The event family.
+          enum: [direct_debit]
+        callbackURL:
+          type: string
+          description: The merchant webhook URL the event was sent to.
+        business:
+          type: string
+          description: The business id the event belongs to.
+        data:
+          $ref: "#/components/schemas/MandatePaymentResult"

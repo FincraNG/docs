@@ -1,0 +1,806 @@
+openapi: 3.1.0
+info:
+  title: Fincra Authentication (fincra-auth)
+  version: "1.0.0"
+  summary: Merchant onboarding, login, and API-key lifecycle for the fincra-auth service.
+  description: >
+    Onboard a merchant, sign in, verify email, run the password-reset flow, and manage
+    the API and webhook keys that authenticate every other Fincra product call. This is
+    the entry point to the platform: a merchant signs up here, verifies their email, logs
+    in to obtain a session, and rotates the credentials used against payouts, collections,
+    wallets, and the rest of the API.
+
+
+    The flows are a mix of synchronous and multi-step. Signup and login return immediately;
+    email verification and password reset are completed out of band via a link or token
+    emailed to the merchant. API-key regeneration is a two-step, OTP-gated flow: request
+    regeneration (which sends an OTP and returns a `reference`), then confirm with the OTP
+    to receive the new key. This service does not emit merchant webhooks.
+
+
+    This spec is generated from the source of `fincra-auth` on branch `dev`
+    (code is truth). Anything undeterminable from code is marked with an `x-todo`
+    extension carrying the exact `file:line`, and is listed in EXTRACTION-REPORT-auth.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every route at "/" with NO version/base-path prefix
+  (src/server.ts:56, src/routes/index.ts). Onboarding lives under /auth (routes/index.ts:63)
+  and key-lifecycle under /merchants (routes/index.ts:54). The public API prefix a merchant
+  calls (platform-wide /v2) is applied at the Kong gateway, which is not in this repo. Paths
+  below are exactly as routed in code; prepend the confirmed gateway prefix before publishing.
+  See EXTRACTION-REPORT-auth.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox (test keys). Powers the docs playground. Source k8s/overlays/sandbox/app.properties:7
+  - url: https://api.fincra.com
+    description: Production (live keys). Source k8s/overlays/prod/app.properties:8
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Authentication
+    description: Merchant onboarding, login, email verification, password reset, and API-key lifecycle.
+
+paths:
+  /auth/signup:
+    post:
+      operationId: authSignupMerchant
+      tags: [Authentication]
+      summary: Sign up a new merchant
+      description: >
+        Create a new merchant account and its first user from a name, email, password,
+        and country. Use this to onboard a merchant onto the Fincra platform. This
+        endpoint is public (no API key). Device details are captured from the request
+        automatically. On success the merchant must verify their email before the account
+        is fully active; verification is completed out of band via the emailed link.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupMerchantRequest"
+            examples:
+              ngMerchant:
+                summary: Nigerian merchant signup
+                value:
+                  name: Amara Okeke
+                  businessName: Zenith Trading Ltd
+                  email: amara.okeke@zenithtrading.co
+                  password: Zenith#Pay2026
+                  country: NG
+                  incorporationNumber: RC-4820193
+                  howDidYouHearAboutFincra: ["Referral from a partner"]
+                  clientIp: "197.210.64.1"
+                  userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/126.0"
+      responses:
+        "200":
+          description: Merchant created; email verification required.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        description: The created merchant/user payload.
+              example:
+                success: true
+                message: Account created successfully. Please verify your email.
+                data:
+                  email: amara.okeke@zenithtrading.co
+                  businessName: Zenith Trading Ltd
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Request body fails Joi validation (missing/mistyped field, weak password, missing incorporationNumber for NG).
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: The email address is flagged/disposable and not allowed (authenticationService.ts:51).
+
+  /auth/signup-test:
+    post:
+      operationId: authSignupMerchantOnTest
+      tags: [Authentication]
+      summary: Sign up a merchant on the test environment
+      description: >
+        Provision the test-environment counterpart of a merchant account. Use this to
+        create the sandbox merchant so a business can transact with test keys. This
+        endpoint is public (no API key). The request contract mirrors the standard signup
+        body; completion is synchronous and returns the created test merchant payload.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupMerchantRequest"
+            examples:
+              testMerchant:
+                summary: Test-environment merchant signup
+                value:
+                  name: Kwame Mensah
+                  businessName: Accra Imports
+                  email: kwame.mensah@accraimports.gh
+                  password: Accra#Test2026
+                  country: GH
+                  howDidYouHearAboutFincra: ["Search engine"]
+                  clientIp: "154.160.22.10"
+                  userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/126.0"
+      responses:
+        "200":
+          description: Test merchant created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /auth/login:
+    post:
+      operationId: authLoginUser
+      tags: [Authentication]
+      summary: Log in a user
+      description: >
+        Authenticate a user with email and password and return a session for the Fincra
+        dashboard. Use this to sign an existing merchant user in. Two-factor users must
+        supply a 6-character `otp` or a `backupCode`. This endpoint is public (no API key).
+        The response carries the authenticated user/session payload.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              passwordLogin:
+                summary: Email and password login
+                value:
+                  email: amara.okeke@zenithtrading.co
+                  password: Zenith#Pay2026
+              twoFactorLogin:
+                summary: Login with a TOTP code
+                value:
+                  email: amara.okeke@zenithtrading.co
+                  password: Zenith#Pay2026
+                  otp: "418205"
+      responses:
+        "200":
+          description: Login succeeded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+              example:
+                success: true
+                message: You have successfully logged in
+                data: {}
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails validation (invalid email, password shorter than 8 chars, otp not 6 chars).
+        - errorType: USER_NOT_ACTIVE
+          status: 403
+          trigger: The user account is not active (authenticatedUserService.ts:262).
+        - errorType: ACCOUNT_LOCKED
+          status: 403
+          trigger: The user account is locked (authenticatedUserService.ts:269).
+        - errorType: RESOURCE_NOT_FOUND
+          status: 404
+          trigger: No user matches the supplied email (authenticatedUserService.ts:256).
+
+  /auth/login-token:
+    post:
+      operationId: authGenerateLoginToken
+      tags: [Authentication]
+      summary: Generate a login token for a user
+      description: >
+        Generate a login token for a known numeric user id, used by dashboard flows that
+        need to mint a session token for an already-identified user. This endpoint is
+        public (no API key) and returns the generated token payload synchronously.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateLoginTokenRequest"
+            example:
+              userId: 90247
+      responses:
+        "200":
+          description: Login token generated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /auth/verify:
+    post:
+      operationId: authVerifyUserEmail
+      tags: [Authentication]
+      summary: Verify a user's email
+      description: >
+        Complete email verification by submitting the token that was emailed to the user
+        at signup. Use this to activate a newly onboarded merchant. This endpoint is
+        public (no API key). Optional UTM fields may accompany the token for attribution.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+            example:
+              token: vtok_9c2a1f04b7d3e6a8
+              utm_source: developer-docs
+      responses:
+        "200":
+          description: Email verified.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+              example:
+                success: true
+                message: Email verified
+                data: {}
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /auth/resend-email-verification:
+    post:
+      operationId: authResendVerificationEmail
+      tags: [Authentication]
+      summary: Resend the email-verification link
+      description: >
+        Re-send the activation link to a merchant's email address when the original was
+        missed or expired. Use this during onboarding recovery. This endpoint is public
+        (no API key). The link is delivered out of band by the notifications service.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnlyRequest"
+            example:
+              email: amara.okeke@zenithtrading.co
+      responses:
+        "200":
+          description: Activation link re-sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /auth/password/forgot:
+    post:
+      operationId: authSendPasswordResetEmail
+      tags: [Authentication]
+      summary: Request a password-reset email
+      description: >
+        Start the password-reset flow by emailing reset instructions to the supplied
+        address. Use this when a merchant user has forgotten their password. This
+        endpoint is public (no API key). The reset link/token is delivered out of band;
+        completion happens via the password reset endpoint.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnlyRequest"
+            example:
+              email: amara.okeke@zenithtrading.co
+      responses:
+        "200":
+          description: Reset instructions emailed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /auth/password/reset:
+    post:
+      operationId: authResetUserPassword
+      tags: [Authentication]
+      summary: Reset a password with a token and OTP
+      description: >
+        Complete the password reset by submitting the emailed token, a 6-digit OTP, and
+        the new password (repeated for confirmation). Use this as the second step of the
+        forgot-password flow. This endpoint is public (no API key). The new password must
+        contain upper-case, lower-case, a digit, and a special character.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+            example:
+              token: rtok_7b1204de55e0af9d
+              otp: "418205"
+              newPassword: Zenith#Reset2026
+              repeatPassword: Zenith#Reset2026
+      responses:
+        "200":
+          description: Password reset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: Body fails validation (otp not 6 chars, weak newPassword, repeatPassword mismatch).
+
+  /merchants/regenerate-api-key:
+    post:
+      operationId: authRequestApiKeyRegeneration
+      tags: [Authentication]
+      summary: Request API-key regeneration (sends OTP)
+      description: >
+        Start the OTP-gated rotation of the merchant's API key. Use this as the first
+        step when a key must be rotated; it sends an OTP to the merchant and returns a
+        `reference` to carry into the confirm step. This endpoint is authenticated with
+        the merchant API key (`api-key` header). No request body is required; the actual
+        new key is issued only after the OTP is confirmed.
+      responses:
+        "200":
+          description: Regeneration requested; OTP sent.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ApiKeyRegenerationRequestResult"
+              example:
+                success: true
+                message: OTP sent for API key regeneration
+                data:
+                  reference: akr_3f81a9c2d5e6f7a8
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Missing or invalid api-key header (authMiddleware.authenticate).
+
+  /merchants/regenerate-api-key/confirm-otp:
+    post:
+      operationId: authConfirmApiKeyRegenerationOtp
+      tags: [Authentication]
+      summary: Confirm API-key regeneration OTP
+      description: >
+        Complete API-key rotation by submitting the `reference` from the request step and
+        the 6-digit `otpCode`. Use this as the second step; on success the new API key is
+        returned. This endpoint is authenticated with the merchant API key (`api-key`
+        header). The OTP must be exactly six digits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmApiKeyRegenerationRequest"
+            example:
+              reference: akr_3f81a9c2d5e6f7a8
+              otpCode: "418205"
+      responses:
+        "200":
+          description: API key regenerated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: reference empty/missing, or otpCode not exactly 6 digits (merchantsValidation.ts:47).
+
+  /merchants/regenerate-api-key/resend-otp:
+    post:
+      operationId: authResendApiKeyRegenerationOtp
+      tags: [Authentication]
+      summary: Resend the API-key regeneration OTP
+      description: >
+        Re-send the regeneration OTP for an in-flight rotation identified by its
+        `reference`. Use this when the merchant did not receive the first OTP. This
+        endpoint is authenticated with the merchant API key (`api-key` header) and
+        requires the `reference` returned by the request step.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendApiKeyOtpRequest"
+            example:
+              reference: akr_3f81a9c2d5e6f7a8
+      responses:
+        "200":
+          description: OTP re-sent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: reference empty or missing (merchantsValidation.ts:64).
+
+  /merchants/regenerate-api-key-with-username:
+    post:
+      operationId: authRegenerateApiKeyWithUsername
+      tags: [Authentication]
+      summary: Regenerate the API key (non-OTP)
+      description: >
+        Rotate the merchant's API key in a single step, keyed off the authenticated
+        merchant identity rather than an OTP. Use this for the username-based rotation
+        path. This endpoint is authenticated with the merchant API key (`api-key`
+        header) and takes no request body; the new key is returned on success.
+      responses:
+        "200":
+          description: API key regenerated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+              example:
+                success: true
+                message: API key regenerated with username successfully
+                data: {}
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/regenerate-webhook-key:
+    post:
+      operationId: authRegenerateWebhookKey
+      tags: [Authentication]
+      summary: Regenerate the webhook signing key
+      description: >
+        Rotate the merchant's webhook signing key, used to verify the signature on
+        webhook events delivered by other Fincra products. Use this when the webhook
+        secret must be cycled. This endpoint is authenticated with the merchant API key
+        (`api-key` header) and takes no request body; the new key is returned on success.
+      responses:
+        "200":
+          description: Webhook key regenerated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+              example:
+                success: true
+                message: Webhook key regenerated successfully
+                data: {}
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /merchants/api/keys:
+    get:
+      operationId: authGetMerchantApiKeys
+      tags: [Authentication]
+      summary: Get the merchant's API keys
+      description: >
+        Return the API keys associated with the authenticated merchant, so a merchant can
+        read the credentials currently issued to them. This endpoint is authenticated
+        with the merchant API key (`api-key` header). It is a read; no request body is
+        accepted.
+      responses:
+        "200":
+          description: The merchant's API keys.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+          x-todo: "Exact API-keys response data shape not harvested; confirm from getMerchantApiKeys. Source: src/components/merchants/merchantsController.ts (getMerchantApiKeys)"
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret or public key, sent in the `api-key` header (fallback header
+        `apikey` is also accepted). The auth-service classifies the key as test or live
+        and resolves the merchant. Source node_modules/fliqpay-utils/src/middleware/auth/authUtil.ts:18.
+        Note: this service exposes NO separate x-pub-key/public-key flow; test vs live is
+        determined by the key itself.
+
+  responses:
+    Forbidden:
+      description: The request is missing valid authentication or is not allowed for this account.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: Invalid API Key passed
+            errorType: ACCESS_DENIED
+    NotFound:
+      description: The referenced resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: User not found
+            errorType: RESOURCE_NOT_FOUND
+    UnprocessableEntity:
+      description: Validation or business-rule failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "The email address provided is not allowed. Please use a valid, non-disposable email address."
+            errorType: UNPROCESSABLE_ENTITY
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` is [] when a handler returns nothing.
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope, built by fliqpay-utils APIHelper
+        (node_modules/fliqpay-utils/src/utilities/APIHelper.ts:145). Note: alongside the
+        three contract keys it also ships an `errors` detail key.
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Not present on every error branch.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates the values reachable
+        on the auth/onboarding and key-lifecycle paths (grepped from throw sites in the
+        fincra-auth controllers/services and the fliqpay-utils error classes; see
+        EXTRACTION-REPORT-auth.md).
+      enum:
+        - VALIDATION_FAILED
+        - UNPROCESSABLE_ENTITY
+        - ACCESS_DENIED
+        - USER_AUTHENTICATION_FALSE
+        - USER_NOT_ACTIVE
+        - ACCOUNT_LOCKED
+        - OPERATION_FORBIDDEN
+        - RESOURCE_NOT_FOUND
+        - RESOURCE_EXIST
+        - SERVICE_UNAVAILABLE
+        - INTERNAL_SERVER_ERROR
+        - SERVER_ERROR
+
+    SignupMerchantRequest:
+      type: object
+      description: >
+        Body for POST /auth/signup and /auth/signup-test. Source
+        src/components/authentication/authenticationValidation.ts:4. `clientIp` and
+        `userAgent` are captured from the request by middleware on /auth/signup; on
+        /auth/signup-test they are part of the validated body.
+      required: [name, email, password, country, howDidYouHearAboutFincra, clientIp, userAgent]
+      properties:
+        name:
+          type: string
+          description: Full name of the signing-up user. Required, trimmed.
+        businessName:
+          type: string
+          description: Trading name of the business. Optional, trimmed.
+        email:
+          type: string
+          format: email
+          description: User email; lower-cased and trimmed. Required and must be a valid, non-disposable address.
+        password:
+          type: string
+          minLength: 8
+          description: Password (min 8 chars) requiring an upper-case letter, a lower-case letter, a digit, and a special character.
+        country:
+          type: string
+          description: Country of the business. Required. When "NG", incorporationNumber is required.
+        mobile:
+          type: string
+          description: Contact mobile number. Optional.
+        logo:
+          type: string
+          description: URL of the business logo. Optional.
+        about_us_medium:
+          type: string
+          description: How the merchant describes their business. Optional.
+        website:
+          type: string
+          description: Business website URL. Optional.
+        businessType:
+          type: string
+          description: Type/category of the business. Optional.
+        countryCallingCode:
+          type: string
+          description: International dialling code for the mobile number. Optional.
+        location:
+          type: string
+          maxLength: 5
+          description: Short location/region code (max 5 chars). Optional.
+        referralCode:
+          type: string
+          description: Referral code of the referring merchant. Optional, trimmed.
+        isDataConsentAccepted:
+          type: boolean
+          default: true
+          description: Whether the user accepted the data-consent terms. Defaults to true.
+        isTermsAccepted:
+          type: boolean
+          default: true
+          description: Whether the user accepted the terms of service. Defaults to true.
+        incorporationNumber:
+          type: string
+          description: Company incorporation/registration number. Required when country is "NG".
+        howDidYouHearAboutFincra:
+          type: array
+          items: { type: string }
+          description: How the merchant heard about Fincra. Required, at least one non-empty string.
+        clientIp:
+          type: string
+          description: Client IP address. Required (captured by middleware on /auth/signup).
+        userAgent:
+          type: string
+          description: Client user-agent string. Required (captured by middleware on /auth/signup).
+
+    LoginRequest:
+      type: object
+      description: Body for POST /auth/login. Source authenticationValidation.ts:38.
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email; lower-cased and trimmed. Required.
+        password:
+          type: string
+          minLength: 8
+          description: User password (min 8 chars). Required.
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          description: Six-character two-factor code, when 2FA is enabled.
+        backupCode:
+          type: string
+          description: A two-factor backup code, as an alternative to otp.
+
+    GenerateLoginTokenRequest:
+      type: object
+      description: Body for POST /auth/login-token. Source authenticationValidation.ts:74.
+      required: [userId]
+      properties:
+        userId:
+          type: integer
+          description: Numeric id of the user to mint a login token for. Required.
+
+    VerifyEmailRequest:
+      type: object
+      description: Body for POST /auth/verify. Source authenticationValidation.ts:67.
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: The email-verification token sent to the user. Required.
+        utm_source:
+          type: string
+          description: UTM source for attribution. Optional.
+        utm_medium:
+          type: string
+          description: UTM medium for attribution. Optional.
+        utm_campaign:
+          type: string
+          description: UTM campaign for attribution. Optional.
+
+    EmailOnlyRequest:
+      type: object
+      description: >
+        Body for POST /auth/resend-email-verification and /auth/password/forgot. Source
+        authenticationValidation.ts:45,63.
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: The user email address; lower-cased and trimmed. Required.
+
+    ResetPasswordRequest:
+      type: object
+      description: Body for POST /auth/password/reset. Source authenticationValidation.ts:49.
+      required: [token, otp, newPassword, repeatPassword]
+      properties:
+        token:
+          type: string
+          description: The password-reset token emailed to the user. Required.
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          description: Six-character reset OTP. Required.
+        newPassword:
+          type: string
+          minLength: 8
+          description: New password (min 8 chars) requiring upper-case, lower-case, a digit, and a special character.
+        repeatPassword:
+          type: string
+          description: Must exactly equal newPassword. Required.
+
+    ConfirmApiKeyRegenerationRequest:
+      type: object
+      description: Body for POST /merchants/regenerate-api-key/confirm-otp. Source merchantsValidation.ts:47.
+      required: [reference, otpCode]
+      properties:
+        reference:
+          type: string
+          description: The regeneration reference returned by the request step. Required, trimmed.
+        otpCode:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: "^\\d{6}$"
+          description: Exactly six digits. Required.
+
+    ResendApiKeyOtpRequest:
+      type: object
+      description: Body for POST /merchants/regenerate-api-key/resend-otp. Source merchantsValidation.ts:64.
+      required: [reference]
+      properties:
+        reference:
+          type: string
+          description: The regeneration reference to resend the OTP for. Required, trimmed.
+
+    ApiKeyRegenerationRequestResult:
+      type: object
+      description: >
+        Data returned by POST /merchants/regenerate-api-key. Carries the reference to use
+        in the confirm/resend steps.
+      x-todo: "Exact data keys beyond message/reference not harvested; confirm from merchantService.requestAPIKeyRegeneration. Source: src/components/merchants/merchantsController.ts:107"
+      properties:
+        reference:
+          type: string
+          description: Reference identifying this regeneration request, passed to confirm-otp/resend-otp.

@@ -1,0 +1,1343 @@
+openapi: 3.1.0
+info:
+  title: Fincra Settlements (settlements-service)
+  version: "1.0.0"
+  summary: Merchant-facing settlement, batch, and referral-batch read/settle API for the settlements-service.
+  description: >
+    Read and settle the collection settlements that Fincra produces when a merchant's
+    collections are paid out into their wallet or settlement account, and read the
+    batch and referral-batch aggregates built on top of them.
+
+
+    The read endpoints are synchronous list/get/export operations over three data
+    families: individual collection settlements, batch settlements (and the unbatched
+    single settlements that feed them), and referral batch settlements. The one write
+    endpoint, `settlementsSettleCollection`, settles a single collection into the
+    business ledger balance and returns `Settlement is processing`; there is no
+    webhook emitted by any in-scope route.
+
+
+    This spec is generated from the source of `settlements-service` on branch
+    `fix/prod-build-legacy-peer-deps-and-exclude-tests` (HEAD b582e499); code is truth.
+    Anything undeterminable from code is marked with an `x-todo` extension carrying the
+    exact `file:line`, and is listed in EXTRACTION-REPORT-settlements.md.
+  contact:
+    name: Fincra Developer Relations
+    url: https://support.fincra.com
+x-todo-gateway-prefix: >
+  The service mounts every in-scope router at "/" with NO version/base-path prefix
+  (src/server.ts:53, src/routes/index.ts:10-21). settlementAPI mounts at "/", batchApi
+  at "/batch", referralBatchApi at "/batch/referral". The public API prefix a merchant
+  calls (and the platform-wide /v2) is applied at the Kong gateway, which is not in this
+  repo. Paths below are exactly as routed in code; prepend the confirmed gateway prefix
+  before publishing. See EXTRACTION-REPORT-settlements.md.
+
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox (test keys). Powers the docs playground.
+  - url: https://api.fincra.com
+    description: Production (live keys).
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Settlements
+    description: Read collection settlements, batches, and referral batches, and settle a single collection.
+
+paths:
+  /:
+    get:
+      operationId: settlementsListSettlements
+      tags: [Settlements]
+      summary: List collection settlements
+      description: >
+        Return a paginated list of the merchant's collection settlements, filterable by
+        batch id, reference, payment method, status, and settled/paid amounts. Use this
+        to build a settlements table or to reconcile which collections were settled. The
+        call is synchronous and returns the objection paginated shape `{ results, total }`;
+        no webhook is emitted.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10 }
+        - name: batchId
+          in: query
+          description: Filter by the numeric batch id the settlement belongs to.
+          schema: { type: number }
+        - name: reference
+          in: query
+          description: Filter by the settlement transaction reference.
+          schema: { type: string }
+        - name: paymentMethod
+          in: query
+          description: Filter by payment method (free-form string; not enum-bound on this route).
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by settlement status (free-form string; no enum in code).
+          schema: { type: string }
+        - name: amountSettled
+          in: query
+          description: Filter by the exact amount settled.
+          schema: { type: number }
+        - name: amountPaid
+          in: query
+          description: Filter by the exact amount paid.
+          schema: { type: number }
+      responses:
+        "200":
+          description: A page of collection settlements.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CollectionSettlementPage"
+              example:
+                success: true
+                message: Settlements fetched successfully
+                data:
+                  results:
+                    - id: 4821
+                      transaction_reference: CS-1a2b3c4d5e
+                      settlement_destination: wallet
+                      settlement_time: instant
+                      batch_id: 77
+                      businessId: 63f9a1b2c4d5e6f7a8b9c0d1
+                      payment_method: bank_transfer
+                      fee: 25
+                      currency: NGN
+                      amount_paid: 10000
+                      amount_settled: 9975
+                      is_batched: true
+                      status: settled
+                      is_queued: false
+                  total: 1
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails Joi validation (missing/non-24-char business, unknown key, wrong type)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+    post:
+      operationId: settlementsSettleCollection
+      tags: [Settlements]
+      summary: Settle a collection
+      description: >
+        Settle a single successful, approved collection into the business ledger balance,
+        creating a collection settlement row. Use this to trigger settlement of a
+        collection identified by its numeric `collectionId`; note this route requires ONLY
+        `collectionId` and does not take a business id. The call validates the collection,
+        credits the wallet, inserts the settlement, and returns `Settlement is processing`;
+        no webhook is emitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettleCollectionRequest"
+            examples:
+              settleOne:
+                summary: Settle a single collection by id
+                value:
+                  collectionId: 748213
+      responses:
+        "200":
+          description: Settlement accepted and processing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CollectionSettlement"
+              example:
+                success: true
+                message: Settlement is processing
+                data:
+                  id: 4822
+                  transaction_reference: CS-9f8e7d6c5b
+                  settlement_destination: wallet
+                  settlement_time: instant
+                  businessId: 63f9a1b2c4d5e6f7a8b9c0d1
+                  payment_method: bank_transfer
+                  fee: 25
+                  currency: NGN
+                  amount_paid: 10000
+                  amount_settled: 9975
+                  is_batched: false
+                  status: processing
+                  is_queued: true
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "collectionId is missing/non-numeric, or an unknown key is present."
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: "Empty payload ('No payload sent'), a JSON-array body ('Request body must be of type object'), or a wallet-credit failure ('Error occured while crediting wallet, please try again')."
+        - errorType: NOT_FOUND
+          status: 409
+          trigger: "Collection not found. NOTE: HttpError passes the numeric 404 as the errors field, so httpCode falls back to CONFLICT/409 (see EXTRACTION-REPORT-settlements.md)."
+        - errorType: BAD_REQUEST
+          status: 409
+          trigger: "Collection ineligible for settlement (not successful, not approved, already settled, disallowed payment method, or missing settlement destination/time). Surfaces as 409 for the same HttpError reason."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The settlement insert fails (DBError special-case).
+
+  /export:
+    get:
+      operationId: settlementsExportSettlements
+      tags: [Settlements]
+      summary: Export collection settlements
+      description: >
+        Export the merchant's collection settlements to a CSV file that is uploaded to
+        S3, returning the file name and URL. Use this to hand a settlement report to
+        finance or an external system. This export accepts a narrower filter set than the
+        list endpoint (batch id, reference, pagination only); it is synchronous and emits
+        no webhook.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10 }
+        - name: batchId
+          in: query
+          description: Filter by the numeric batch id.
+          schema: { type: number }
+        - name: reference
+          in: query
+          description: Filter by the settlement transaction reference.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Export produced; file name and URL returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ExportResult"
+              example:
+                success: true
+                message: Settlement exported successfully
+                data:
+                  name: settlements-2026-07-12.csv
+                  url: https://sandbox-files.fincra.com/exports/settlements-2026-07-12.csv
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails validation (missing/non-24-char business, unknown key)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /{id}:
+    get:
+      operationId: settlementsGetSettlement
+      tags: [Settlements]
+      summary: Get a collection settlement by id
+      description: >
+        Fetch a single collection settlement by its numeric id. Use this to look up one
+        settlement row. This route validates only a numeric `id` and does not take a
+        business id; when no row matches, the handler returns HTTP 200 with `data: []`
+        rather than a 404. Synchronous; no webhook is emitted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric collection settlement id.
+          schema: { type: number }
+      responses:
+        "200":
+          description: The collection settlement, or an empty array when not found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CollectionSettlement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "id is missing or non-numeric."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /settle:
+    post:
+      operationId: settlementsSettleCollectionAlias
+      tags: [Settlements]
+      summary: Settle a collection (settle path)
+      description: >
+        Settle a single successful, approved collection into the business ledger balance
+        via the explicit `/settle` path, identified by numeric `collectionId`. This route
+        requires ONLY `collectionId` and does not take a business id. The call validates
+        the collection, credits the wallet, inserts the settlement, and returns
+        `Settlement is processing`; no webhook is emitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettleCollectionRequest"
+            examples:
+              settleOne:
+                summary: Settle a single collection by id
+                value:
+                  collectionId: 748213
+      responses:
+        "200":
+          description: Settlement accepted and processing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/CollectionSettlement"
+              example:
+                success: true
+                message: Settlement is processing
+                data:
+                  id: 4823
+                  transaction_reference: CS-3c2b1a0f9e
+                  settlement_destination: wallet
+                  settlement_time: instant
+                  businessId: 63f9a1b2c4d5e6f7a8b9c0d1
+                  payment_method: bank_transfer
+                  fee: 25
+                  currency: NGN
+                  amount_paid: 10000
+                  amount_settled: 9975
+                  is_batched: false
+                  status: processing
+                  is_queued: true
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "collectionId is missing/non-numeric, or an unknown key is present."
+        - errorType: UNPROCESSABLE_ENTITY
+          status: 422
+          trigger: "Empty payload, a JSON-array body, or a wallet-credit failure."
+        - errorType: NOT_FOUND
+          status: 409
+          trigger: "Collection not found (HttpError -> CONFLICT/409 fallback)."
+        - errorType: BAD_REQUEST
+          status: 409
+          trigger: "Collection ineligible for settlement (HttpError -> CONFLICT/409 fallback)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The settlement insert fails (DBError special-case).
+
+  /batch:
+    get:
+      operationId: settlementsListBatches
+      tags: [Settlements]
+      summary: List batch settlements
+      description: >
+        Return a paginated list of the merchant's batch settlements, filterable by
+        currency, reference, payment method, settlement destination/time, status, amounts,
+        and a date range. Use this to build a batch-settlement table or to reconcile
+        batched payouts. Synchronous; returns `{ results, total }` and emits no webhook.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10 }
+        - name: currency
+          in: query
+          description: Filter by settled currency (free-form string; no enum in code).
+          schema: { type: string }
+        - name: transactionReference
+          in: query
+          description: Filter by the batch transaction reference.
+          schema: { type: string }
+        - name: paymentMethod
+          in: query
+          description: Filter by payment method (free-form string on this route).
+          schema: { type: string }
+        - name: settlementDestination
+          in: query
+          description: Filter by settlement destination.
+          schema: { type: string }
+        - name: settlementTime
+          in: query
+          description: Filter by settlement time.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by batch status (free-form string; no enum in code).
+          schema: { type: string }
+        - name: amountPaid
+          in: query
+          description: Filter by amount paid (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: amountSettled
+          in: query
+          description: Filter by amount settled (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: dateFrom
+          in: query
+          description: Include batches created on or after this date.
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include batches created on or before this date.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: A page of batch settlements.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BatchSettlementPage"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails validation (missing/non-24-char business, negative amount, unknown key)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/single:
+    get:
+      operationId: settlementsListUnbatchedSettlements
+      tags: [Settlements]
+      summary: List unbatched single settlements
+      description: >
+        Return a paginated list of the merchant's unbatched single settlements (the rows
+        that feed batches). Use this to see settlements not yet grouped into a batch. On
+        this route `paymentMethod` is enum-constrained to mobile_money or bank_transfer.
+        Synchronous; returns `{ results, total }` and emits no webhook.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10 }
+        - name: currency
+          in: query
+          description: Filter by settled currency (free-form string).
+          schema: { type: string }
+        - name: transactionReference
+          in: query
+          description: Filter by the transaction reference.
+          schema: { type: string }
+        - name: paymentMethod
+          in: query
+          description: Filter by payment method; the only in-scope route where this is enum-bound.
+          schema: { $ref: "#/components/schemas/PaymentMethod" }
+        - name: settlementDestination
+          in: query
+          description: Filter by settlement destination.
+          schema: { type: string }
+        - name: settlementTime
+          in: query
+          description: Filter by settlement time.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by status (free-form string).
+          schema: { type: string }
+        - name: amountPaid
+          in: query
+          description: Filter by amount paid (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: amountSettled
+          in: query
+          description: Filter by amount settled (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: dateFrom
+          in: query
+          description: Include settlements created on or after this date.
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include settlements created on or before this date.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: A page of unbatched single settlements.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SingleSettlementPage"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails validation, including paymentMethod not in [mobile_money, bank_transfer]."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/export:
+    get:
+      operationId: settlementsExportBatches
+      tags: [Settlements]
+      summary: Export batch settlements
+      description: >
+        Export the merchant's batch settlements to a CSV file uploaded to S3, returning
+        the file name and URL. Use this to hand a batch report to finance. When absent,
+        the date range defaults to the last 30 days, and `perPage` defaults to 1000.
+        Synchronous; emits no webhook.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 1000 on export.
+          schema: { type: integer, default: 1000 }
+        - name: currency
+          in: query
+          description: Filter by settled currency (free-form string).
+          schema: { type: string }
+        - name: transactionReference
+          in: query
+          description: Filter by the batch transaction reference.
+          schema: { type: string }
+        - name: paymentMethod
+          in: query
+          description: Filter by payment method (free-form string on export).
+          schema: { type: string }
+        - name: settlementDestination
+          in: query
+          description: Filter by settlement destination.
+          schema: { type: string }
+        - name: settlementTime
+          in: query
+          description: Filter by settlement time.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by status (free-form string).
+          schema: { type: string }
+        - name: amountPaid
+          in: query
+          description: Filter by amount paid (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: amountSettled
+          in: query
+          description: Filter by amount settled (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: dateFrom
+          in: query
+          description: Range start. Defaults to 30 days ago when omitted.
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Range end. Defaults to now when omitted.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Export produced; file name and URL returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ExportResult"
+              example:
+                success: true
+                message: Batches exported successfully
+                data:
+                  name: batches-2026-07-12.csv
+                  url: https://sandbox-files.fincra.com/exports/batches-2026-07-12.csv
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails validation (missing/non-24-char business, negative amount, unknown key)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/single/export:
+    get:
+      operationId: settlementsExportUnbatchedSettlements
+      tags: [Settlements]
+      summary: Export unbatched single settlements
+      description: >
+        Export the merchant's unbatched single settlements to a CSV file uploaded to S3,
+        returning the file name and URL. It validates against the batch-export schema (no
+        paymentMethod enum) even though the underlying data is single settlements, and
+        applies the same 30-day default window with `perPage` defaulting to 1000.
+        Synchronous; emits no webhook.
+      parameters:
+        - $ref: "#/components/parameters/BusinessQuery"
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 1000 on export.
+          schema: { type: integer, default: 1000 }
+        - name: currency
+          in: query
+          description: Filter by settled currency (free-form string).
+          schema: { type: string }
+        - name: transactionReference
+          in: query
+          description: Filter by the transaction reference.
+          schema: { type: string }
+        - name: paymentMethod
+          in: query
+          description: Filter by payment method (free-form string; no enum on this export route).
+          schema: { type: string }
+        - name: settlementDestination
+          in: query
+          description: Filter by settlement destination.
+          schema: { type: string }
+        - name: settlementTime
+          in: query
+          description: Filter by settlement time.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by status (free-form string).
+          schema: { type: string }
+        - name: amountPaid
+          in: query
+          description: Filter by amount paid (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: amountSettled
+          in: query
+          description: Filter by amount settled (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: dateFrom
+          in: query
+          description: Range start. Defaults to 30 days ago when omitted.
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Range end. Defaults to now when omitted.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Export produced; file name and URL returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ExportResult"
+              example:
+                success: true
+                message: Settlements exported successfully
+                data:
+                  name: single-settlements-2026-07-12.csv
+                  url: https://sandbox-files.fincra.com/exports/single-settlements-2026-07-12.csv
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails validation (missing/non-24-char business, negative amount, unknown key)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/{id}:
+    get:
+      operationId: settlementsGetBatch
+      tags: [Settlements]
+      summary: Get a batch settlement by id
+      description: >
+        Fetch a single batch settlement by its numeric id. Use this to look up one batch.
+        The `id` is optional in the schema and does not require a business id; when no row
+        matches, the handler returns HTTP 200 with `data: []` rather than a 404.
+        Synchronous; no webhook is emitted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric batch settlement id.
+          schema: { type: number }
+      responses:
+        "200":
+          description: The batch settlement, or an empty array when not found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BatchSettlement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "id is present but non-numeric."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/single/{id}:
+    get:
+      operationId: settlementsGetUnbatchedSettlement
+      tags: [Settlements]
+      summary: Get an unbatched single settlement by id
+      description: >
+        Fetch a single unbatched single settlement by its numeric id. Use this to look up
+        one settlement not yet grouped into a batch. The `id` is optional in the schema
+        and does not require a business id; when no row matches, the handler returns HTTP
+        200 with `data: []` rather than a 404. Synchronous; no webhook is emitted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric single settlement id.
+          schema: { type: number }
+      responses:
+        "200":
+          description: The single settlement, or an empty array when not found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SingleSettlement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "id is present but non-numeric."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/referral/{id}:
+    get:
+      operationId: settlementsGetReferralBatch
+      tags: [Settlements]
+      summary: Get a referral batch settlement by id
+      description: >
+        Fetch a single referral batch settlement by its numeric id. Use this to look up
+        one referral batch. The `id` is optional in the schema and does not require a
+        business id; when no row matches, the handler returns HTTP 200 with `data: []`
+        rather than a 404. Synchronous; no webhook is emitted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Numeric referral batch settlement id.
+          schema: { type: number }
+      responses:
+        "200":
+          description: The referral batch settlement, or an empty array when not found.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReferralBatchSettlement"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "id is present but non-numeric."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/referral/export:
+    get:
+      operationId: settlementsExportReferralBatches
+      tags: [Settlements]
+      summary: Export referral batch settlements
+      description: >
+        Export the merchant's referral batch settlements to a CSV file uploaded to S3,
+        returning the file name and URL. It validates against the same schema as the
+        referral-batch list route (all fields optional; `perPage` defaults to 10, not
+        1000). Synchronous; emits no webhook.
+      parameters:
+        - name: businessId
+          in: query
+          description: Optional 24-character business id filter.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10 on referral export.
+          schema: { type: integer, default: 10 }
+        - name: transactionCurrency
+          in: query
+          description: Filter by transaction currency (free-form string).
+          schema: { type: string }
+        - name: settledCurrency
+          in: query
+          description: Filter by settled currency (free-form string; not applied as a filter by the query builder).
+          schema: { type: string }
+        - name: reference
+          in: query
+          description: Filter by the referral batch reference.
+          schema: { type: string }
+        - name: settlementDestination
+          in: query
+          description: Filter by settlement destination.
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by status (free-form string).
+          schema: { type: string }
+        - name: transactionType
+          in: query
+          description: Filter by transaction type.
+          schema: { $ref: "#/components/schemas/ReferralTransactionType" }
+        - name: totalCommission
+          in: query
+          description: Filter by total commission (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: totalRevenue
+          in: query
+          description: Filter by total revenue (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: dateFrom
+          in: query
+          description: Include referral batches created on or after this date.
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include referral batches created on or before this date.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Export produced; file name and URL returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ExportResult"
+              example:
+                success: true
+                message: Referral Batches exported successfully
+                data:
+                  name: referral-batches-2026-07-12.csv
+                  url: https://sandbox-files.fincra.com/exports/referral-batches-2026-07-12.csv
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails validation (negative amount, transactionType not in [payouts, collections], unknown key)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+  /batch/referral:
+    get:
+      operationId: settlementsListReferralBatches
+      tags: [Settlements]
+      summary: List referral batch settlements
+      description: >
+        Return a paginated list of the merchant's referral batch settlements, joined with
+        merchant and advocate detail, filterable by reference, transaction type/currency,
+        status, total commission, and a date range. All fields are optional and business
+        is not required on this route. The route is declared at the router root '/' under
+        the `/batch/referral` mount (matches with or without a trailing slash).
+        Synchronous; returns `{ results, total }` and emits no webhook.
+      parameters:
+        - name: businessId
+          in: query
+          description: Optional 24-character business id filter.
+          schema: { type: string, minLength: 24, maxLength: 24 }
+        - name: page
+          in: query
+          description: 1-based page number. Defaults to 1.
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          description: Items per page. Defaults to 10.
+          schema: { type: integer, default: 10 }
+        - name: transactionCurrency
+          in: query
+          description: Filter by transaction currency (free-form string).
+          schema: { type: string }
+        - name: settledCurrency
+          in: query
+          description: Filter by settled currency (free-form string; not applied as a filter by the query builder).
+          schema: { type: string }
+        - name: reference
+          in: query
+          description: Filter by the referral batch reference.
+          schema: { type: string }
+        - name: settlementDestination
+          in: query
+          description: Filter by settlement destination (accepted but not applied as a filter).
+          schema: { type: string }
+        - name: status
+          in: query
+          description: Filter by status (free-form string).
+          schema: { type: string }
+        - name: transactionType
+          in: query
+          description: Filter by transaction type.
+          schema: { $ref: "#/components/schemas/ReferralTransactionType" }
+        - name: totalCommission
+          in: query
+          description: Filter by total commission (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: totalRevenue
+          in: query
+          description: Filter by total revenue (must be >= 0).
+          schema: { type: number, minimum: 0 }
+        - name: dateFrom
+          in: query
+          description: Include referral batches created on or after this date.
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Include referral batches created on or before this date.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: A page of referral batch settlements.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReferralBatchSettlementPage"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/ServerError" }
+      x-fincra-error-catalog:
+        - errorType: VALIDATION_FAILED
+          status: 422
+          trigger: "A query parameter fails validation (negative amount, transactionType not in [payouts, collections], unknown key)."
+        - errorType: ACCESS_DENIED
+          status: 403
+          trigger: Authentication credentials are missing or rejected.
+        - errorType: INTERNAL_SERVER_ERROR
+          status: 500
+          trigger: The database query fails (DBError special-case).
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+      description: >
+        Merchant secret or public key, sent in the `api-key` header. The auth middleware
+        (fliqpay-utils authMiddleware.authenticate) also accepts a Bearer `authorization`
+        header paired with `api-key`/`apikey`, or a `service-secret-key`; this public spec
+        is scoped to the `api-key` credential. Missing all credentials yields ACCESS_DENIED
+        (HTTP 403).
+
+  parameters:
+    BusinessQuery:
+      name: business
+      in: query
+      required: true
+      description: The 24-character Fincra business id the settlements belong to.
+      schema:
+        type: string
+        minLength: 24
+        maxLength: 24
+
+  responses:
+    Forbidden:
+      description: The request is not authenticated (missing or rejected credentials).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: You do not have access to this resource
+            errorType: ACCESS_DENIED
+    Conflict:
+      description: >
+        Collection ineligible for settlement or not found. NOTE: HttpError passes the
+        intended 404/400 as the errors field, so httpCode falls back to CONFLICT/409.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: This collection has already been settled
+            errorType: BAD_REQUEST
+    UnprocessableEntity:
+      description: Validation or request-shape failure. `errorType` identifies the cause.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: business length must be 24 characters long
+            errorType: VALIDATION_FAILED
+    ServerError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+          example:
+            success: false
+            error: "Error occured during operation. We're currently checking why this is happening."
+            errorType: INTERNAL_SERVER_ERROR
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      description: The standard Fincra success envelope. `data` is [] when a handler returns nothing (e.g. a get by id with no match).
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+          description: Always true on a 2xx response.
+        message:
+          type: string
+          description: Human-readable summary of the result.
+        data:
+          description: The result payload; shape depends on the endpoint.
+
+    ErrorResponse:
+      type: object
+      description: >
+        The shared Fincra error envelope, built by fliqpay-utils APIHelper. Application
+        errors return HTTP error.httpCode||400 with `errors` detail; auth failures return
+        via the express errorHandler at httpCode||500 without `errors`; the DBError
+        special-case returns 500/INTERNAL_SERVER_ERROR without `errors`.
+      required: [success, error, errorType]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: Always false on an error response.
+        error:
+          type: string
+          description: Human-readable error message.
+        errorType:
+          $ref: "#/components/schemas/ErrorType"
+        errors:
+          description: >
+            Optional structured detail (e.g. the array of per-field Joi messages on a
+            VALIDATION_FAILED). Not present on auth-layer or DBError branches.
+
+    ErrorType:
+      type: string
+      description: >
+        SCREAMING_SNAKE_CASE machine code for the error. Enumerates only the values
+        reachable on the in-scope settlement/batch/referral routes (see
+        EXTRACTION-REPORT-settlements.md).
+      enum:
+        - VALIDATION_FAILED
+        - UNPROCESSABLE_ENTITY
+        - NOT_FOUND
+        - BAD_REQUEST
+        - ACCESS_DENIED
+        - RESOURCE_NOT_FOUND
+        - INTERNAL_SERVER_ERROR
+
+    PaymentMethod:
+      type: string
+      description: >
+        Payment method, enum-constrained only on GET /batch/single (the unbatched-single
+        list route). All other in-scope routes accept payment method as a free-form string.
+      enum: [mobile_money, bank_transfer]
+
+    ReferralTransactionType:
+      type: string
+      description: Transaction type filter for the referral-batch routes.
+      enum: [payouts, collections]
+
+    ExportResult:
+      type: object
+      description: The CSV export artifact produced by an export endpoint and uploaded to S3.
+      required: [name, url]
+      properties:
+        name: { type: string, description: The generated CSV file name. }
+        url: { type: string, description: The location (S3 URL) of the exported CSV file. }
+
+    CollectionSettlement:
+      type: object
+      description: A row of the collection_settlements table, returned by the settlement read/settle endpoints.
+      properties:
+        id: { type: integer, description: Numeric settlement id. }
+        transaction_reference: { type: string, description: The settlement transaction reference. }
+        settlement_destination: { type: string, description: Where the settlement was delivered (e.g. wallet). }
+        settlement_time: { type: string, description: The settlement timing (e.g. instant). }
+        batch_id: { type: integer, description: "The batch id this settlement belongs to, if batched." }
+        businessId: { type: string, description: The 24-character business id owning the settlement. }
+        payment_method: { type: string, description: The payment method of the underlying collection. }
+        fee: { type: number, description: The settlement fee. }
+        currency: { type: string, description: The settlement currency. }
+        amount_paid: { type: number, description: The amount paid into settlement. }
+        amount_settled: { type: number, description: The amount settled to the business. }
+        is_batched: { type: boolean, description: Whether the settlement has been grouped into a batch. }
+        status: { type: string, description: The settlement status. }
+        is_queued: { type: boolean, description: Whether the settlement is queued for processing. }
+        created_at: { type: string, format: date-time, description: Creation timestamp. }
+        updated_at: { type: string, format: date-time, description: Last update timestamp. }
+
+    CollectionSettlementPage:
+      type: object
+      description: An objection paginated page of collection settlements.
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          description: The collection settlements on this page.
+          items: { $ref: "#/components/schemas/CollectionSettlement" }
+        total: { type: integer, description: Total number of matching settlements across all pages. }
+
+    BatchSettlement:
+      type: object
+      description: A row of the batch_settlements table, returned by the batch read endpoints.
+      properties:
+        id: { type: integer, description: Numeric batch id. }
+        transaction_reference: { type: string, description: The batch transaction reference. }
+        reference: { type: string, description: The batch reference. }
+        settled_currency: { type: string, description: The currency the batch settled in. }
+        settlement_destination: { type: string, description: Where the batch was settled. }
+        settlement_time: { type: string, description: The batch settlement timing. }
+        total_collection_amount: { type: number, description: Sum of collection amounts in the batch. }
+        total_collection_fee: { type: number, description: Sum of collection fees in the batch. }
+        payment_method: { type: string, description: The payment method of the batch. }
+        settlement_fee: { type: number, description: The batch settlement fee. }
+        businessId: { type: string, description: The 24-character business id owning the batch. }
+        amount_settled: { type: number, description: The amount settled for the batch. }
+        approval_status: { type: string, description: The batch approval status. }
+        status: { type: string, description: The batch status. }
+        payout_status: { type: string, description: The batch payout status. }
+        payout_retry_count: { type: integer, description: Number of payout retries for the batch. }
+        created_at: { type: string, format: date-time, description: Creation timestamp. }
+        updated_at: { type: string, format: date-time, description: Last update timestamp. }
+
+    BatchSettlementPage:
+      type: object
+      description: An objection paginated page of batch settlements.
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          description: The batch settlements on this page.
+          items: { $ref: "#/components/schemas/BatchSettlement" }
+        total: { type: integer, description: Total number of matching batches across all pages. }
+
+    SingleSettlement:
+      type: object
+      description: A row of the single_settlements table (unbatched settlements), with the columns selected by the read endpoints.
+      properties:
+        id: { type: integer, description: Numeric single settlement id. }
+        transaction_reference: { type: string, description: The transaction reference. }
+        settled_currency: { type: string, description: The currency the settlement settled in. }
+        businessId: { type: string, description: The 24-character business id owning the settlement. }
+        status: { type: string, description: The settlement status. }
+        settlement_destination: { type: string, description: Where the settlement was delivered. }
+        settlement_time: { type: string, description: The settlement timing. }
+        reference: { type: string, description: The settlement reference. }
+        amount_settled: { type: number, description: The amount settled. }
+        collection_fee: { type: number, description: The collection fee. }
+        collection_amount: { type: number, description: The collection amount. }
+        payment_method: { type: string, description: The payment method. }
+        created_at: { type: string, format: date-time, description: Creation timestamp. }
+        updated_at: { type: string, format: date-time, description: Last update timestamp. }
+
+    SingleSettlementPage:
+      type: object
+      description: An objection paginated page of unbatched single settlements.
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          description: The single settlements on this page.
+          items: { $ref: "#/components/schemas/SingleSettlement" }
+        total: { type: integer, description: Total number of matching single settlements across all pages. }
+
+    ReferralBatchSettlement:
+      type: object
+      description: >
+        A referral batch settlement row. The list route returns a join projection of
+        merchant, advocate, and referral aggregate columns; the get-by-id route returns
+        the referral_batch_settlements row.
+      properties:
+        merchant_name: { type: string, description: The merchant's name. }
+        merchant_email: { type: string, description: The merchant's email. }
+        merchant_created_at: { type: string, format: date-time, description: When the merchant was created. }
+        merchant_kYC: { type: string, description: The merchant's KYC state. }
+        advocate_name: { type: string, description: The referring advocate's name. }
+        transaction_type: { type: string, description: The referral transaction type (payouts or collections). }
+        settlement_currency: { type: string, description: The referral settlement currency. }
+        transaction_currency: { type: string, description: The referral transaction currency. }
+        reference: { type: string, description: The referral batch reference. }
+        status: { type: string, description: The referral batch status. }
+        settlement_destination: { type: string, description: Where the referral batch was settled. }
+        created_at: { type: string, format: date-time, description: Creation timestamp. }
+        total_commission: { type: number, description: Total referral commission. }
+        total_revenue: { type: number, description: Total revenue for the referral batch. }
+        total_transaction_amount: { type: number, description: Total transaction amount. }
+        settlement_fee: { type: number, description: The referral settlement fee. }
+        total_commission_tax: { type: number, description: Total tax on the referral commission. }
+
+    ReferralBatchSettlementPage:
+      type: object
+      description: An objection paginated page of referral batch settlements.
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          description: The referral batch settlements on this page.
+          items: { $ref: "#/components/schemas/ReferralBatchSettlement" }
+        total: { type: integer, description: Total number of matching referral batches across all pages. }
+
+    SettleCollectionRequest:
+      type: object
+      description: >
+        Body for POST / and POST /settle. The only field is `collectionId`; this route does
+        NOT take a business id. An empty payload yields UNPROCESSABLE_ENTITY ('No payload
+        sent') and a JSON-array body yields UNPROCESSABLE_ENTITY ('Request body must be of
+        type object'). Unknown keys are rejected with VALIDATION_FAILED.
+      required: [collectionId]
+      properties:
+        collectionId:
+          type: number
+          description: The numeric id of the collection to settle.
