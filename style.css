@@ -1,0 +1,14 @@
+/* Cards: flat, light border and 8px corners, matching the Airwallex benchmark. */
+.card {
+  border-radius: 8px;
+  border: 1px solid #E8EAED;
+  box-shadow: none;
+}
+
+html.dark .card {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.card > [data-component-part="card-content-container"] {
+  padding: 24px;
+}
