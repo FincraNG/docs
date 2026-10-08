@@ -1,14 +1,29 @@
-/* Cards: flat, light border and 8px corners, matching the Airwallex benchmark. */
+/* Cards: no border, soft shadow and 4px corners, matching the Plaid benchmark. */
 .card {
-  border-radius: 8px;
-  border: 1px solid #E8EAED;
-  box-shadow: none;
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 8px 16px rgba(18, 18, 18, 0.08);
 }
 
+/* Shadows disappear on a dark background, so dark mode uses a faint outline. */
 html.dark .card {
-  border-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
 }
 
 .card > [data-component-part="card-content-container"] {
   padding: 24px;
+}
+
+.card [data-component-part="card-title"] {
+  font-weight: 700;
+}
+
+/* Monochrome icons. */
+.card [data-component-part="card-icon"] svg {
+  background-color: #111111;
+}
+
+html.dark .card [data-component-part="card-icon"] svg {
+  background-color: #FFFFFF;
 }
