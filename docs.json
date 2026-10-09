@@ -37,7 +37,14 @@
               },
               "virtual-accounts/overview",
               "fx-and-conversion/overview",
-              "wallets-and-balances/overview",
+              {
+                "group": "Wallets and Balances",
+                "pages": [
+                  "wallets-and-balances/overview",
+                  "wallets-and-balances/test-in-sandbox",
+                  "wallets-and-balances/reconcile"
+                ]
+              },
               "direct-debit/overview",
               "issuing/overview",
               "verification/overview"
@@ -98,6 +105,7 @@
               "GET /disbursements/payouts/reference/{reference}",
               "GET /disbursements/payouts/customer-reference/{customerReference}",
               "GET /disbursements/payouts",
+              "POST /disbursements/payouts/export",
               "POST /disbursements/payouts/wallets",
               "POST /disbursements/payouts/documents-upload"
             ]
@@ -124,6 +132,32 @@
               "GET /conversions/reference/{reference}",
               "GET /conversions/customer-reference/{customerReference}",
               "GET /conversions"
+            ]
+          },
+          {
+            "group": "Wallets and Balances",
+            "openapi": {
+              "source": "api/specs/wallets.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "GET /wallets",
+              "GET /wallets/{walletID}",
+              "GET /wallets/logs",
+              "GET /wallets/logs/{id}",
+              "GET /wallets/logs/statement"
+            ]
+          },
+          {
+            "group": "Sandbox simulation",
+            "openapi": {
+              "source": "api/specs/sandbox.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /wallets/fund",
+              "POST /collections/transfer/simulate",
+              "POST /checkout-core/webhooks/charges/bank-transfer"
             ]
           },
           {

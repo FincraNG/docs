@@ -1,4 +1,74 @@
 ---
 title: "Wallets and Balances"
-description: "Hold funds in multiple currencies and track every movement."
+sidebarTitle: "Overview"
+description: "How your wallets hold money, what each balance means and how money moves in and out."
+keywords: ["wallet", "balance", "available balance", "ledger balance", "locked balance", "rolling reserve", "fund", "top up"]
 ---
+
+Every Fincra business has a wallet for each currency it can use. A wallet holds your money in that currency: collections arrive in it, and payouts, conversions and fees are paid from it. Fincra creates your wallets when your business is created, so you never create one yourself.
+
+## The four balances
+
+Each wallet reports four balances. The ledger balance is the total, and it always equals the other three added together:
+
+```text
+ledgerBalance = availableBalance
+              + lockedBalance
+              + rollingReserveBalance
+```
+
+| Balance | What it is | Can you spend it? |
+|---|---|---|
+| `availableBalance` | Money you can use now | Yes. Payouts, conversions and fees come from here |
+| `lockedBalance` | Money held while something completes: the amount of payouts still in progress, and incoming money Fincra has recorded but not yet released to you | No. It moves to available, or leaves the wallet, when the transaction completes |
+| `rollingReserveBalance` | Part of your card payments that Fincra holds as a reserve and releases later | No. It is zero unless a reserve applies to your business |
+| `ledgerBalance` | Everything in the wallet | No. Check `availableBalance` before you send money |
+
+<Note>
+Always check `availableBalance`, not `ledgerBalance`, before a payout or conversion. If your available balance can't cover it, Fincra rejects the request.
+</Note>
+
+## How a payout moves your balances
+
+A payout changes your balances in two steps, so the money is never spent twice:
+
+| When | Available | Locked | Ledger |
+|---|---|---|---|
+| You create the payout | Goes down by the amount | Goes up by the amount | No change |
+| The payout succeeds | No change | Goes down by the amount | Goes down by the amount |
+| The payout fails | Goes back up by the amount | Goes down by the amount | No change |
+
+A failed payout returns the money to your available balance. Other debits that take time, such as a [BVN check](/api/verification/verify-a-bvn), follow the same steps. [List wallet transactions](/api/wallets-and-balances/list-wallet-transactions) shows each step as its own entry, with every balance before and after.
+
+## How money comes in
+
+- **Collections.** Money your customers pay into your [virtual accounts](/virtual-accounts/overview) or through [Payments](/payments/overview) arrives in the wallet of that currency. Fincra credits the amount minus its fee, and the statement shows both.
+- **Card payments.** Card payments are recorded in your ledger and locked balances first, and Fincra moves them to your available balance when it settles them. If a rolling reserve applies to your business, part of each card payment goes to your rolling reserve balance instead.
+- **Conversions.** A [conversion](/fx-and-conversion/overview) moves money from a wallet in one currency to a wallet in another.
+- **Bank transfer top-ups.** In the dashboard, you can top up a wallet by bank transfer. Fincra gives you an account and a reference to pay with, you upload your proof of payment, and Fincra credits the wallet after it reviews the payment.
+
+In sandbox, you can add test money to any wallet with one request. See [Test in sandbox](/wallets-and-balances/test-in-sandbox).
+
+## How money goes out
+
+- **Payouts** to bank accounts and mobile money wallets. See [Payouts](/payouts/overview).
+- **Conversions** to a wallet in another currency.
+- **Fees** for services you use, such as a BVN check.
+
+## Know when a balance changes
+
+Fincra doesn't send a webhook when a balance changes. To react to money moving, use the webhooks for the transaction itself, such as a payout or collection webhook. To check a balance, call [List wallets](/api/wallets-and-balances/list-wallets) with `currency`.
+
+## Reconcile your wallets
+
+Use [Get a wallet statement](/api/wallets-and-balances/get-a-wallet-statement) to match every movement of money against your own records for a period. See [Reconcile your wallets](/wallets-and-balances/reconcile).
+
+## API reference
+
+| To | Use |
+|---|---|
+| See all your wallets and balances | [List wallets](/api/wallets-and-balances/list-wallets) |
+| See one wallet | [Get a wallet](/api/wallets-and-balances/get-a-wallet) |
+| See every balance change | [List wallet transactions](/api/wallets-and-balances/list-wallet-transactions) |
+| Reconcile a period | [Get a wallet statement](/api/wallets-and-balances/get-a-wallet-statement) |
+| Add test money in sandbox | [Fund a sandbox wallet](/api/sandbox-simulation/fund-a-sandbox-wallet) |

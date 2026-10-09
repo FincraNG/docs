@@ -1,0 +1,39 @@
+---
+title: "Reconcile your wallets"
+description: "Match every movement of money in a wallet against your own records."
+keywords: ["reconciliation", "statement", "opening balance", "closing balance", "wallet transactions", "fees"]
+---
+
+Reconciling a wallet means checking that every movement of money Fincra recorded matches your own records, and that the balances add up. Fincra gives you two views of the same wallet. Use the one that fits the question you're answering.
+
+| Use | When you want to | Shows |
+|---|---|---|
+| [Get a wallet statement](/api/wallets-and-balances/get-a-wallet-statement) | Reconcile a period, such as a day or month | Opening and closing balances, and each completed movement once, oldest first, with its fee, amounts and sender or recipient |
+| [List wallet transactions](/api/wallets-and-balances/list-wallet-transactions) | Trace exactly how one transaction changed your balances | Every balance change, newest first, including the hold and release steps of a payout |
+
+## Reconcile a period
+
+1. Call [Get a wallet statement](/api/wallets-and-balances/get-a-wallet-statement) with the `currency`, `dateFrom` and `dateTo` of the period. Request every page: `pagination.total_pages` tells you how many there are, and each page holds up to 50 movements.
+2. Check that the balances add up. The opening ledger balance, plus every `credit`, minus every `debit`, equals the closing ledger balance.
+3. Match each movement to your records. Use `merchantReference` for transactions you started with your own reference, such as a payout's `customerReference`. Use `reference` for everything else.
+4. Account for fees. For a collection, the balance goes up by `destinationAmount` minus `fee`, so a collection of 1,000 with a fee of 14 adds 986.
+
+<Tip>
+To compare against your own end-of-day figures, call [List wallets](/api/wallets-and-balances/list-wallets) with `dateFrom` and `dateTo`. It returns the opening and closing balances of every wallet for that period in one request.
+</Tip>
+
+## Trace one transaction
+
+Call [List wallet transactions](/api/wallets-and-balances/list-wallet-transactions) with the transaction's `reference`. A successful payout returns two entries:
+
+| Entry | `reason` | What happened |
+|---|---|---|
+| First | `payout initiated` | The amount moved from available to locked |
+| Second | `payout successful` | The amount left the ledger and locked balances |
+
+A failed payout's second entry has the reason `payout failed` and returns the amount from locked to available instead. Each entry shows all four balances before and after, so you can see the exact effect of every step.
+
+## Times and dates
+
+- Every time Fincra returns is in UTC.
+- In List wallet transactions, a date such as `2026-10-09` in `dateTo` includes the whole day. A date and time, such as `2026-10-09T12:00:00Z`, ends at that exact time, which suits syncing new entries since your last check.

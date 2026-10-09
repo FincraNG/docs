@@ -227,11 +227,10 @@ paths:
     post:
       operationId: verifyBvn
       summary: Verify a BVN
-      description: >
-        Verifies a Nigerian Bank Verification Number and returns the identity
-        details attached to it. BVN Verification must be enabled for your
-        business, and your NGN balance must cover the verification fee. Fincra
-        completes the charge only when the verification succeeds.
+      description: |
+        Checks a Nigerian Bank Verification Number (BVN) and returns the identity registered to it, such as the name, date of birth and phone number. Each successful check charges a fee to your NGN balance. Fincra holds the fee while it checks the BVN and releases it if the check fails, so you only pay for successful checks.
+
+        In sandbox, use the test BVN `22222222222`. It returns the test identity shown in the example on this page, and Fincra charges the fee to your sandbox NGN balance.
       tags: [Verification]
       requestBody:
         required: true
@@ -245,19 +244,18 @@ paths:
                   type: string
                   minLength: 11
                   maxLength: 11
-                  pattern: "^[0-9]{11}$"
-                  description: The 11-digit BVN to verify.
+                  description: The 11-digit BVN to check.
+                  example: "22222222222"
                 business:
                   type: string
-                  minLength: 24
-                  maxLength: 24
-                  description: Your Business ID.
+                  description: Your Business ID. It must be the business your secret key belongs to.
+                  example: YOUR_BUSINESS_ID
             example:
-              bvn: "54651333604"
-              business: 64f1c2a9e4b0a1b2c3d4e5f6
+              bvn: "22222222222"
+              business: YOUR_BUSINESS_ID
       responses:
         "200":
-          description: The BVN was verified.
+          description: Fincra verified the BVN and charged the fee.
           content:
             application/json:
               schema:
@@ -266,7 +264,7 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    description: Always `true` when the BVN was verified.
+                    description: Always `true` when Fincra verified the BVN.
                   message:
                     type: string
                     description: Always `Bvn verification successful`.
@@ -277,41 +275,79 @@ paths:
                 message: Bvn verification successful
                 data:
                   verificationStatus: verified
-                  message: Verification Successfull
                   response:
-                    firstName: John
-                    middleName: Doe
-                    lastName: Jane
-                    dateOfBirth: 01-Jan-2000
-                    phoneNo: "08012345678"
-                    bvn: "54651333604"
-                    watchListed: false
+                    firstName: JOHN
+                    middleName: TEST
+                    lastName: DOE
+                    gender: Female
+                    dateOfBirth: 15-Jul-2022
+                    phoneNo: "09022222222"
+                    pixBase64: JJJ..
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: BVN Verification is not enabled for your business.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CoreError"
-        "404":
-          description: Your business does not have an NGN wallet.
+          description: BVN verification isn't enabled for your business. Ask Fincra to turn it on.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CoreError"
               example:
                 success: false
-                error: NGN wallet not found
-                errorType: RESOURCE_NOT_FOUND
-        "422":
+                error: Access Denied. You're not authorized to access bvn_verification product
+                errorType: ACCESS_DENIED
+        "404":
           description: >
-            The BVN could not be verified, your NGN balance cannot cover the
-            fee or the request failed validation.
+            The `business` you sent isn't the business your secret key belongs
+            to, or your business doesn't have an NGN balance.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CoreError"
+              examples:
+                "Wrong Business ID":
+                  summary: Wrong Business ID
+                  value:
+                    success: false
+                    error: Business not found
+                    errorType: RESOURCE_NOT_FOUND
+                "No NGN balance":
+                  summary: No NGN balance
+                  value:
+                    success: false
+                    error: NGN wallet not found
+                    errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: >
+            Fincra couldn't verify the BVN, your NGN balance can't cover the
+            fee, or a field is missing or in the wrong format. When the BVN
+            can't be verified, `error` explains why and its wording can change,
+            so handle the failure by status code and `errorType`. Fincra
+            doesn't charge for a failed check.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoreError"
+              examples:
+                "BVN not verified":
+                  summary: BVN not verified
+                  value:
+                    success: false
+                    error: Unable to verify bvn
+                    errorType: UNPROCESSABLE_ENTITY
+                "Balance too low":
+                  summary: Balance too low
+                  value:
+                    success: false
+                    error: Insufficient funds in wallet
+                    errorType: NO_ENOUGH_MONEY_IN_WALLET
+                "Missing field":
+                  summary: Missing field
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. business is required
+                    errorType: VALIDATION_FAILED
+                    errors:
+                      - Error occurred during payload validation. business is required
 
   /checkout/resolve/bin/{bin}:
     get:
@@ -634,40 +670,43 @@ components:
             Fincra rejects the payout.
     BvnVerification:
       type: object
-      required: [verificationStatus]
+      required: [verificationStatus, response]
       properties:
         verificationStatus:
           type: string
           enum: [verified]
+          description: Always `verified` in a successful response.
         message:
           type: string
-          description: The verification message returned by the identity provider.
+          description: A note about the check, when there is one.
         response:
           type: object
-          additionalProperties: true
+          description: The identity registered to the BVN. Fields with no value on record are left out.
           properties:
             firstName:
               type: string
+              description: The first name on record.
             middleName:
-              type: [string, "null"]
+              type: string
+              description: The middle name on record.
             lastName:
               type: string
-            bvn:
-              type: string
+              description: The last name on record.
             gender:
-              type: [string, "null"]
+              type: string
+              description: The gender on record, such as `Female`.
             dateOfBirth:
-              type: [string, "null"]
+              type: string
+              description: The date of birth on record, in DD-Mon-YYYY format, such as `15-Jul-2022`.
             phoneNo:
-              type: [string, "null"]
+              type: string
+              description: The phone number on record.
             phoneNo2:
-              type: [string, "null"]
+              type: string
+              description: A second phone number, when there is one on record.
             pixBase64:
-              type: [string, "null"]
-            watchListed:
-              type: [boolean, "null"]
-            watchListMessage:
-              type: [string, "null"]
+              type: string
+              description: The photo on record, as a Base64-encoded image. In sandbox, this is a placeholder.
     BinDetails:
       type: object
       required: [bin, scheme, brand, country, bank, type, lengths]
