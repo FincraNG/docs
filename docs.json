@@ -97,8 +97,7 @@
               "directory": "api"
             },
             "pages": [
-              "POST /quotes/generate",
-              "GET /quotes/currencyPairs"
+              "POST /quotes/generate"
             ]
           }
         ]
