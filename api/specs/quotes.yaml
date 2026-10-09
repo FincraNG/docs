@@ -1,0 +1,302 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Quotes"
+  version: "1.0"
+  description: >
+    Get a rate quote before a cross-currency payout or a conversion, and list
+    the currency pairs you can quote. Captured from fincra-quoting-engine.
+    During the code freeze this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Quotes
+    description: Rate quotes for payouts and conversions.
+paths:
+  /quotes/generate:
+    post:
+      operationId: getQuote
+      summary: Get a quote
+      description: >
+        Returns a rate quote for a payout or a conversion between two
+        currencies. The quote holds its rate until `expireAt`, 60 seconds by
+        default. Send its `reference` as `quoteReference` when you create the
+        payout or conversion. Use `action` to fix the amount you send or the
+        amount the recipient gets.
+      tags: [Quotes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/PayoutQuote"
+                - $ref: "#/components/schemas/ConversionQuote"
+              discriminator:
+                propertyName: transactionType
+                mapping:
+                  disbursement: "#/components/schemas/PayoutQuote"
+                  conversion: "#/components/schemas/ConversionQuote"
+            examples:
+              "Payout, NGN to KES, mobile money":
+                summary: Payout, NGN to KES, mobile money
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  transactionType: disbursement
+                  action: send
+                  sourceCurrency: NGN
+                  destinationCurrency: KES
+                  amount: 50000
+                  paymentDestination: mobile_money_wallet
+                  beneficiaryType: individual
+                  feeBearer: business
+              "Payout, NGN to USD, bank account":
+                summary: Payout, NGN to USD, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  transactionType: disbursement
+                  action: receive
+                  sourceCurrency: NGN
+                  destinationCurrency: USD
+                  amount: 1000
+                  paymentDestination: bank_account
+                  paymentScheme: fed_wire
+                  beneficiaryType: corporate
+              "Conversion, NGN to USD":
+                summary: Conversion, NGN to USD
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  transactionType: conversion
+                  action: receive
+                  sourceCurrency: NGN
+                  destinationCurrency: USD
+                  amount: 1000
+      responses:
+        "200":
+          description: The quote. Use its `reference` before `expireAt`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Quote generated successfully`.
+                  data:
+                    $ref: "#/components/schemas/Quote"
+              example:
+                success: true
+                message: Quote generated successfully
+                data:
+                  reference: 9f8e7d6c-5b4a-4321-8f0e-1a2b3c4d5e6f
+                  transactionType: disbursement
+                  action: send
+                  sourceCurrency: NGN
+                  destinationCurrency: KES
+                  sourceAmount: 50000
+                  destinationAmount: 4150
+                  rate: 0.083
+                  fee: 500
+                  amountToCharge: 50500
+                  amountToReceive: 4150
+                  expireAt: "2026-10-09T10:01:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: The request failed validation, such as a decimal amount in a currency that needs whole numbers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /quotes/currencyPairs:
+    get:
+      operationId: listCurrencyPairs
+      summary: List currency pairs
+      description: >
+        Returns the currency pairs you can quote, based on the balances active
+        on your business. Each pair reads `SOURCE/DESTINATION`, such as
+        `NGN/USD`.
+      tags: [Quotes]
+      parameters:
+        - name: x-business-id
+          in: header
+          required: false
+          description: Your Business ID. Send it to list pairs for a specific business under your merchant account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The currency pairs you can quote.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Currency pairs fetched successfully`.
+                  data:
+                    type: array
+                    description: The pairs, sorted alphabetically.
+                    items:
+                      type: string
+              example:
+                success: true
+                message: Currency pairs fetched successfully
+                data: [NGN/EUR, NGN/GBP, NGN/GHS, NGN/KES, NGN/USD]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Always `Unauthorized`.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+  schemas:
+    QuoteBase:
+      type: object
+      required: [business, action, sourceCurrency, destinationCurrency, amount]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your Business ID. It must belong to your merchant account.
+        action:
+          type: string
+          enum: [send, receive]
+          description: >
+            `send` fixes the amount you send, in `sourceCurrency`. `receive`
+            fixes the amount the recipient gets, in `destinationCurrency`.
+        sourceCurrency:
+          type: string
+          description: The currency you send from, such as `NGN`.
+        destinationCurrency:
+          type: string
+          description: The currency you want to end up with, such as `USD`.
+        amount:
+          type: number
+          description: >
+            The amount in the currency `action` fixes. Must be a whole number
+            for RWF, UGX, XAF and XOF.
+        feeBearer:
+          type: string
+          enum: [business, customer]
+          description: Who pays the fee.
+    PayoutQuote:
+      title: For a payout
+      allOf:
+        - $ref: "#/components/schemas/QuoteBase"
+        - type: object
+          required: [transactionType]
+          properties:
+            transactionType:
+              type: string
+              enum: [disbursement]
+              description: Quote a payout.
+            paymentDestination:
+              type: string
+              enum: [bank_account, mobile_money_wallet]
+              description: Where the payout goes. Send the same value you'll use in the payout.
+            paymentScheme:
+              type: string
+              enum: [sepa, sepa_instant, chaps, fps, swift, ach, fed_wire, cnaps, eft, interac]
+              description: The payment rail for international bank payouts. Send the same value you'll use in the payout.
+            beneficiaryType:
+              type: string
+              enum: [individual, corporate]
+              description: Whether the beneficiary is a person or a business.
+    ConversionQuote:
+      title: For a conversion
+      allOf:
+        - $ref: "#/components/schemas/QuoteBase"
+        - type: object
+          required: [transactionType]
+          properties:
+            transactionType:
+              type: string
+              enum: [conversion]
+              description: Quote a conversion between your balances.
+    Quote:
+      type: object
+      properties:
+        reference:
+          type: string
+          description: The quote reference. Send it as `quoteReference` before `expireAt`.
+        transactionType:
+          type: string
+          description: "`disbursement` or `conversion`, as requested."
+        action:
+          type: string
+          description: "`send` or `receive`, as requested."
+        sourceCurrency:
+          type: string
+          description: The currency you send from.
+        destinationCurrency:
+          type: string
+          description: The currency you end up with.
+        sourceAmount:
+          type: number
+          description: The amount in `sourceCurrency`, before fees.
+        destinationAmount:
+          type: number
+          description: The amount in `destinationCurrency`.
+        rate:
+          type: number
+          description: The exchange rate applied.
+        fee:
+          type: number
+          description: Fincra's fee for the transaction.
+        amountToCharge:
+          type: number
+          description: The total Fincra debits from your balance, including the fee when your business pays it.
+        amountToReceive:
+          type: number
+          description: The amount the recipient gets.
+        expireAt:
+          type: string
+          format: date-time
+          description: When the quote expires, in UTC. Use it before this time.
+        settlementDate:
+          type: string
+          format: date-time
+          description: When the converted funds settle. Returned for conversions.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.

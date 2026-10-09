@@ -89,6 +89,17 @@
               "POST /disbursements/payouts/wallets",
               "POST /disbursements/payouts/documents-upload"
             ]
+          },
+          {
+            "group": "Quotes",
+            "openapi": {
+              "source": "api/specs/quotes.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /quotes/generate",
+              "GET /quotes/currencyPairs"
+            ]
           }
         ]
       }
