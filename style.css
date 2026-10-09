@@ -27,3 +27,14 @@ html.dark .card {
 html.dark .card [data-component-part="card-icon"] svg {
   background-color: #FFFFFF;
 }
+
+/* Divider between Products and the last sidebar section, matching Mintlify's group dividers. */
+.sidebar-group:has(> li[id="/developer-tools/overview"]) {
+  border-top: 1px solid rgb(238, 242, 240);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+html.dark .sidebar-group:has(> li[id="/developer-tools/overview"]) {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
