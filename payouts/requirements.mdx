@@ -1,0 +1,47 @@
+---
+title: "Requirements"
+description: "What each payout needs, by destination currency."
+keywords: ["payout requirements", "corridors", "beneficiary", "mobile money", "bank account", "quote"]
+mode: "wide"
+---
+
+Every payout needs the same basic fields: `business`, `sourceCurrency`, `destinationCurrency`, `amount`, `customerReference`, `paymentDestination` and `beneficiary`. This page lists what each destination currency needs on top of those, for payouts sent from an NGN balance.
+
+## By destination currency
+
+<div className="boxed-table">
+| NGN to | Destinations | Quote | Payment scheme | Beneficiary type | Also send |
+|---|---|---|---|---|---|
+| NGN | Bank account | Not needed | | Individual or corporate | 10-digit `accountNumber`, `bankCode` and `accountHolderName` |
+| GHS | Bank account, mobile money | Required | | Individual or corporate | Bank: `bankCode` and `country`. Mobile money: see [Mobile money](#mobile-money) |
+| KES, UGX, TZS, ZMW, XAF, XOF | Bank account, mobile money | Required | | Individual or corporate | Bank: `bankCode` or `bankSwiftCode`, `bankName` and `country`. Mobile money: see [Mobile money](#mobile-money) |
+| ZAR | Bank account, mobile money | Required | | Individual or corporate | Bank: `bankCode` and `country` |
+| EUR | Bank account | Required | `sepa` or `sepa_instant` | Individual or corporate | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
+| GBP | Bank account | Required | `fps` or `chaps` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
+| USD | Bank account | Required | `ach`, `fed_wire` or `swift` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName`, a full `address`, `customerName` and `files` |
+| CAD | Bank account | Required | `eft` or `interac` | Individual or corporate | For Interac, `interacEmail` |
+| CNY, CNH | Bank account | Required | `cnaps` | Individual or corporate | `bankName`, `bankSwiftCode` and a full `address` |
+</div>
+
+## Quotes
+
+When the source and destination currencies differ, get a quote first and send its reference as `quoteReference`. Without it, Fincra rejects the payout with `Quote Reference not specified, Kindly generate a quote first to continue.`
+
+## Mobile money
+
+<div className="boxed-table">
+| Beneficiary type | Send |
+|---|---|
+| Individual | `firstName`, `lastName`, `country`, `accountNumber` (the phone number) and `mobileMoneyCode` |
+| Corporate | `accountHolderName`, `country`, `accountNumber` (the phone number) and `mobileMoneyCode` |
+</div>
+
+Fincra checks that the phone number matches the beneficiary's country. When the source and destination currencies are the same, most mobile money payouts must be whole numbers.
+
+## Amounts
+
+Send RWF, UGX, XAF and XOF amounts as whole numbers. Other currencies accept up to 2 decimal places.
+
+## Senders for USD, EUR, GBP and CNY
+
+Payouts in these currencies can include a `senderId`, the ID of a sender you registered with Fincra. The sender must belong to your business and be approved. USD, EUR and GBP payouts need a corporate sender. CNY payouts accept individual senders.

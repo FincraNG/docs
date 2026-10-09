@@ -28,7 +28,13 @@
             "group": "Products",
             "pages": [
               "payments/overview",
-              "payouts/overview",
+              {
+                "group": "Payouts",
+                "pages": [
+                  "payouts/overview",
+                  "payouts/requirements"
+                ]
+              },
               "virtual-accounts/overview",
               "fx-and-conversion/overview",
               "wallets-and-balances/overview",
