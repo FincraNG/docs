@@ -11,92 +11,24 @@
     "anchors": [
       {
         "anchor": "Home",
+        "icon": "house",
         "pages": [
-          "index"
-        ]
-      },
-      {
-        "anchor": "Quickstart",
-        "pages": [
-          "quickstart/create-a-sandbox-account",
-          "quickstart/get-your-api-keys"
-        ]
-      },
-      {
-        "anchor": "Payments",
-        "pages": [
-          "payments/overview"
-        ]
-      },
-      {
-        "anchor": "Payouts",
-        "pages": [
-          "payouts/overview"
-        ]
-      },
-      {
-        "anchor": "Virtual Accounts",
-        "pages": [
-          "virtual-accounts/overview"
-        ]
-      },
-      {
-        "anchor": "FX and Conversion",
-        "pages": [
-          "fx-and-conversion/overview"
-        ]
-      },
-      {
-        "anchor": "Wallets and Balances",
-        "pages": [
-          "wallets-and-balances/overview"
-        ]
-      },
-      {
-        "anchor": "Direct Debit",
-        "pages": [
-          "direct-debit/overview"
-        ]
-      },
-      {
-        "anchor": "Issuing",
-        "pages": [
-          "issuing/overview"
-        ]
-      },
-      {
-        "anchor": "Verification",
-        "pages": [
-          "verification/overview"
+          "index",
+          {
+            "group": "Quickstart",
+            "pages": [
+              "quickstart/create-a-sandbox-account",
+              "quickstart/get-your-api-keys"
+            ]
+          }
         ]
       },
       {
         "anchor": "Developer tools",
+        "icon": "wrench",
         "pages": [
           "developer-tools/overview",
           "developer-tools/api"
-        ]
-      },
-      {
-        "anchor": "API reference",
-        "pages": [
-          "api-reference/overview"
-        ]
-      },
-      {
-        "anchor": "Changelog",
-        "pages": [
-          "changelog"
-        ]
-      },
-      {
-        "anchor": "Support",
-        "href": "mailto:support@fincra.com"
-      },
-      {
-        "anchor": "Glossary",
-        "pages": [
-          "glossary"
         ]
       }
     ]
