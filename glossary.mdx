@@ -1,4 +1,30 @@
 ---
 title: "Glossary"
-description: "The terms used in this documentation and what they mean."
+description: "The terms used in this documentation and what they mean at Fincra."
+keywords: ["glossary", "terms", "definitions", "wallet", "collection", "virtual account", "payout", "BVN", "NUBAN"]
 ---
+
+- **Available balance**: The money in a wallet that you can use now, for payouts, conversions and fees. See [Wallets and Balances](/wallets-and-balances/overview).
+- **Beneficiary**: A person or business you send payouts to. You can save beneficiaries so you don't collect their details every time. See [Beneficiaries](/payouts/beneficiaries).
+- **Business ID**: Fincra's ID for your business. Some requests need it, and [Get business details](/api/business/get-business-details) returns it as `_id`. Sandbox and production have different Business IDs.
+- **BVN**: Bank Verification Number. An 11-digit number that identifies a person across Nigerian banks. Fincra uses it to verify people and to open NGN virtual accounts. See [Verify a BVN](/api/verification/verify-a-bvn).
+- **Chargeback**: A dispute a cardholder raises with their bank about a card payment. You accept it, or reject it with proof. See [Chargebacks](/api/payments/chargebacks/list-chargebacks).
+- **Collection**: Fincra's record of money you received, whichever way it came in: a virtual account, checkout, card or mobile money. See [When money arrives](/when-money-arrives).
+- **Conversion**: Exchanging money from a wallet in one currency to a wallet in another. See [Create a conversion](/api/conversions/create-a-conversion).
+- **Customer reference**: Your own reference for a payout or conversion, sent as `customerReference`. Fincra accepts each one once, so you can safely retry a request with the same reference.
+- **Ledger balance**: The total money in a wallet: available, locked and rolling reserve together.
+- **Locked balance**: Money in a wallet you can't use yet. It holds payouts that are still in progress, and incoming money Fincra hasn't released to your available balance.
+- **Merchant reference**: Your own reference on a virtual account or checkout payment, sent as `merchantReference`. Use it to find the account or payment later.
+- **Mobile money**: A wallet tied to a phone number, such as M-Pesa or Airtel Money, that people use to send and receive money. Fincra pays out to and collects from mobile money in several African countries.
+- **NUBAN**: Nigeria Uniform Bank Account Number. The 10-digit account number every Nigerian bank account has.
+- **Payout**: Money you send from a wallet to a bank account or mobile money wallet. See [Payouts](/payouts/overview).
+- **Production**: The live environment, where real money moves. It has its own base URL, secret key and Business ID.
+- **Quote**: A locked exchange rate for a cross-currency payout or conversion. It expires after a short time. See [Get a quote](/api/quotes/get-a-quote).
+- **Reference**: Fincra's own ID for a transaction, sent back as `reference`. It's the same in the API response, the webhook and your wallet transactions, so use it to match them.
+- **Refund**: Sending a collection's money back to the person who paid it. See [Initiate a refund](/api/payments/refunds/initiate-a-refund).
+- **Rolling reserve balance**: Part of your card payments that Fincra holds as a reserve and releases to your available balance later. It's zero unless a reserve applies to your business.
+- **Sandbox**: The test environment, where no real money moves. Use it to build and test your integration before you go live.
+- **Secret key**: The key that authenticates your API requests, sent in the `api-key` header. Keep it on your server, never in a browser or mobile app. See [Authentication](/api/authentication).
+- **Virtual account**: A real account number you give to someone who pays you. Money sent to it arrives in your wallet. Permanent accounts keep working; temporary accounts expire after the time you set. See [Virtual Accounts](/virtual-accounts/overview).
+- **Wallet**: Where your money in one currency lives. Fincra creates a wallet for each currency your business can use. See [Wallets and Balances](/wallets-and-balances/overview).
+- **Webhook**: A message Fincra sends to your server when something happens, such as a collection succeeding or a payout failing. See [Webhooks](/api/webhooks).
