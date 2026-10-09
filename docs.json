@@ -16,6 +16,19 @@
           "quickstart/create-a-sandbox-account",
           "quickstart/send-your-first-api-request"
         ]
+      },
+      {
+        "group": "Products",
+        "pages": [
+          "payments/overview",
+          "payouts/overview",
+          "virtual-accounts/overview",
+          "fx-and-conversion/overview",
+          "wallets-and-balances/overview",
+          "direct-debit/overview",
+          "issuing/overview",
+          "verification/overview"
+        ]
       }
     ]
   },
