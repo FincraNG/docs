@@ -37,6 +37,23 @@
       "glossary"
     ]
   },
+  "navbar": {
+    "links": [
+      {
+        "label": "API Reference",
+        "href": "/api-reference/overview"
+      },
+      {
+        "label": "Log in",
+        "href": "https://app.fincra.com/auth/login"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get started in sandbox",
+      "href": "https://app.fincra.com/auth/signup"
+    }
+  },
   "contextual": {
     "options": [
       "copy",
