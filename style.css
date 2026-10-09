@@ -63,7 +63,8 @@ html[data-current-path^="/api/"] li.navbar-link:has(> a[href="/api/introduction"
 }
 
 /* API Reference introduction: base URL table in a bordered box, after the Airwallex benchmark. */
-.base-url-table table {
+.base-url-table table,
+.boxed-table table {
   margin: 0;
   width: 100%;
   border: 1px solid rgb(232, 234, 237);
@@ -73,19 +74,24 @@ html[data-current-path^="/api/"] li.navbar-link:has(> a[href="/api/introduction"
   overflow: hidden;
 }
 
-.base-url-table th {
+.base-url-table th,
+.boxed-table th {
   background: rgb(246, 247, 249);
 }
 
 .base-url-table th,
-.base-url-table td {
+.base-url-table td,
+.boxed-table th,
+.boxed-table td {
   padding: 12px 16px;
 }
 
-html.dark .base-url-table table {
+html.dark .base-url-table table,
+.boxed-table table {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-html.dark .base-url-table th {
+html.dark .base-url-table th,
+.boxed-table th {
   background: rgba(255, 255, 255, 0.04);
 }
