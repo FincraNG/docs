@@ -47,7 +47,8 @@
       {
         "tab": "API Reference",
         "pages": [
-          "api/introduction"
+          "api/introduction",
+          "api/authentication"
         ]
       }
     ]

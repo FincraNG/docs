@@ -1,0 +1,43 @@
+---
+title: "Authentication"
+description: "Authenticate every request with your secret key in the api-key header."
+keywords: ["authentication", "api-key", "secret key", "public key", "webhook key", "401"]
+---
+
+Fincra authenticates every request with your secret key. Send it in the `api-key` header. Requests without a valid key fail.
+
+<Panel>
+  ```bash Authenticated request
+  curl https://sandboxapi.fincra.com/profile/business/me \
+    -H "api-key: {{SECRET_KEY}}" \
+    -H "accept: application/json"
+  ```
+
+  ```json 401 Unauthorized
+  {
+    "message": "Unauthorized",
+    "request_id": "5519f326100b3e2529a55b7e32bf0a64"
+  }
+  ```
+</Panel>
+
+## Your keys
+
+Each environment, sandbox and production, has its own set of keys. Find them in the dashboard under **My Account** > **API Keys & Webhooks**.
+
+| Key | How you use it | Where it belongs |
+|---|---|---|
+| Secret key | Send it in the `api-key` header of every API request | Your server only. Fincra shows it once, when you generate it |
+| Public key | Send it in the `x-pub-key` header when you start a checkout payment from your website or app | Safe to use in browser code |
+| Webhook key | Use it to verify that a webhook came from Fincra | Your server only |
+
+## When authentication fails
+
+Fincra returns HTTP `401 Unauthorized` when the key is missing, wrong or from the other environment. For example, a sandbox key sent to the production base URL fails.
+
+The response includes a `request_id`. Include it when you contact support, so Fincra can find your request.
+
+## Keep your keys safe
+
+- Store your keys in environment variables. Never put your secret key or webhook key in code, browser code or version control.
+- Generating a new secret key stops the old key immediately. Update every system that uses the key before you generate a new one.
