@@ -23,24 +23,3 @@ Start in sandbox. It works like production but moves no real money. When your in
     -H "api-key: {{SECRET_KEY}}"
   ```
 </Panel>
-
-## Environments
-
-| Environment | Base URL | Use it to |
-|---|---|---|
-| Sandbox | `https://sandboxapi.fincra.com` | Build and test your integration |
-| Production | `https://api.fincra.com` | Move real money |
-
-Each environment has its own secret key. Use your sandbox key with the sandbox base URL and your production key with the production base URL.
-
-## Authentication
-
-Send your secret key in the `api-key` header of every request. You generate the key in the dashboard under **My Account** > **API Keys & Webhooks**. [Create a sandbox account](/quickstart/create-a-sandbox-account#generate-your-api-keys) shows the steps.
-
-Keep your secret key on your server. Anyone with it can make requests as your business.
-
-## Start here
-
-<Card title="Send your first API request" href="/quickstart/send-your-first-api-request">
-  Confirm your key works with one read-only request.
-</Card>
