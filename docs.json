@@ -29,7 +29,12 @@
           "issuing/overview",
           "verification/overview"
         ]
-      }
+      },
+      "developer-tools/overview",
+      "api-reference/overview",
+      "changelog",
+      "support",
+      "glossary"
     ]
   },
   "contextual": {
