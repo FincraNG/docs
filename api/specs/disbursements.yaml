@@ -30,7 +30,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePayout"
+              oneOf:
+                - $ref: "#/components/schemas/BankAccountPayout"
+                - $ref: "#/components/schemas/MobileMoneyPayout"
+              discriminator:
+                propertyName: paymentDestination
+                mapping:
+                  bank_account: "#/components/schemas/BankAccountPayout"
+                  mobile_money_wallet: "#/components/schemas/MobileMoneyPayout"
             examples:
               "NGN to NGN, bank account":
                 summary: NGN to NGN, bank account
@@ -527,9 +534,9 @@ components:
         data:
           type: object
           description: The payout.
-    CreatePayout:
+    PayoutBase:
       type: object
-      required: [business, sourceCurrency, destinationCurrency, amount, customerReference, paymentDestination, beneficiary]
+      required: [business, sourceCurrency, destinationCurrency, amount, customerReference]
       properties:
         business:
           type: string
@@ -541,7 +548,7 @@ components:
           description: The currency of the balance Fincra debits, such as `NGN`.
         destinationCurrency:
           type: string
-          description: The currency the beneficiary receives, such as `NGN`.
+          description: The currency the beneficiary receives, such as `KES`.
         amount:
           type: number
           description: >
@@ -553,14 +560,6 @@ components:
         customerReference:
           type: string
           description: Your unique reference for this payout. Fincra accepts each reference once.
-        paymentDestination:
-          type: string
-          enum: [bank_account, mobile_money_wallet]
-          description: Where the money goes.
-        paymentScheme:
-          type: string
-          enum: [sepa, sepa_instant, chaps, fps, swift, ach, fed_wire, cnaps, eft, interac]
-          description: The payment rail to use for international bank payouts, such as `sepa` for EUR.
         quoteReference:
           type: string
           description: The reference of a rate quote. Required when `sourceCurrency` and `destinationCurrency` differ. Get a quote first.
@@ -568,8 +567,6 @@ components:
           type: string
           enum: [business, customer]
           description: Who pays the fee for this payout.
-        beneficiary:
-          $ref: "#/components/schemas/Beneficiary"
         sender:
           $ref: "#/components/schemas/Sender"
         purposeOfFund:
@@ -580,82 +577,109 @@ components:
           type: string
           enum: [self, parents, child, siblings, other_relatives, spouse, ex_spouse, vendor, supplier, employee, friends, business_partner, customer, agent, creditor, debtor, subsidiary_company, branch_office, holding_company, franchisee]
           description: How the sender is related to the beneficiary.
-        customerName:
-          type: string
-          description: The name of your customer the payout is for. Required when `destinationCurrency` is `USD`.
-        files:
-          oneOf:
-            - type: string
-            - type: array
-              items:
-                type: string
-          description: A supporting document URL, or a list of them, such as an invoice. Required when `destinationCurrency` is `USD`.
-        additionalInfo:
-          type: string
-          description: Extra details for the payout. Used when `destinationCurrency` is `USD`.
-        correspondent:
-          type: object
-          description: The correspondent bank. Used when `destinationCurrency` is `USD`.
+    BankAccountPayout:
+      title: Bank account
+      allOf:
+        - $ref: "#/components/schemas/PayoutBase"
+        - type: object
+          required: [paymentDestination, beneficiary]
           properties:
-            bankName:
+            paymentDestination:
               type: string
-              description: The correspondent bank's name.
-            bankSwiftCode:
+              enum: [bank_account]
+              description: Send to a bank account.
+            paymentScheme:
               type: string
-              description: The correspondent bank's SWIFT code.
-        intermediary:
-          type: object
-          description: The intermediary bank. Used when `destinationCurrency` is `USD`.
+              enum: [sepa, sepa_instant, chaps, fps, swift, ach, fed_wire, cnaps, eft, interac]
+              description: The payment rail for international bank payouts, such as `sepa` for EUR. See the Requirements page for each currency.
+            beneficiary:
+              $ref: "#/components/schemas/BankAccountBeneficiary"
+            customerName:
+              type: string
+              description: The name of your customer the payout is for. Required when `destinationCurrency` is `USD`.
+            files:
+              oneOf:
+                - type: string
+                - type: array
+                  items:
+                    type: string
+              description: A supporting document URL, or a list of them, such as an invoice. Required when `destinationCurrency` is `USD`.
+            additionalInfo:
+              type: string
+              description: Extra details for the payout. Used when `destinationCurrency` is `USD`.
+            correspondent:
+              type: object
+              description: The correspondent bank. Used when `destinationCurrency` is `USD`.
+              properties:
+                bankName:
+                  type: string
+                  description: The correspondent bank's name.
+                bankSwiftCode:
+                  type: string
+                  description: The correspondent bank's SWIFT code.
+            intermediary:
+              type: object
+              description: The intermediary bank. Used when `destinationCurrency` is `USD`.
+              properties:
+                bankName:
+                  type: string
+                  description: The intermediary bank's name.
+                bankAddress:
+                  type: string
+                  description: The intermediary bank's address.
+    MobileMoneyPayout:
+      title: Mobile money
+      allOf:
+        - $ref: "#/components/schemas/PayoutBase"
+        - type: object
+          required: [paymentDestination, beneficiary]
           properties:
-            bankName:
+            paymentDestination:
               type: string
-              description: The intermediary bank's name.
-            bankAddress:
-              type: string
-              description: The intermediary bank's address.
-    Beneficiary:
+              enum: [mobile_money_wallet]
+              description: Send to a mobile money wallet.
+            beneficiary:
+              $ref: "#/components/schemas/MobileMoneyBeneficiary"
+    BankAccountBeneficiary:
       type: object
       description: >
         The person or business receiving the payout. Payouts in USD and GBP
         must go to a `corporate` beneficiary.
-      required: [type]
+      required: [type, accountHolderName, accountNumber]
       properties:
         type:
           type: string
           enum: [individual, corporate]
           description: Whether the beneficiary is a person or a business.
+        accountHolderName:
+          type: string
+          description: The name on the bank account.
+        accountNumber:
+          type: string
+          description: >
+            The bank account number or IBAN. NGN accounts use the 10-digit
+            NUBAN. Interac payouts use `interacEmail` instead.
         firstName:
           type: string
           description: The beneficiary's first name. Required when `type` is `individual`.
         lastName:
           type: string
           description: The beneficiary's last name.
-        accountHolderName:
-          type: string
-          description: The name on the bank account. Required when `paymentDestination` is `bank_account`.
-        accountNumber:
-          type: string
-          description: >
-            The bank account number or mobile money number. Required, except
-            for Interac payouts, which use `interacEmail`.
         bankCode:
           type: string
-          description: The beneficiary's bank code, such as `044`.
-        bankName:
-          type: string
-          description: The beneficiary's bank name. Required when `destinationCurrency` is `CNY` or `CNH`.
+          description: The beneficiary's bank code, such as `305`. Send `bankCode` or `bankSwiftCode`.
         bankSwiftCode:
           type: string
           description: The beneficiary bank's SWIFT code. Required when `destinationCurrency` is `CNY` or `CNH`.
+        bankName:
+          type: string
+          description: The beneficiary's bank name. Required when `destinationCurrency` is `CNY` or `CNH`.
         sortCode:
           type: string
           description: The UK sort code, for GBP payouts.
-        mobileMoneyCode:
-          type: string
-          description: The mobile money operator code. Used when `paymentDestination` is `mobile_money_wallet`.
         country:
           type: string
-          description: The beneficiary's country, as a two-letter ISO 3166-1 code.
+          description: The beneficiary's country, as a two-letter ISO 3166-1 code. Required for GHS and ZAR.
         email:
           type: string
           format: email
@@ -694,6 +718,37 @@ components:
         incorporationCountry:
           type: string
           description: The country the company is registered in. Used when `type` is `corporate`.
+    MobileMoneyBeneficiary:
+      type: object
+      description: The person or business receiving the payout in their mobile money wallet.
+      required: [type, accountNumber, mobileMoneyCode, country]
+      properties:
+        type:
+          type: string
+          enum: [individual, corporate]
+          description: Whether the beneficiary is a person or a business.
+        accountNumber:
+          type: string
+          description: The mobile money phone number, with the country code, such as `254731234567`. Fincra checks it matches `country`.
+        mobileMoneyCode:
+          type: string
+          description: The mobile money operator code, such as `AIRTEL`.
+        country:
+          type: string
+          description: The beneficiary's country, as a two-letter ISO 3166-1 code.
+        firstName:
+          type: string
+          description: The beneficiary's first name. Required when `type` is `individual`.
+        lastName:
+          type: string
+          description: The beneficiary's last name. Required when `type` is `individual`.
+        accountHolderName:
+          type: string
+          description: The name on the wallet. Required when `type` is `corporate`.
+        email:
+          type: string
+          format: email
+          description: The beneficiary's email address.
     Sender:
       type: object
       description: The person or business sending the money, when the corridor needs sender details.
