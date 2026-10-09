@@ -186,6 +186,56 @@ paths:
                     bankSwiftCode: NWBKGB2L
                     bankName: NatWest Bank
                     country: GB
+              "GHS to GHS, mobile money":
+                summary: GHS to GHS, mobile money
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: GHS
+                  destinationCurrency: GHS
+                  amount: 500
+                  customerReference: payout-ghs-ghs-mobile-money
+                  paymentDestination: mobile_money_wallet
+                  beneficiary:
+                    type: individual
+                    firstName: Ama
+                    lastName: Boateng
+                    accountNumber: "233541234567"
+                    mobileMoneyCode: AIRTEL
+                    country: GH
+              "GHS to NGN, bank account":
+                summary: GHS to NGN, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: GHS
+                  destinationCurrency: NGN
+                  amount: 500
+                  customerReference: payout-ghs-ngn-bank
+                  paymentDestination: bank_account
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  beneficiary:
+                    type: individual
+                    firstName: Grace
+                    lastName: Okoro
+                    accountHolderName: Grace Okoro
+                    accountNumber: "0987654321"
+                    bankCode: "305"
+                    country: NG
+              "KES to KES, mobile money":
+                summary: KES to KES, mobile money
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: KES
+                  destinationCurrency: KES
+                  amount: 1000
+                  customerReference: payout-kes-kes-mobile-money
+                  paymentDestination: mobile_money_wallet
+                  beneficiary:
+                    type: individual
+                    firstName: Mary
+                    lastName: Atieno
+                    accountNumber: "254731234567"
+                    mobileMoneyCode: AIRTEL
+                    country: KE
       responses:
         "200":
           description: Fincra accepted the payout. Track the final status with a webhook or by fetching the payout.

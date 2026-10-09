@@ -1,31 +1,46 @@
 ---
 title: "Requirements"
-description: "What each payout needs, by destination currency."
+description: "Where you can send payouts from and to, and what each destination currency needs."
 keywords: ["payout requirements", "corridors", "beneficiary", "mobile money", "bank account", "quote"]
 mode: "wide"
 ---
 
-Every payout needs the same basic fields: `business`, `sourceCurrency`, `destinationCurrency`, `amount`, `customerReference`, `paymentDestination` and `beneficiary`. This page lists what each destination currency needs on top of those, for payouts sent from an NGN balance.
+Every payout needs the same basic fields: `business`, `sourceCurrency`, `destinationCurrency`, `amount`, `customerReference`, `paymentDestination` and `beneficiary`. This page shows which balances can send where, and what each destination currency needs on top of those basic fields.
+
+## Where you can send from
+
+Most balances can pay out to the same destination currencies: NGN, GHS, KES, UGX, TZS, ZMW, XAF, XOF, ZAR, EUR, GBP, USD, CAD, CNY and CNH. This applies to NGN, GHS, KES, UGX, TZS, ZMW, XAF, XOF, ZAR, EGP, EUR, GBP, USD, CAD, CNY and CNH balances.
+
+These balances are different:
+
+<div className="boxed-table">
+| Balance | Can pay out to |
+|---|---|
+| MWK | MWK only |
+| MZN | MZN only |
+| CDF | USD only |
+| RWF | Not available for payouts |
+</div>
 
 ## By destination currency
 
 <div className="boxed-table">
-| NGN to | Destinations | Quote | Payment scheme | Beneficiary type | Also send |
-|---|---|---|---|---|---|
-| NGN | Bank account | Not needed | | Individual or corporate | 10-digit `accountNumber`, `bankCode` and `accountHolderName` |
-| GHS | Bank account, mobile money | Required | | Individual or corporate | Bank: `bankCode` and `country`. Mobile money: see [Mobile money](#mobile-money) |
-| KES, UGX, TZS, ZMW, XAF, XOF | Bank account, mobile money | Required | | Individual or corporate | Bank: `bankCode` or `bankSwiftCode`, `bankName` and `country`. Mobile money: see [Mobile money](#mobile-money) |
-| ZAR | Bank account, mobile money | Required | | Individual or corporate | Bank: `bankCode` and `country` |
-| EUR | Bank account | Required | `sepa` or `sepa_instant` | Individual or corporate | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
-| GBP | Bank account | Required | `fps` or `chaps` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
-| USD | Bank account | Required | `ach`, `fed_wire` or `swift` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName`, a full `address`, `customerName` and `files` |
-| CAD | Bank account | Required | `eft` or `interac` | Individual or corporate | For Interac, `interacEmail` |
-| CNY, CNH | Bank account | Required | `cnaps` | Individual or corporate | `bankName`, `bankSwiftCode` and a full `address` |
+| To | Destinations | Payment scheme | Beneficiary type | Also send |
+|---|---|---|---|---|
+| NGN | Bank account | | Individual or corporate | 10-digit `accountNumber`, `bankCode` and `accountHolderName` |
+| GHS | Bank account, mobile money | | Individual or corporate | Bank: `bankCode` and `country`. Mobile money: see [Mobile money](#mobile-money) |
+| KES, UGX, TZS, ZMW, XAF, XOF | Bank account, mobile money | | Individual or corporate | Bank: `bankCode` or `bankSwiftCode`, `bankName` and `country`. Mobile money: see [Mobile money](#mobile-money) |
+| ZAR | Bank account, mobile money | | Individual or corporate | Bank: `bankCode` and `country` |
+| EUR | Bank account | `sepa` or `sepa_instant` | Individual or corporate | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
+| GBP | Bank account | `fps` or `chaps` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
+| USD | Bank account | `ach`, `fed_wire` or `swift` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName`, a full `address`, `customerName` and `files` |
+| CAD | Bank account | `eft` or `interac` | Individual or corporate | For Interac, `interacEmail` |
+| CNY, CNH | Bank account | `cnaps` | Individual or corporate | `bankName`, `bankSwiftCode` and a full `address` |
 </div>
 
 ## Quotes
 
-When the source and destination currencies differ, get a quote first and send its reference as `quoteReference`. Without it, Fincra rejects the payout with `Quote Reference not specified, Kindly generate a quote first to continue.`
+A payout in the same currency as your balance, such as GHS to GHS, needs no quote. When the currencies differ, such as GHS to NGN, get a quote first and send its reference as `quoteReference`. Without it, Fincra rejects the payout with `Quote Reference not specified, Kindly generate a quote first to continue.`
 
 ## Mobile money
 
