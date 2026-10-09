@@ -1,0 +1,62 @@
+---
+title: "When money arrives"
+description: "What happens after a customer pays you, through a virtual account, checkout, card or mobile money."
+keywords: ["collection", "collection webhook", "pending review", "additional information", "RFI", "fees", "settlement"]
+---
+
+Whichever way a customer pays you, through a [virtual account](/virtual-accounts/overview), a checkout, a card or mobile money, Fincra records the money as a **collection**. Every collection follows the same steps and sends the same webhooks, so you handle incoming money one way.
+
+## What happens
+
+1. Fincra receives the money and creates a collection, with its own `reference`.
+2. Fincra checks it. Most collections pass straight away. Some need a review first. See [When Fincra reviews a collection](#when-fincra-reviews-a-collection).
+3. Fincra credits your wallet in that currency with the amount minus its fee, and sends the `collection.successful` webhook.
+
+If the payment doesn't go through, the status is `failed`, Fincra credits nothing and sends `collection.failed`.
+
+## Webhook events
+
+| Event | When Fincra sends it | What to do |
+|---|---|---|
+| `collection.successful` | Fincra credited your wallet | Give your customer what they paid for |
+| `collection.additional-info-requested` | Fincra needs answers before it can credit the money | [Answer the questions](#when-fincra-reviews-a-collection) |
+| `collection.failed` | The payment failed or Fincra declined it after review | Don't fulfil the order. Nothing was credited |
+
+Each webhook's `data` includes the collection's `reference`. Use it with [Get a collection by reference](/api/collections/get-a-collection-by-reference) to confirm the status before you act.
+
+## Fees and amounts
+
+| Field | Meaning |
+|---|---|
+| `sourceAmount` | What the customer sent |
+| `sourceFee` | Fincra's fee |
+| `destinationAmountSettled` | What Fincra credits to your wallet: the amount minus the fee |
+
+For example, a transfer of EUR 200 with a fee of EUR 10 credits EUR 190. Card payments go to your wallet's locked balance first, and Fincra moves them to your available balance when it settles them. See [Wallets and Balances](/wallets-and-balances/overview).
+
+## When Fincra reviews a collection
+
+Fincra reviews some collections before it credits them, for example large payments in some currencies. The collection's status is `pending`, and Fincra sends `collection.additional-info-requested`.
+
+1. Call [Get requested information](/api/collections/get-requested-information) with the collection's `id` to see Fincra's questions, such as "Source of the funds".
+2. Answer each one with [Respond to requested information](/api/collections/respond-to-requested-information). Send the question's `id` as `additionalInfoId`, and your answer as `text`, `urls` or both. You can answer each question once.
+3. When you've answered them all, the collection's `pendingAdditionalInfoCount` is `0`. Fincra reviews your answers, then credits the money and sends `collection.successful`, or declines it and sends `collection.failed`.
+
+## Find a collection
+
+| To find | Use |
+|---|---|
+| All money you received | [List collections](/api/collections/list-collections) |
+| Every transfer into one virtual account | [List collections](/api/collections/list-collections) with `virtualAccount` |
+| The collection from a webhook | [Get a collection by reference](/api/collections/get-a-collection-by-reference) |
+| A checkout payment, by your reference | [Get a collection by your reference](/api/collections/get-a-collection-by-your-reference) |
+
+To reconcile collections with your wallet, use the `reference`: it matches your [wallet transactions](/wallets-and-balances/reconcile).
+
+## Test in sandbox
+
+Use [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection) to make each outcome happen:
+
+- Any normal amount: `collection.successful`.
+- An amount of `999`: `collection.failed`.
+- 10,000 or more in EUR or CAD: the collection is held for review and Fincra sends `collection.additional-info-requested`, so you can test answering questions.

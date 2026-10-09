@@ -1,0 +1,737 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Collections"
+  version: "1.0"
+  description: >
+    A collection is Fincra's record of money you received, whichever way it
+    came in: a transfer to a virtual account, a checkout payment, a card or
+    mobile money. Captured from fincra-collections. During the code freeze
+    this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Collections
+    description: Money you received, from any payment method.
+paths:
+  /collections:
+    get:
+      operationId: listCollections
+      summary: List collections
+      description: |
+        Returns the money you received, newest first, from every payment method: virtual accounts, bank transfers, cards and mobile money.
+
+        To see every transfer into one virtual account, filter by `virtualAccount` with the account's `_id`.
+      tags: [Collections]
+      x-codeSamples:
+        - lang: bash
+          label: cURL
+          source: |
+            curl --request GET \
+              --url 'https://sandboxapi.fincra.com/collections?business=YOUR_BUSINESS_ID&perPage=20' \
+              --header 'api-key: YOUR_SECRET_KEY'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const { FINCRA_SECRET_KEY, FINCRA_BUSINESS_ID } = process.env;
+
+            const params = new URLSearchParams({ business: FINCRA_BUSINESS_ID, perPage: "20" });
+            const response = await fetch(
+              `https://sandboxapi.fincra.com/collections?${params}`,
+              { headers: { "api-key": FINCRA_SECRET_KEY } }
+            );
+            const { data } = await response.json();
+        - lang: python
+          label: Python
+          source: |
+            import os
+            import requests
+
+            response = requests.get(
+                "https://sandboxapi.fincra.com/collections",
+                params={"business": os.environ["FINCRA_BUSINESS_ID"], "perPage": 20},
+                headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+            )
+            data = response.json()["data"]
+      parameters:
+        - name: business
+          in: query
+          required: true
+          description: Your Business ID.
+          example: YOUR_BUSINESS_ID
+          schema:
+            type: string
+        - name: status[]
+          in: query
+          description: Return only collections in these statuses. Repeat the parameter for more than one.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/CollectionStatus"
+        - name: paymentMethod[]
+          in: query
+          description: Return only collections paid this way. Repeat the parameter for more than one.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/PaymentMethod"
+        - name: sourceCurrency
+          in: query
+          description: Return only collections in this currency, such as `NGN`.
+          schema:
+            type: string
+        - name: virtualAccount
+          in: query
+          description: Return only collections into this virtual account, by its `_id`.
+          schema:
+            type: string
+        - name: reference
+          in: query
+          description: Return the collection with this Fincra `reference`.
+          schema:
+            type: string
+        - name: dateInitiatedFrom
+          in: query
+          description: Return collections that started on or after this date, in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - name: dateInitiatedTo
+          in: query
+          description: Return collections that started on or before this date, in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: The page to return, starting at 1.
+          schema:
+            type: integer
+            default: 1
+        - name: perPage
+          in: query
+          description: How many collections to return on each page.
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: A page of collections. List entries are a summary; get one collection for every field.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Collections fetched successfully`.
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CollectionSummary"
+                      total:
+                        type: integer
+                        description: How many collections match, across all pages.
+              example:
+                success: true
+                message: Collections fetched successfully
+                data:
+                  results:
+                    - id: 106587
+                      reference: 8dbaf2e9-d366-46e5-9ee0-07b1b38d1ada
+                      merchantReference: null
+                      status: pending
+                      paymentMethod: virtual_account
+                      sourceCurrency: EUR
+                      sourceAmount: 10000
+                      payeeName: Tumaini Enterprises
+                      virtualAccountId: 6aa928ef58ab7d33291fb488
+                      pendingAdditionalInfoCount: 3
+                      isReversed: 0
+                      vat: 0
+                      electronicMoneyTransferLevy: 0
+                      initiatedAt: "2026-10-09T19:32:54.000Z"
+                      createdAt: "2026-10-09T19:32:54.000Z"
+                    - id: 106584
+                      reference: f7ae4073-0d62-486f-9b94-b0dcb7c64d2c
+                      merchantReference: null
+                      status: successful
+                      paymentMethod: virtual_account
+                      sourceCurrency: EUR
+                      sourceAmount: 200
+                      payeeName: Tumaini Enterprises
+                      virtualAccountId: 6aa928ef58ab7d33291fb488
+                      pendingAdditionalInfoCount: 0
+                      isReversed: 0
+                      vat: 0
+                      electronicMoneyTransferLevy: 0
+                      initiatedAt: "2026-10-09T19:32:10.000Z"
+                      createdAt: "2026-10-09T19:32:10.000Z"
+                  total: 174
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: "`business` is missing, or a filter is in the wrong format."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Error occurred during payload validation. business is required
+                errorType: VALIDATION_FAILED
+  /collections/{id}:
+    get:
+      operationId: getCollection
+      summary: Get a collection
+      description: Returns one collection with every field, by its `id`.
+      tags: [Collections]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The collection's `id`.
+          example: 106584
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/CollectionFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectionNotFound"
+  /collections/reference/{reference}:
+    get:
+      operationId: getCollectionByReference
+      summary: Get a collection by reference
+      description: Returns one collection by Fincra's `reference`, the one in the collection webhook and in your wallet transactions.
+      tags: [Collections]
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: Fincra's `reference` for the collection.
+          example: f7ae4073-0d62-486f-9b94-b0dcb7c64d2c
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/CollectionFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectionNotFound"
+  /collections/merchant-reference/{merchantReference}:
+    get:
+      operationId: getCollectionByMerchantReference
+      summary: Get a collection by your reference
+      description: |
+        Returns a collection by your own reference: a checkout payment's `reference`, or the `merchantReference` of the virtual account it was paid into.
+
+        A virtual account usually receives many transfers, but this returns one. To see them all, use List collections with `virtualAccount`.
+      tags: [Collections]
+      parameters:
+        - name: merchantReference
+          in: path
+          required: true
+          description: Your reference.
+          example: customer-0001
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/CollectionFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/CollectionNotFound"
+  /collections/{id}/additional-information:
+    get:
+      operationId: getRequestedInformation
+      summary: Get requested information
+      description: |
+        Returns the questions Fincra asked about a collection it's reviewing. Fincra asks when a collection needs a review, and sends the `collection.additional-info-requested` webhook. Answer each question with Respond to requested information.
+      tags: [Collections]
+      parameters:
+        - $ref: "#/components/parameters/CollectionID"
+      responses:
+        "200":
+          description: The questions, with your answers once you send them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InformationRequest"
+              example:
+                success: true
+                message: Addtional information fetched sucessfully
+                data:
+                  - id: 249
+                    collection_id: 106587
+                    request: Source of the funds
+                    response: null
+                    created_at: "2026-10-09T19:32:54.000Z"
+                    updated_at: "2026-10-09T19:32:54.000Z"
+                  - id: 250
+                    collection_id: 106587
+                    request: Purpose of funds
+                    response: null
+                    created_at: "2026-10-09T19:32:54.000Z"
+                    updated_at: "2026-10-09T19:32:54.000Z"
+                  - id: 251
+                    collection_id: 106587
+                    request: "Confirm transaction frequency: One off or Recurring?"
+                    response: null
+                    created_at: "2026-10-09T19:32:54.000Z"
+                    updated_at: "2026-10-09T19:32:54.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      operationId: respondToRequestedInformation
+      summary: Respond to requested information
+      description: |
+        Answers one question Fincra asked about a collection, by the question's `id`. Send `text`, links in `urls`, or both. You can answer each question once.
+
+        When you've answered every question, `pendingAdditionalInfoCount` on the collection is `0` and Fincra reviews your answers. The collection stays `pending` until Fincra approves it, credits your wallet and sends `collection.successful`, or declines it and sends `collection.failed`.
+      tags: [Collections]
+      parameters:
+        - $ref: "#/components/parameters/CollectionID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [additionalInfoId]
+              properties:
+                additionalInfoId:
+                  type: integer
+                  description: The question's `id` from Get requested information.
+                  example: 249
+                text:
+                  type: string
+                  description: Your answer.
+                  example: Customer payment for a software subscription invoice
+                urls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  description: Links to supporting documents, such as an invoice.
+            example:
+              additionalInfoId: 249
+              text: Customer payment for a software subscription invoice
+      responses:
+        "200":
+          description: Fincra saved your answer.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Additional information response saved sucessfully`.
+                  data:
+                    type: object
+                    description: The answer you sent.
+              example:
+                success: true
+                message: Additional information response saved sucessfully
+                data:
+                  text: Customer payment for a software subscription invoice
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: You already answered this question.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Cannot continue. You've already provided a response to this additional info request
+                errorType: OPERATION_FORBIDDEN
+        "404":
+          description: The collection has no question with that `additionalInfoId`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Additional Information Request not found
+                errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: You sent neither `text` nor `urls`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Kindly provide the requested information, to continue
+                errorType: UNPROCESSABLE_ENTITY
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  parameters:
+    CollectionID:
+      name: id
+      in: path
+      required: true
+      description: The collection's `id`.
+      example: 106587
+      schema:
+        type: integer
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+    CollectionNotFound:
+      description: None of your collections matches.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Collection not found
+            errorType: RESOURCE_NOT_FOUND
+    CollectionFound:
+      description: The collection.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                description: "`true` when the request was successful."
+              message:
+                type: string
+                description: Always `Collection fetched successfully`.
+              data:
+                $ref: "#/components/schemas/Collection"
+          example:
+            success: true
+            message: Collection fetched successfully
+            data:
+              id: 106584
+              _id: "106584"
+              reference: f7ae4073-0d62-486f-9b94-b0dcb7c64d2c
+              merchantReference: null
+              status: successful
+              approvalStatus: approved
+              requiresApproval: 0
+              paymentMethod: virtual_account
+              paymentScheme: null
+              sourceCurrency: EUR
+              destinationCurrency: EUR
+              sourceAmount: 200
+              destinationAmount: 200
+              sourceFee: 10
+              destinationFee: 10
+              sourceAmountSettled: 190
+              destinationAmountSettled: 190
+              vat: 0
+              electronicMoneyTransferLevy: 0
+              settlementDestination: wallet
+              balanceBefore: 6851492.34
+              balanceAfter: 6851682.34
+              virtualAccountId: 6aa928ef58ab7d33291fb488
+              payeeName: Tumaini Enterprises
+              payeeAccountNumber: GBXXCLXX334381238824XX
+              payer:
+                name: Tumaini Moyo
+                email: null
+                phone: null
+                accountNumber: DE89370400440532013000
+                bankCode: null
+                bankName: Test Bank
+                cardScheme: null
+              payee:
+                name: Tumaini Enterprises
+                email: null
+                phone: null
+                accountNumber: GBXXCLXX334381238824XX
+                bankCode: null
+                bankName: Community Bank
+                cardScheme: null
+              description: null
+              metadata: '{"customerId":"sim-eur-0001"}'
+              additionalInformation: []
+              pendingAdditionalInfoCount: 0
+              isReversed: 0
+              initiatedAt: "2026-10-09T19:32:10.000Z"
+              settledAt: "2026-10-09T19:32:10.000Z"
+              createdAt: "2026-10-09T19:32:10.000Z"
+              updatedAt: "2026-10-09T19:32:10.000Z"
+  schemas:
+    CollectionStatus:
+      type: string
+      enum: [initiated, processing, pending, successful, failed, reversal-initiated, awaiting-reversal, reversed, awaiting-refund, refunded]
+      description: >
+        `successful` means Fincra credited your wallet. `pending` means Fincra
+        is reviewing it. `failed` means no money was credited. The reversal and
+        refund statuses mean the money is being, or was, sent back to the payer.
+    PaymentMethod:
+      type: string
+      enum: [virtual_account, bank_transfer, card, mobile_money, pos, payattitude, wallet_transfer, manual_funding]
+      description: How the payer sent the money.
+    CollectionSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Fincra's ID for the collection.
+        reference:
+          type: string
+          description: Fincra's reference. It matches the collection webhook and your wallet transactions.
+        merchantReference:
+          type: [string, "null"]
+          description: Your reference, from the checkout payment or the virtual account.
+        status:
+          $ref: "#/components/schemas/CollectionStatus"
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        sourceCurrency:
+          type: string
+          description: The currency the payer sent.
+        sourceAmount:
+          type: number
+          description: The amount the payer sent.
+        payeeName:
+          type: [string, "null"]
+          description: The name on the account that received the money.
+        virtualAccountId:
+          type: [string, "null"]
+          description: The `_id` of the virtual account that received the money, for virtual account collections.
+        pendingAdditionalInfoCount:
+          type: integer
+          description: How many of Fincra's questions you still have to answer.
+        isReversed:
+          type: integer
+          description: "`1` when the money was sent back to the payer."
+        vat:
+          type: number
+          description: VAT on Fincra's fee.
+        electronicMoneyTransferLevy:
+          type: number
+          description: The Nigerian electronic money transfer levy, when it applies.
+        initiatedAt:
+          type: string
+          format: date-time
+          description: When the payment started, in UTC.
+        createdAt:
+          type: string
+          format: date-time
+          description: When Fincra recorded it, in UTC.
+    Collection:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Fincra's ID for the collection.
+        reference:
+          type: string
+          description: Fincra's reference. It matches the collection webhook and your wallet transactions.
+        merchantReference:
+          type: [string, "null"]
+          description: Your reference, from the checkout payment or the virtual account.
+        status:
+          $ref: "#/components/schemas/CollectionStatus"
+        approvalStatus:
+          type: string
+          enum: [not-required, pending, approved, declined]
+          description: The result of Fincra's review, when one was needed.
+        requiresApproval:
+          type: integer
+          description: "`1` when the collection needed a review."
+        paymentMethod:
+          $ref: "#/components/schemas/PaymentMethod"
+        sourceCurrency:
+          type: string
+          description: The currency the payer sent.
+        destinationCurrency:
+          type: string
+          description: The currency Fincra credited.
+        sourceAmount:
+          type: number
+          description: The amount the payer sent.
+        destinationAmount:
+          type: number
+          description: The amount in `destinationCurrency`.
+        sourceFee:
+          type: number
+          description: Fincra's fee, in `sourceCurrency`.
+        destinationFee:
+          type: number
+          description: Fincra's fee, in `destinationCurrency`.
+        sourceAmountSettled:
+          type: number
+          description: What Fincra credits after its fee, in `sourceCurrency`.
+        destinationAmountSettled:
+          type: number
+          description: What Fincra credits to your wallet after its fee.
+        vat:
+          type: number
+          description: VAT on Fincra's fee.
+        electronicMoneyTransferLevy:
+          type: number
+          description: The Nigerian electronic money transfer levy, when it applies.
+        settlementDestination:
+          type: string
+          description: Where Fincra settles the money, such as `wallet`.
+        balanceBefore:
+          type: [number, "null"]
+          description: Your wallet's balance before the credit.
+        balanceAfter:
+          type: [number, "null"]
+          description: Your wallet's balance after the credit.
+        virtualAccountId:
+          type: [string, "null"]
+          description: The `_id` of the virtual account that received the money.
+        payer:
+          $ref: "#/components/schemas/Party"
+        payee:
+          $ref: "#/components/schemas/Party"
+        payeeName:
+          type: [string, "null"]
+          description: The name on the account that received the money.
+        payeeAccountNumber:
+          type: [string, "null"]
+          description: The account that received the money.
+        description:
+          type: [string, "null"]
+          description: The payer's narration, when there is one.
+        metadata:
+          type: [string, "null"]
+          description: Extra details, as a JSON string. Parse it before you read it.
+        additionalInformation:
+          type: array
+          description: Fincra's questions about the collection, when it's reviewing it.
+          items:
+            $ref: "#/components/schemas/InformationRequest"
+        pendingAdditionalInfoCount:
+          type: integer
+          description: How many of Fincra's questions you still have to answer.
+        isReversed:
+          type: integer
+          description: "`1` when the money was sent back to the payer."
+        initiatedAt:
+          type: string
+          format: date-time
+          description: When the payment started, in UTC.
+        settledAt:
+          type: [string, "null"]
+          format: date-time
+          description: When Fincra credited your wallet, in UTC.
+        createdAt:
+          type: string
+          format: date-time
+          description: When Fincra recorded it, in UTC.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When it last changed, in UTC.
+    Party:
+      type: object
+      properties:
+        name:
+          type: [string, "null"]
+          description: The name on the account.
+        accountNumber:
+          type: [string, "null"]
+          description: The account number, IBAN or card number shown for the payment.
+        bankName:
+          type: [string, "null"]
+          description: The bank.
+        bankCode:
+          type: [string, "null"]
+          description: The bank code.
+        email:
+          type: [string, "null"]
+          description: The email, when known.
+        phone:
+          type: [string, "null"]
+          description: The phone number, when known.
+        cardScheme:
+          type: [string, "null"]
+          description: The card scheme, for card payments.
+    InformationRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: The question's ID. Send it as `additionalInfoId` when you answer.
+        collection_id:
+          type: integer
+          description: The collection's `id`.
+        request:
+          type: string
+          description: Fincra's question.
+        response:
+          type: [object, "null"]
+          description: Your answer, or `null` until you send one.
+        created_at:
+          type: string
+          format: date-time
+          description: When Fincra asked, in UTC.
+        updated_at:
+          type: string
+          format: date-time
+          description: When it last changed, in UTC.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.
+        errors:
+          description: More detail about the error, when there is any.

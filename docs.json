@@ -56,6 +56,7 @@
               "verification/overview"
             ]
           },
+          "when-money-arrives",
           "developer-tools/overview",
           "api-reference",
           "changelog",
@@ -165,6 +166,21 @@
               "POST /profile/virtual-accounts/transfer",
               "GET /profile/virtual-accounts",
               "GET /profile/virtual-accounts/{id}"
+            ]
+          },
+          {
+            "group": "Collections",
+            "openapi": {
+              "source": "api/specs/collections.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "GET /collections",
+              "GET /collections/{id}",
+              "GET /collections/reference/{reference}",
+              "GET /collections/merchant-reference/{merchantReference}",
+              "GET /collections/{id}/additional-information",
+              "PATCH /collections/{id}/additional-information"
             ]
           },
           {
