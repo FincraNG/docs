@@ -5,9 +5,9 @@ description: "Every Fincra API endpoint, with request fields, response schemas a
 keywords: ["API reference", "base URL", "authentication", "sandbox", "production"]
 ---
 
-The Fincra API is a REST API. It uses resource-based URLs, accepts JSON request bodies, returns JSON responses and uses standard HTTP status codes.
+The Fincra API is a REST API. You send requests over HTTPS to the base URL for your environment, with your secret key in a header and any data in JSON. Fincra replies in JSON, telling you whether the request worked and returning the result.
 
-Build and test in sandbox first. Sandbox moves no real money. When your integration works, switch to production.
+Start in sandbox. It works like production but moves no real money. When your integration works, switch to your production key and base URL.
 
 <Panel>
   ```text Base URLs
@@ -31,30 +31,13 @@ Build and test in sandbox first. Sandbox moves no real money. When your integrat
 | Sandbox | `https://sandboxapi.fincra.com` | Build and test your integration |
 | Production | `https://api.fincra.com` | Move real money |
 
-Each environment has its own Business ID, secret key, public key and webhook key. Use sandbox values with the sandbox base URL and production values with the production base URL.
+Each environment has its own secret key. Use your sandbox key with the sandbox base URL and your production key with the production base URL.
 
 ## Authentication
 
-Send your secret key in the `api-key` header of every request. Generate your key in the dashboard under **My Account** > **API Keys & Webhooks**. See [Create a sandbox account](/quickstart/create-a-sandbox-account#generate-your-api-keys) for the steps.
+Send your secret key in the `api-key` header of every request. You generate the key in the dashboard under **My Account** > **API Keys & Webhooks**. [Create a sandbox account](/quickstart/create-a-sandbox-account#generate-your-api-keys) shows the steps.
 
-<Warning>
-  Keep your secret key on your server. Never put it in browser code, mobile apps or version control. Anyone with your key can make requests as your business.
-</Warning>
-
-If the key is missing or wrong, Fincra returns HTTP `401`:
-
-```json
-{
-  "message": "Unauthorized",
-  "request_id": "5519f326100b3e2529a55b7e32bf0a64"
-}
-```
-
-Include the `request_id` when you contact support. It lets Fincra find your request.
-
-## Requests and responses
-
-Send request bodies as JSON with the `content-type: application/json` header. Every endpoint page shows its request fields, its response schema and example requests in cURL and Node.js.
+Keep your secret key on your server. Anyone with it can make requests as your business.
 
 ## Start here
 
