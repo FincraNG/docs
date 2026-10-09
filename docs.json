@@ -68,6 +68,21 @@
               "PATCH /profile/business/{businessID}/settings",
               "GET /profile/business"
             ]
+          },
+          {
+            "group": "Payouts",
+            "openapi": {
+              "source": "api/specs/disbursements.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /disbursements/payouts",
+              "GET /disbursements/payouts/reference/{reference}",
+              "GET /disbursements/payouts/customer-reference/{customerReference}",
+              "GET /disbursements/payouts",
+              "POST /disbursements/payouts/wallets",
+              "POST /disbursements/payouts/documents-upload"
+            ]
           }
         ]
       }
@@ -105,5 +120,14 @@
       "cursor",
       "vscode"
     ]
+  },
+  "api": {
+    "examples": {
+      "languages": [
+        "bash",
+        "node"
+      ],
+      "defaults": "required"
+    }
   }
 }
