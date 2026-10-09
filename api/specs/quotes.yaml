@@ -21,10 +21,11 @@ paths:
       summary: Get a quote
       description: >
         Returns a rate quote for a payout or a conversion between two
-        currencies. The quote holds its rate until `expireAt`, 60 seconds by
-        default. Send its `reference` as `quoteReference` when you create the
-        payout or conversion. Use `action` to fix the amount you send or the
-        amount the recipient gets.
+        currencies. The quote holds its rate until `expireAt`, which is
+        usually less than a minute away. Send its `reference` as
+        `quoteReference` before then, when you create the payout or
+        conversion. Use `action` to fix the amount you send or the amount the
+        recipient gets.
       tags: [Quotes]
       requestBody:
         required: true
@@ -90,22 +91,59 @@ paths:
                     description: Always `Quote generated successfully`.
                   data:
                     $ref: "#/components/schemas/Quote"
-              example:
-                success: true
-                message: Quote generated successfully
-                data:
-                  reference: 9f8e7d6c-5b4a-4321-8f0e-1a2b3c4d5e6f
-                  transactionType: disbursement
-                  action: send
-                  sourceCurrency: NGN
-                  destinationCurrency: KES
-                  sourceAmount: 50000
-                  destinationAmount: 4150
-                  rate: 0.083
-                  fee: 500
-                  amountToCharge: 50500
-                  amountToReceive: 4150
-                  expireAt: "2026-10-09T10:01:00.000Z"
+              examples:
+                "Payout, NGN to KES":
+                  summary: Payout, NGN to KES
+                  value:
+                    success: true
+                    message: Quote generated successfully
+                    data:
+                      sourceCurrency: NGN
+                      destinationCurrency: KES
+                      sourceAmount: 50000
+                      destinationAmount: 4618
+                      action: send
+                      transactionType: disbursement
+                      fee: 0
+                      initialAmount: 50000
+                      quotedAmount: 4618
+                      rate: 0.0923662892
+                      amountToCharge: 50000
+                      amountToReceive: 4618
+                      price: 10.83
+                      reference: f02a263b-d305-4941-a809-9dec9a6ceecd
+                      feeCurrency: KES
+                      feeRate: 1
+                      stampDuty: 0
+                      rounding:
+                        applied: floor
+                        reason: zero_precision_currency
+                        preRoundedValue: 4618.31
+                        difference: 0.31
+                      expireAt: "2026-10-09T09:23:49.720Z"
+                "Conversion, NGN to USD":
+                  summary: Conversion, NGN to USD
+                  value:
+                    success: true
+                    message: Quote generated successfully
+                    data:
+                      sourceCurrency: NGN
+                      destinationCurrency: USD
+                      sourceAmount: 1405815.922
+                      destinationAmount: 1000
+                      action: receive
+                      transactionType: conversion
+                      fee: 0
+                      initialAmount: 1000
+                      quotedAmount: 1405815.922
+                      rate: 0.0007113307
+                      amountToCharge: 1405815.922
+                      amountToReceive: 1000
+                      price: 1405.82
+                      reference: cc8206b1-fa7d-4c5c-917b-8e27f9957372
+                      rounding: null
+                      expireAt: "2026-10-09T09:23:51.326Z"
+                      settlementDate: "2026-10-09T09:23:20.546Z"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "422":
@@ -121,7 +159,8 @@ paths:
       description: >
         Returns the currency pairs you can quote, based on the balances active
         on your business. Each pair reads `SOURCE/DESTINATION`, such as
-        `NGN/USD`.
+        `NGN/USD`. The list is empty until at least one of your balances is
+        active.
       tags: [Quotes]
       parameters:
         - name: x-business-id
@@ -270,7 +309,41 @@ components:
           description: The amount in `destinationCurrency`.
         rate:
           type: number
-          description: The exchange rate applied.
+          description: How much `destinationCurrency` you get for 1 unit of `sourceCurrency`. For NGN to KES, `0.0924` means 1 NGN buys 0.0924 KES.
+        price:
+          type: number
+          description: The same rate the other way round. How much `sourceCurrency` buys 1 unit of `destinationCurrency`.
+        initialAmount:
+          type: number
+          description: The amount you asked for, in the currency `action` fixes.
+        quotedAmount:
+          type: number
+          description: The matching amount on the other side of the quote.
+        feeCurrency:
+          type: string
+          description: The currency of `fee`.
+        feeRate:
+          type: number
+          description: The fee rate applied.
+        stampDuty:
+          type: number
+          description: Any stamp duty charged.
+        rounding:
+          type: [object, "null"]
+          description: How Fincra rounded the amount for a currency with no decimal places. `null` when no rounding applied.
+          properties:
+            applied:
+              type: string
+              description: The rounding method, such as `floor`.
+            reason:
+              type: string
+              description: Why Fincra rounded, such as `zero_precision_currency`.
+            preRoundedValue:
+              type: number
+              description: The amount before rounding.
+            difference:
+              type: number
+              description: The amount removed or added by rounding.
         fee:
           type: number
           description: Fincra's fee for the transaction.

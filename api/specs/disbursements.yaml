@@ -301,6 +301,11 @@ paths:
           schema:
             type: integer
             default: 10
+        - name: cursor
+          in: query
+          description: The `nextCursor` from the previous page, to get the next page.
+          schema:
+            type: integer
         - name: status
           in: query
           description: Only return payouts with these statuses.
@@ -352,6 +357,25 @@ paths:
                   data:
                     type: object
                     description: The page of payouts.
+                    properties:
+                      results:
+                        type: array
+                        description: The payouts on this page.
+                        items:
+                          type: object
+                      total:
+                        type: integer
+                        description: How many payouts match your filters in total.
+                      nextCursor:
+                        type: [integer, "null"]
+                        description: Send this as `cursor` to get the next page. `null` on the last page.
+              example:
+                success: true
+                message: Payouts fetched successfully
+                data:
+                  results: []
+                  total: 0
+                  nextCursor: null
         "401":
           $ref: "#/components/responses/Unauthorized"
   /disbursements/payouts/reference/{reference}:

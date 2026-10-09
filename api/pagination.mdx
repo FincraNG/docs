@@ -12,3 +12,5 @@ Endpoints that return lists, such as a list of payouts, return results one page 
 | `perPage` | How many results to return on each page | `10` |
 
 To get every result, request page 1, then page 2 and so on, until a page returns fewer results than `perPage`.
+
+Some lists, such as List payouts, also return `nextCursor`. Send it as `cursor` to get the next page. It's `null` on the last page.

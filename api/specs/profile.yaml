@@ -97,9 +97,13 @@ paths:
                   name: Tumaini Moyo
                   email: tumaini@example.com
                   country: NG
-                  mobile: "8000000000"
+                  incorporationNumber: RC123456
+                  howDidYouHearAboutUs: [Search engine]
+                  apiKeyRotatedAt: "2026-10-09T10:05:00.000Z"
+                  apiKeyRotatedBy: tumaini@example.com
                   business:
                     id: 64f1c2a9e4b0a1b2c3d4e5f6
+                    businessKey: B-EXAMPLE1234
                     subBusinessIds: []
                   createdAt: "2026-10-09T10:00:00.000Z"
                   updatedAt: "2026-10-09T10:00:00.000Z"
@@ -369,6 +373,21 @@ components:
         mobile:
           type: string
           description: The merchant phone number.
+        incorporationNumber:
+          type: string
+          description: The incorporation number entered at sign-up.
+        howDidYouHearAboutUs:
+          type: array
+          items:
+            type: string
+          description: The answers chosen at sign-up.
+        apiKeyRotatedAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the secret key was last generated, in UTC.
+        apiKeyRotatedBy:
+          type: [string, "null"]
+          description: The email address of the user who last generated the secret key.
         business:
           type: object
           description: The businesses under this merchant account.
@@ -376,6 +395,9 @@ components:
             id:
               type: string
               description: The Business ID of the main business.
+            businessKey:
+              type: string
+              description: Fincra's key for the business.
             subBusinessIds:
               type: array
               items:
