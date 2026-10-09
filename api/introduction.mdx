@@ -1,4 +1,63 @@
 ---
-title: "Introduction"
-description: "The Fincra API reference: every endpoint, with its request fields and response schemas."
+title: "Fincra API reference"
+sidebarTitle: "Introduction"
+description: "Every endpoint in the Fincra API, with its request fields, response schemas and examples."
+keywords: ["API reference", "base URL", "authentication", "sandbox", "production"]
 ---
+
+The Fincra API is a REST API. It uses resource-based URLs, accepts JSON request bodies, returns JSON responses and uses standard HTTP status codes.
+
+Build and test in sandbox first. Sandbox moves no real money. When your integration works, switch to production.
+
+<Panel>
+  ```text Base URLs
+  Sandbox
+  https://sandboxapi.fincra.com
+
+  Production
+  https://api.fincra.com
+  ```
+
+  ```bash Authenticated request
+  curl https://sandboxapi.fincra.com/profile/business/me \
+    -H "api-key: {{SECRET_KEY}}"
+  ```
+</Panel>
+
+## Environments
+
+| Environment | Base URL | Use it to |
+|---|---|---|
+| Sandbox | `https://sandboxapi.fincra.com` | Build and test your integration |
+| Production | `https://api.fincra.com` | Move real money |
+
+Each environment has its own Business ID, secret key, public key and webhook key. Use sandbox values with the sandbox base URL and production values with the production base URL.
+
+## Authentication
+
+Send your secret key in the `api-key` header of every request. Generate your key in the dashboard under **My Account** > **API Keys & Webhooks**. See [Create a sandbox account](/quickstart/create-a-sandbox-account#generate-your-api-keys) for the steps.
+
+<Warning>
+  Keep your secret key on your server. Never put it in browser code, mobile apps or version control. Anyone with your key can make requests as your business.
+</Warning>
+
+If the key is missing or wrong, Fincra returns HTTP `401`:
+
+```json
+{
+  "message": "Unauthorized",
+  "request_id": "5519f326100b3e2529a55b7e32bf0a64"
+}
+```
+
+Include the `request_id` when you contact support. It lets Fincra find your request.
+
+## Requests and responses
+
+Send request bodies as JSON with the `content-type: application/json` header. Every endpoint page shows its request fields, its response schema and example requests in cURL and Node.js.
+
+## Start here
+
+<Card title="Send your first API request" href="/quickstart/send-your-first-api-request">
+  Confirm your key works with one read-only request.
+</Card>
