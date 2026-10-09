@@ -36,7 +36,12 @@
                   "payouts/beneficiaries"
                 ]
               },
-              "virtual-accounts/overview",
+              {
+                "group": "Virtual Accounts",
+                "pages": [
+                  "virtual-accounts/overview"
+                ]
+              },
               "fx-and-conversion/overview",
               {
                 "group": "Wallets and Balances",
@@ -147,6 +152,19 @@
               "GET /conversions/reference/{reference}",
               "GET /conversions/customer-reference/{customerReference}",
               "GET /conversions"
+            ]
+          },
+          {
+            "group": "Virtual Accounts",
+            "openapi": {
+              "source": "api/specs/virtual-accounts.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /profile/virtual-accounts/requests",
+              "POST /profile/virtual-accounts/transfer",
+              "GET /profile/virtual-accounts",
+              "GET /profile/virtual-accounts/{id}"
             ]
           },
           {

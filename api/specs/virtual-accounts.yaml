@@ -1,0 +1,908 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Virtual Accounts"
+  version: "1.0"
+  description: >
+    Give your business or your customers account numbers to receive bank
+    transfers. Captured from fincra-profile. During the code freeze this file
+    lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Virtual Accounts
+    description: Permanent and temporary accounts for receiving bank transfers.
+paths:
+  /profile/virtual-accounts/requests:
+    post:
+      operationId: requestVirtualAccount
+      summary: Request a permanent virtual account
+      description: |
+        Requests a permanent account that keeps receiving transfers until it's closed. Money sent to it arrives in your wallet in the same currency, minus Fincra's fee.
+
+        | Currency | Individual | Corporate | What you send |
+        | --- | --- | --- | --- |
+        | NGN | Yes | Yes | The account holder's name and BVN. Fincra creates the account straight away |
+        | USD | No | Yes | Full company details, documents and beneficial owners. Fincra reviews the request |
+
+        An individual account is in a person's name, for example one of your customers. A corporate account is in a business's name. NGN accounts are approved in the response. A USD request is reviewed first, and you can only have one USD account: requesting another returns the one you have.
+
+        Send `merchantReference` to tag the account with your own ID, such as your customer's ID. Each reference can be used once.
+      tags: [Virtual Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/NgnIndividualRequest"
+                - $ref: "#/components/schemas/NgnCorporateRequest"
+                - $ref: "#/components/schemas/UsdCorporateRequest"
+            examples:
+              "NGN, individual":
+                summary: NGN, individual
+                value:
+                  currency: NGN
+                  accountType: individual
+                  merchantReference: customer-0001
+                  KYCInformation:
+                    firstName: Tumaini
+                    lastName: Moyo
+                    bvn: "22222222222"
+              "NGN, corporate":
+                summary: NGN, corporate
+                value:
+                  currency: NGN
+                  accountType: corporate
+                  merchantReference: customer-0002
+                  KYCInformation:
+                    businessName: Tumaini Enterprises
+                    bvn: "22222222222"
+              "USD, corporate (minimum)":
+                summary: USD, corporate (minimum)
+                value:
+                  currency: USD
+                  accountType: corporate
+                  entityName: Tumaini Enterprises Ltd
+                  purpose: self
+                  paymentFlowDescription: Receiving USD payments from international customers for software subscriptions.
+                  incorporationDocuments: https://example.com/documents/incorporation.pdf
+                  articleOfIncorporation: https://example.com/documents/articles.pdf
+                  beneficialOwnershipCertificate: https://example.com/documents/ownership.pdf
+                  sourceOfFunds: https://example.com/documents/source-of-funds.pdf
+                  utilityBill: https://example.com/documents/utility-bill.pdf
+                  KYCInformation:
+                    email: tumaini@example.com
+                    tradingName: Tumaini Enterprises
+                    businessRegistrationName: Tumaini Enterprises Ltd
+                    businessRegistrationNumber: RC-1234567
+                    businessRegistrationCountry: NG
+                    incorporationCountryCode: NG
+                    incorporationDate: "2018-03-01"
+                    directorsName: Tumaini Moyo
+                    taxIdentificationNumber: 12345678-0001
+                    taxCountry: NG
+                    website: https://example.com
+                    companyType: limited_liability_company
+                    businessCategory: fintech
+                    businessCategoryDescription: Software for small businesses
+                    primaryBusiness: finance
+                    primaryBusinessDescription: Payment software for SMEs
+                    primarySourceOfFunds: business_income
+                    regulationStatus: none
+                    riskRating: low
+                    annualIncome: "1000000"
+                    estimatedMonthlyTurnover: "500000"
+                    projectedMonthlyInflow: "300000"
+                    projectedMonthlyOutflow: "250000"
+                    projectedMonthlyTransactionCount: "120"
+                    projectedTransactionFrequency: monthly
+                    tradeInternationally: true
+                    fundsTransferCorridors: [US, NG]
+                    businessPartners: []
+                    address:
+                      countryOfResidence: NG
+                      number: "12"
+                      street: Admiralty Way
+                      city: Lekki
+                      state: Lagos
+                      zip: "100001"
+                    ultimateBeneficialOwners:
+                      - firstName: Tumaini
+                        lastName: Moyo
+                        title: Director
+                        emailAddress: tumaini@example.com
+                        phoneNumber: "+2348012345678"
+                        dateOfBirth: "1990-01-01"
+                        nationality: NG
+                        citizenships: [NG]
+                        taxCountry: NG
+                        percentageOwnership: "100"
+                        beneficialOwnerType: beneficial_owner
+                        politicallyExposedPerson: false
+                        usResidencyStatus: non_resident
+                        address:
+                          countryOfResidence: NG
+                          number: "12"
+                          street: Admiralty Way
+                          city: Lekki
+                          state: Lagos
+                          zip: "100001"
+                        document:
+                          type: passport
+                          number: A12345678
+                          issuedCountryCode: NG
+                          issuedBy: Nigeria Immigration Service
+                          issuedDate: "2020-01-01"
+                          expirationDate: "2030-01-01"
+                        meansOfId: https://example.com/documents/passport.pdf
+                        bankStatement: https://example.com/documents/bank-statement.pdf
+      responses:
+        "200":
+          description: >
+            Fincra created the account, or received the request for review.
+            Check `status`: `approved` accounts can receive money now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    $ref: "#/components/schemas/VirtualAccount"
+              examples:
+                "NGN, individual":
+                  summary: NGN, individual
+                  value:
+                    success: true
+                    message: Thank you, Tumaini Moyo. A NGN virtual account has been created for you
+                    data:
+                      _id: 6ac94bd968fd72fe30f4b4a3
+                      business: YOUR_BUSINESS_ID
+                      currency: NGN
+                      currencyType: fiat
+                      status: approved
+                      isActive: true
+                      accountNumber: "3900120003"
+                      accountType: individual
+                      merchantReference: customer-0001
+                      KYCInformation:
+                        firstName: Tumaini
+                        lastName: Moyo
+                        email: tumaini@example.com
+                      accountInformation:
+                        accountNumber: "3900120003"
+                        accountName: Tumaini Moyo
+                        bankName: Bold MFB
+                        bankCode: "50725"
+                      isPermanent: true
+                      expiresAt: null
+                      virtualAccountType: additional
+                      createdAt: "2026-10-09T20:17:29.214Z"
+                "NGN, corporate":
+                  summary: NGN, corporate
+                  value:
+                    success: true
+                    message: Thank you, Tumaini Moyo. A NGN virtual account has been created for you
+                    data:
+                      _id: 6ac94bdb68fd72fe30f4b4a6
+                      business: YOUR_BUSINESS_ID
+                      currency: NGN
+                      currencyType: fiat
+                      status: approved
+                      isActive: true
+                      accountNumber: "3242671377659390"
+                      accountType: corporate
+                      merchantReference: customer-0002
+                      KYCInformation:
+                        businessName: Tumaini Enterprises
+                        email: tumaini@example.com
+                      accountInformation:
+                        accountNumber: "3242671377659390"
+                        accountName: Tumaini Enterprises
+                        bankName: GLOBUS BANK
+                      isPermanent: true
+                      expiresAt: null
+                      virtualAccountType: additional
+                      createdAt: "2026-10-09T20:17:31.102Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: You already used this `merchantReference`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Virtual account with merchant reference already exists
+                errorType: DUPLICATE_REFERENCE
+        "422":
+          description: >
+            A field is missing or in the wrong format, or the currency doesn't
+            offer that account type, such as an individual USD account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                "Individual USD":
+                  summary: Individual USD
+                  value:
+                    success: false
+                    error: Individual virtual account request for USD is currently not available. Please try again later
+                    errorType: VALIDATION_FAILED
+                "Missing field":
+                  summary: Missing field
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. KYCInformation.tradingName is required
+                    errorType: VALIDATION_FAILED
+  /profile/virtual-accounts/transfer:
+    post:
+      operationId: createTemporaryVirtualAccount
+      summary: Create a temporary virtual account
+      description: |
+        Creates an NGN account for one payment of an exact amount, such as a customer's order. The account expires after `expiresAt` minutes. Fincra creates it straight away, in your business's name.
+
+        Temporary accounts are NGN only. To receive other currencies, use a permanent account.
+      tags: [Virtual Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currency, accountType, amount, expiresAt]
+              properties:
+                currency:
+                  type: string
+                  enum: [NGN]
+                  description: Always `NGN`.
+                  example: NGN
+                accountType:
+                  type: string
+                  enum: [corporate]
+                  description: Send `corporate`. The account is always in your business's name.
+                  example: corporate
+                amount:
+                  type: string
+                  pattern: "^\\d+(\\.\\d{1,2})?$"
+                  description: The amount you expect, as a string with up to 2 decimal places, such as `"1000"` or `"2500.50"`.
+                  example: "1000"
+                expiresAt:
+                  type: integer
+                  minimum: 1
+                  description: How many minutes the account stays open.
+                  example: 30
+                merchantReference:
+                  type: string
+                  description: Your own reference for this payment, such as your order ID. Each reference can be used once.
+                  example: order-0001
+      responses:
+        "200":
+          description: Fincra created the account. Show `accountInformation` to your customer.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    $ref: "#/components/schemas/VirtualAccount"
+              example:
+                success: true
+                message: Thank you, Tumaini Moyo. A NGN virtual account has been created for you
+                data:
+                  _id: 6ac94af668fd72fe30f4b499
+                  business: YOUR_BUSINESS_ID
+                  currency: NGN
+                  amount: 1000
+                  status: approved
+                  isActive: true
+                  accountNumber: "3900119281"
+                  accountType: corporate
+                  merchantReference: order-0001
+                  accountInformation:
+                    accountNumber: "3900119281"
+                    accountName: Tumaini Enterprises
+                    bankName: Bold MFB
+                    bankCode: "50725"
+                  isPermanent: false
+                  expiresAt: "2026-10-09T20:43:42.581Z"
+                  virtualAccountType: additional
+                  createdAt: "2026-10-09T20:13:42.659Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: You already used this `merchantReference`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Virtual account with merchant reference already exists
+                errorType: DUPLICATE_REFERENCE
+        "422":
+          description: A field is missing or in the wrong format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                "Missing expiry":
+                  summary: Missing expiry
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. expiresAt is required
+                    errorType: VALIDATION_FAILED
+                "Amount as a number":
+                  summary: Amount as a number
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. amount must be a string
+                    errorType: VALIDATION_FAILED
+  /profile/virtual-accounts:
+    get:
+      operationId: listVirtualAccounts
+      summary: List virtual accounts
+      description: Returns your virtual accounts. Filter by currency, type, status or your reference.
+      tags: [Virtual Accounts]
+      parameters:
+        - name: currency
+          in: query
+          description: Return only accounts in this currency, such as `NGN`.
+          schema:
+            type: string
+        - name: accountType
+          in: query
+          description: Return only individual or corporate accounts.
+          schema:
+            type: string
+            enum: [individual, corporate]
+        - name: status
+          in: query
+          description: Return only accounts with this status.
+          schema:
+            $ref: "#/components/schemas/VirtualAccountStatus"
+        - name: merchantReference
+          in: query
+          description: Return the account with this `merchantReference`.
+          schema:
+            type: string
+        - name: accountNumber
+          in: query
+          description: Return the account with this account number.
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: The page to return, starting at 1.
+          schema:
+            type: integer
+            default: 1
+        - name: perPage
+          in: query
+          description: How many accounts to return on each page.
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: A page of virtual accounts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Merchant virtual accounts fetched successfully`.
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/VirtualAccount"
+                      total:
+                        type: integer
+                        description: How many accounts match, across all pages.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /profile/virtual-accounts/{id}:
+    get:
+      operationId: getVirtualAccount
+      summary: Get a virtual account
+      description: Returns one virtual account, by its `_id`.
+      tags: [Virtual Accounts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The account's `_id`.
+          example: 6ac94bd968fd72fe30f4b4a3
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The virtual account. `business` here is your business's name and email.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Virtual account fetched successfully`.
+                  data:
+                    $ref: "#/components/schemas/VirtualAccount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+  schemas:
+    VirtualAccountStatus:
+      type: string
+      enum: [pending, reviewed, approved, declined, expired, closed]
+      description: >
+        `approved` accounts can receive money. `pending` and `reviewed` are in
+        review. `declined`, `expired` and `closed` can't receive money.
+    Address:
+      type: object
+      required: [countryOfResidence, number, street, city, state, zip]
+      properties:
+        countryOfResidence:
+          type: string
+          description: Two-letter ISO 3166-1 country code.
+        number:
+          type: string
+          description: The building number.
+        street:
+          type: string
+          description: The street.
+        city:
+          type: string
+          description: The city.
+        state:
+          type: string
+          description: The state or region.
+        zip:
+          type: string
+          description: The postal code.
+    NgnIndividualRequest:
+      title: NGN, individual
+      type: object
+      required: [currency, accountType, KYCInformation]
+      properties:
+        currency:
+          type: string
+          enum: [NGN]
+          description: Always `NGN`.
+        accountType:
+          type: string
+          enum: [individual]
+          description: An account in a person's name.
+        merchantReference:
+          type: string
+          description: Your own ID for the account, such as your customer's ID. Each reference can be used once.
+        KYCInformation:
+          type: object
+          required: [firstName, lastName, bvn]
+          properties:
+            firstName:
+              type: string
+              description: The person's first name. It becomes the account name.
+            lastName:
+              type: string
+              description: The person's last name.
+            bvn:
+              type: string
+              description: The person's 11-digit BVN. In sandbox, use `22222222222`.
+            email:
+              type: string
+              format: email
+              description: The person's email address.
+    NgnCorporateRequest:
+      title: NGN, corporate
+      type: object
+      required: [currency, accountType, KYCInformation]
+      properties:
+        currency:
+          type: string
+          enum: [NGN]
+          description: Always `NGN`.
+        accountType:
+          type: string
+          enum: [corporate]
+          description: An account in a business's name.
+        merchantReference:
+          type: string
+          description: Your own ID for the account. Each reference can be used once.
+        KYCInformation:
+          type: object
+          required: [businessName, bvn]
+          properties:
+            businessName:
+              type: string
+              description: The business's name. It becomes the account name.
+            bvn:
+              type: string
+              description: The BVN of a director of the business. In sandbox, use `22222222222`.
+            email:
+              type: string
+              format: email
+              description: The business's email address.
+    UsdCorporateRequest:
+      title: USD, corporate
+      type: object
+      required: [currency, accountType, entityName, purpose, paymentFlowDescription, incorporationDocuments, articleOfIncorporation, beneficialOwnershipCertificate, sourceOfFunds, utilityBill, KYCInformation]
+      description: >
+        Documents can be URLs to PDF or image files. Send at least one of
+        `utilityBill`, `bankStatement` or `leaseAgreement`.
+      properties:
+        currency:
+          type: string
+          enum: [USD]
+          description: Always `USD`.
+        accountType:
+          type: string
+          enum: [corporate]
+          description: USD accounts are only for businesses.
+        entityName:
+          type: string
+          description: The business's registered name.
+        purpose:
+          type: string
+          enum: [self, third_party]
+          description: "`self` if the account receives money for your own business, `third_party` if it receives money for your customers."
+        paymentFlowDescription:
+          type: string
+          description: Who will send money to the account and why.
+        incorporationDocuments:
+          type: string
+          format: uri
+          description: The certificate of incorporation.
+        articleOfIncorporation:
+          type: string
+          format: uri
+          description: The articles of incorporation.
+        beneficialOwnershipCertificate:
+          type: string
+          format: uri
+          description: A document showing who owns the business.
+        sourceOfFunds:
+          type: string
+          format: uri
+          description: Evidence of where the business's money comes from.
+        utilityBill:
+          type: string
+          format: uri
+          description: A recent utility bill for the business's address. You can send `bankStatement` or `leaseAgreement` instead, but you must send at least one of the three.
+        bankStatement:
+          type: string
+          format: uri
+          description: A recent bank statement for the business.
+        leaseAgreement:
+          type: string
+          format: uri
+          description: The lease for the business's premises.
+        merchantReference:
+          type: string
+          description: Your own ID for the account. Each reference can be used once.
+        KYCInformation:
+          type: object
+          required: [email, tradingName, businessRegistrationName, businessRegistrationNumber, businessRegistrationCountry, incorporationCountryCode, incorporationDate, directorsName, taxIdentificationNumber, taxCountry, website, companyType, businessCategory, businessCategoryDescription, primaryBusiness, primaryBusinessDescription, primarySourceOfFunds, regulationStatus, riskRating, annualIncome, estimatedMonthlyTurnover, projectedMonthlyInflow, projectedMonthlyOutflow, projectedMonthlyTransactionCount, projectedTransactionFrequency, tradeInternationally, fundsTransferCorridors, businessPartners, address, ultimateBeneficialOwners]
+          properties:
+            email:
+              type: string
+              format: email
+              description: The business's email address.
+            tradingName:
+              type: string
+              description: The name the business trades under.
+            businessRegistrationName:
+              type: string
+              description: The registered name.
+            businessRegistrationNumber:
+              type: string
+              description: The registration number.
+            businessRegistrationCountry:
+              type: string
+              description: Where the business is registered, as a two-letter country code.
+            incorporationCountryCode:
+              type: string
+              description: Where the business is incorporated, as a two-letter country code.
+            incorporationDate:
+              type: string
+              format: date
+              description: The date of incorporation, in YYYY-MM-DD format.
+            directorsName:
+              type: string
+              description: A director's full name.
+            taxIdentificationNumber:
+              type: string
+              description: The business's tax number.
+            taxCountry:
+              type: string
+              description: Where the business pays tax, as a two-letter country code.
+            website:
+              type: string
+              description: The business's website.
+            companyType:
+              type: string
+              enum: [sole_proprietorship, limited_partnership, limited_liability_partnership, limited_liability_company, professional_limited_liability_company, corporation, public_limited_company, private_limited_company, nonprofit, nonprofit_corporation, cooperative, trust, franchise, joint_venture, holding_company, special_purpose_vehicle, government_owned]
+              description: The legal form of the business.
+            businessCategory:
+              type: string
+              enum: [retail, wholesale, software, financial_services, fintech, banking, insurance, healthcare, manufacturing, professional_services, hospitality, tourism, transportation, logistics, energy, telecommunications, entertainment, gaming, agriculture, automotive, education, government, nonprofit, other]
+              description: The business's sector.
+            businessCategoryDescription:
+              type: string
+              description: A sentence about the business's sector.
+            primaryBusiness:
+              type: string
+              description: >
+                What the business mainly does, such as `software`, `saas`,
+                `ecommerce`, `finance`, `payment_processor`, `consulting` or
+                `logistics_distribution`.
+            primaryBusinessDescription:
+              type: string
+              description: A sentence about what the business does.
+            primarySourceOfFunds:
+              type: string
+              enum: [salary, business_income, investment, gift, inheritance, real_estate, loan, pension, grant, trust, crypto, other]
+              description: Where the business's money mainly comes from.
+            regulationStatus:
+              type: string
+              enum: [regulated, registered, licensed, none, not_required]
+              description: Whether a financial regulator oversees the business. If `regulated`, `registered` or `licensed`, also send `regulatoryEvidence`.
+            riskRating:
+              type: string
+              description: Your assessment of the business's risk, such as `low`.
+            annualIncome:
+              type: string
+              description: Annual income, in USD.
+            estimatedMonthlyTurnover:
+              type: string
+              description: Monthly turnover, in USD.
+            projectedMonthlyInflow:
+              type: string
+              description: Money you expect into the account each month, in USD.
+            projectedMonthlyOutflow:
+              type: string
+              description: Money you expect out of the account each month, in USD.
+            projectedMonthlyTransactionCount:
+              type: string
+              description: How many transactions you expect each month.
+            projectedTransactionFrequency:
+              type: string
+              enum: [daily, weekly, biweekly, monthly, quarterly, semi_annually]
+              description: How often money moves.
+            tradeInternationally:
+              type: boolean
+              description: Whether the business trades across borders.
+            fundsTransferCorridors:
+              type: array
+              items:
+                type: string
+              description: Countries money will move between, as two-letter country codes.
+            businessPartners:
+              type: array
+              description: Main business partners. Send `[]` if you have none to list.
+              items:
+                type: object
+            address:
+              $ref: "#/components/schemas/Address"
+            ultimateBeneficialOwners:
+              type: array
+              description: Everyone who owns or controls the business.
+              items:
+                $ref: "#/components/schemas/BeneficialOwner"
+    BeneficialOwner:
+      type: object
+      required: [firstName, lastName, title, emailAddress, phoneNumber, dateOfBirth, nationality, citizenships, taxCountry, percentageOwnership, beneficialOwnerType, politicallyExposedPerson, usResidencyStatus, address, document, meansOfId, bankStatement]
+      description: Send at least one of `bankStatement` or `utilityBill` for each owner.
+      properties:
+        firstName:
+          type: string
+          description: First name.
+        lastName:
+          type: string
+          description: Last name.
+        title:
+          type: string
+          description: Their role, such as `Director`.
+        emailAddress:
+          type: string
+          format: email
+          description: Email address.
+        phoneNumber:
+          type: string
+          description: Phone number with the country code, such as `+2348012345678`.
+        dateOfBirth:
+          type: string
+          format: date
+          description: Date of birth, in YYYY-MM-DD format. Owners must be at least 18.
+        nationality:
+          type: string
+          description: Two-letter country code.
+        citizenships:
+          type: array
+          items:
+            type: string
+          description: Two-letter country codes.
+        taxCountry:
+          type: string
+          description: Where they pay tax, as a two-letter country code.
+        taxNumber:
+          type: string
+          description: Their tax number.
+        percentageOwnership:
+          type: string
+          description: Their share of the business, such as `"100"`.
+        beneficialOwnerType:
+          type: string
+          enum: [beneficial_owner, control_person, authorized_person]
+          description: How they relate to the business.
+        politicallyExposedPerson:
+          type: boolean
+          description: Whether they hold or held a prominent public position.
+        usResidencyStatus:
+          type: string
+          enum: [resident, non_resident, citizen]
+          description: Their US residency status.
+        address:
+          $ref: "#/components/schemas/Address"
+        document:
+          type: object
+          required: [type, number, issuedCountryCode, issuedBy, issuedDate, expirationDate]
+          description: Their ID document.
+          properties:
+            type:
+              type: string
+              enum: [passport, driverLicense, idCard, nationalId, other]
+              description: The document type.
+            number:
+              type: string
+              description: The document number.
+            issuedCountryCode:
+              type: string
+              description: The issuing country, as a two-letter code.
+            issuedBy:
+              type: string
+              description: The issuing authority.
+            issuedDate:
+              type: string
+              format: date
+              description: When it was issued, in YYYY-MM-DD format.
+            expirationDate:
+              type: string
+              format: date
+              description: When it expires, in YYYY-MM-DD format.
+        meansOfId:
+          type: string
+          format: uri
+          description: A copy of the ID document.
+        bankStatement:
+          type: string
+          format: uri
+          description: A recent bank statement. You can send `utilityBill` instead, but you must send at least one of the two.
+        utilityBill:
+          type: string
+          format: uri
+          description: A recent utility bill.
+    VirtualAccount:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Fincra's ID for the account.
+        business:
+          description: Your Business ID.
+        currency:
+          type: string
+          description: The account's currency.
+        status:
+          $ref: "#/components/schemas/VirtualAccountStatus"
+        isActive:
+          type: boolean
+          description: "`true` when the account can receive money."
+        accountNumber:
+          type: [string, "null"]
+          description: The account number. `null` until the account is issued.
+        accountType:
+          type: string
+          description: "`individual` or `corporate`."
+        merchantReference:
+          type: [string, "null"]
+          description: The reference you sent.
+        amount:
+          type: number
+          description: For a temporary account, the amount you expect.
+        isPermanent:
+          type: boolean
+          description: "`false` for a temporary account."
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: When a temporary account expires, in UTC. `null` for a permanent account.
+        virtualAccountType:
+          type: string
+          description: "`main` for your business's own account in a currency, `additional` for accounts you create for customers or payments."
+        KYCInformation:
+          type: object
+          description: The details you sent.
+        accountInformation:
+          type: object
+          description: The details your customer needs to pay into the account.
+          properties:
+            accountNumber:
+              type: string
+              description: The account number.
+            accountName:
+              type: string
+              description: The name on the account.
+            bankName:
+              type: string
+              description: The bank that holds the account.
+            bankCode:
+              type: string
+              description: The bank's code, when there is one.
+        createdAt:
+          type: string
+          format: date-time
+          description: When the account was created, in UTC.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.

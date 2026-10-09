@@ -1,4 +1,46 @@
 ---
 title: "Virtual Accounts"
+sidebarTitle: "Overview"
 description: "Receive bank transfers into permanent or temporary virtual accounts."
+keywords: ["virtual account", "permanent account", "temporary account", "dynamic account", "NGN", "USD", "collections", "BVN"]
 ---
+
+A virtual account is a real account number that you give to someone who wants to pay you. When they send a bank transfer to it, Fincra credits your wallet in that currency, minus its fee, and sends you a collection webhook.
+
+## Permanent or temporary
+
+| | Permanent | Temporary |
+|---|---|---|
+| Use it for | A customer or your business that pays you again and again | One payment of an exact amount, such as an order |
+| Currencies | NGN and USD | NGN only |
+| Name on the account | The person or business you request it for | Your business |
+| How long it lasts | Until it's closed | The number of minutes you set in `expiresAt` |
+| Create it with | [Request a permanent virtual account](/api/virtual-accounts/request-a-permanent-virtual-account) | [Create a temporary virtual account](/api/virtual-accounts/create-a-temporary-virtual-account) |
+
+## Individual or corporate
+
+Every permanent account is either individual, in a person's name, or corporate, in a business's name.
+
+| Currency | Individual | Corporate |
+|---|---|---|
+| NGN | Yes. Send `firstName`, `lastName` and `bvn` | Yes. Send `businessName` and `bvn` |
+| USD | No | Yes. Send company details, documents and beneficial owners |
+
+NGN accounts are created straight away, and the response includes the account number. A USD request is reviewed before the account is issued, and each business can have one USD account.
+
+<Note>
+The minimum USD request has about 40 fields, all listed in [Request a permanent virtual account](/api/virtual-accounts/request-a-permanent-virtual-account) under **USD, corporate**. Copy the example, replace the values with your own, and send document links that Fincra can download.
+</Note>
+
+## Temporary accounts
+
+A temporary account is NGN only. Send the `amount` you expect as a string, such as `"1000"`, and `expiresAt` in minutes. Show your customer the `accountInformation` from the response, and tell them when it expires. The account is always in your business's name, whatever `accountType` you send.
+
+## Your own reference
+
+Send `merchantReference` with any account to tag it with your own ID, such as your customer's ID or your order number. Each reference can be used once: reusing one returns `409`. You can find an account by its reference with [List virtual accounts](/api/virtual-accounts/list-virtual-accounts).
+
+## Test in sandbox
+
+- For NGN accounts, use the test BVN `22222222222`.
+- To test money arriving, use [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection) with your account number. Fincra credits your sandbox wallet and sends the collection webhook, just as it does in production.
