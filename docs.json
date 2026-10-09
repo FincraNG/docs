@@ -14,8 +14,14 @@
         "group": "Quickstart",
         "pages": [
           "quickstart/create-a-sandbox-account",
-          "quickstart/get-your-api-keys",
-          "quickstart/send-your-first-api-request"
+          "quickstart/get-your-api-keys"
+        ]
+      },
+      {
+        "group": "Developer tools",
+        "pages": [
+          "developer-tools/overview",
+          "developer-tools/api"
         ]
       }
     ]
