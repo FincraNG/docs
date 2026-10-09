@@ -38,3 +38,12 @@ html.dark .card [data-component-part="card-icon"] svg {
 html.dark .sidebar-group:has(> li[id="/developer-tools/overview"]) {
   border-top-color: rgba(255, 255, 255, 0.1);
 }
+
+/* Top bar button without the arrow. */
+#topbar-cta-button svg {
+  display: none;
+}
+
+#topbar-cta-button a {
+  padding-right: 0.75rem;
+}
