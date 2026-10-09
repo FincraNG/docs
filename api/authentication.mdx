@@ -52,6 +52,12 @@ Fincra returns HTTP `401 Unauthorized` when the key is missing, wrong or from th
 
 The response includes a `request_id`. Include it when you contact support, so Fincra can find your request.
 
+## IP whitelisting
+
+In production, Fincra only accepts requests from IP addresses you've whitelisted. Until you add at least one, every production request fails with `IP address(es) must be whitelisted to proceed`. Sandbox doesn't check IP addresses.
+
+Add your server IP addresses in the dashboard under **My Account** > **IP Whitelisting**. Each change can add or replace 1 to 3 addresses, and Fincra reviews it before it takes effect, so add your addresses before you go live.
+
 ## Keep your keys safe
 
 - Store your keys in environment variables. Never put your secret key or webhook key in code, browser code or version control.

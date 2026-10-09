@@ -48,7 +48,14 @@
         "tab": "API Reference",
         "pages": [
           "api/introduction",
-          "api/authentication"
+          "api/authentication",
+          "api/errors",
+          "api/data-types",
+          "api/pagination",
+          "api/idempotency",
+          "api/rate-limits",
+          "api/webhooks",
+          "api/versioning"
         ]
       }
     ]

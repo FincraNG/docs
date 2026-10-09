@@ -1,0 +1,14 @@
+---
+title: "Pagination"
+description: "Get long lists of results one page at a time."
+keywords: ["pagination", "page", "perPage", "list"]
+---
+
+Endpoints that return lists, such as a list of payouts, return results one page at a time.
+
+| Parameter | What it does | Default |
+|---|---|---|
+| `page` | The page number to return, starting at 1 | `1` |
+| `perPage` | How many results to return on each page | `10` |
+
+To get every result, request page 1, then page 2 and so on, until a page returns fewer results than `perPage`.

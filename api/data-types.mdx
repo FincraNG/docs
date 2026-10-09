@@ -1,0 +1,40 @@
+---
+title: "Data types"
+description: "The formats Fincra uses for amounts, currencies, countries, dates and IDs."
+keywords: ["data types", "amount", "currency", "decimal", "country code", "date", "Business ID"]
+---
+
+Every request and response uses the same formats for common values.
+
+## Amounts
+
+Send amounts in the currency's major unit, as a number. For example, NGN 50,000 is `50000` and USD 25.50 is `25.5`.
+
+These currencies have no decimal places, so their amounts must be whole numbers:
+
+| Currency | Name |
+|---|---|
+| `RWF` | Rwandan franc |
+| `UGX` | Ugandan shilling |
+| `XAF` | Central African CFA franc |
+| `XOF` | West African CFA franc |
+
+Other currencies accept up to 2 decimal places.
+
+## Currencies
+
+Use three-letter ISO 4217 currency codes in capital letters, such as `NGN`, `KES` or `USD`.
+
+## Countries
+
+Use two-letter ISO 3166-1 country codes in capital letters, such as `NG`, `KE` or `GH`.
+
+## Dates and times
+
+Fincra returns dates and times in ISO 8601 format, in UTC, such as `2026-10-09T10:00:00.000Z`.
+
+## Business ID
+
+Your Business ID identifies your business. Some endpoints need it in the request body, in a field called `business`. Each endpoint page says when it's required.
+
+Find your Business ID in the dashboard under **My Account** > **My Profile**. Sandbox and production have different Business IDs.
