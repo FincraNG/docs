@@ -27,3 +27,8 @@ html.dark .card {
 html.dark .card [data-component-part="card-icon"] svg {
   background-color: #FFFFFF;
 }
+
+/* Sidebar anchors without icons. Mintlify adds a default icon when none is set. */
+.nav-anchor > svg {
+  display: none;
+}
