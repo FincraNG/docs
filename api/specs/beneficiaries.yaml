@@ -484,7 +484,7 @@ components:
             error: Beneficiary not found
             errorType: RESOURCE_NOT_FOUND
   schemas:
-    Address:
+    BeneficiaryAddress:
       type: object
       required: [country]
       properties:
@@ -505,7 +505,7 @@ components:
         zip:
           type: string
           description: The postal code.
-    Bank:
+    BeneficiaryBank:
       type: object
       description: >
         The beneficiary's bank, or their mobile money operator for a mobile
@@ -524,7 +524,7 @@ components:
           type: string
           description: The UK sort code, for GBP accounts.
         address:
-          $ref: "#/components/schemas/Address"
+          $ref: "#/components/schemas/BeneficiaryAddress"
     BeneficiaryInput:
       type: object
       required: [type, accountHolderName, currency, paymentDestination]
@@ -571,9 +571,9 @@ components:
           format: email
           description: The beneficiary's Interac email. Required when `paymentScheme` is `interac`.
         bank:
-          $ref: "#/components/schemas/Bank"
+          $ref: "#/components/schemas/BeneficiaryBank"
         address:
-          $ref: "#/components/schemas/Address"
+          $ref: "#/components/schemas/BeneficiaryAddress"
         uniqueIdentifier:
           type: string
           description: Your own ID for the beneficiary, if you want to store one.
