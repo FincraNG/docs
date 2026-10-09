@@ -198,18 +198,6 @@
             ]
           },
           {
-            "group": "Direct Debit",
-            "pages": [
-              "api/direct-debit/overview"
-            ]
-          },
-          {
-            "group": "Issuing",
-            "pages": [
-              "api/issuing/overview"
-            ]
-          },
-          {
             "group": "Sandbox simulation",
             "openapi": {
               "source": "api/specs/sandbox.yaml",
@@ -229,6 +217,18 @@
             },
             "pages": [
               "GET /core/banks"
+            ]
+          },
+          {
+            "group": "Direct Debit",
+            "pages": [
+              "api/direct-debit/overview"
+            ]
+          },
+          {
+            "group": "Issuing",
+            "pages": [
+              "api/issuing/overview"
             ]
           }
         ]
