@@ -25,8 +25,6 @@ paths:
         wallet. Fincra accepts each `customerReference` once for your business,
         so you can safely retry this request with the same reference.
       tags: [Payouts]
-      parameters:
-        - $ref: "#/components/parameters/Signature"
       requestBody:
         required: true
         content:
