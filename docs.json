@@ -8,17 +8,24 @@
     "dark": "#15803D"
   },
   "navigation": {
-    "pages": [
-      "index",
+    "anchors": [
       {
-        "group": "Quickstart",
+        "anchor": "Home",
+        "icon": "house",
         "pages": [
-          "quickstart/create-a-sandbox-account",
-          "quickstart/get-your-api-keys"
+          "index",
+          {
+            "group": "Quickstart",
+            "pages": [
+              "quickstart/create-a-sandbox-account",
+              "quickstart/get-your-api-keys"
+            ]
+          }
         ]
       },
       {
-        "group": "Developer tools",
+        "anchor": "Developer tools",
+        "icon": "wrench",
         "pages": [
           "developer-tools/overview",
           "developer-tools/api"
