@@ -9,7 +9,13 @@
   },
   "navigation": {
     "pages": [
-      "index"
+      "index",
+      {
+        "group": "Get started",
+        "pages": [
+          "quickstart"
+        ]
+      }
     ]
   },
   "contextual": {
