@@ -108,7 +108,6 @@
             },
             "pages": [
               "POST /conversions/initiate",
-              "POST /conversions/{id}/amend",
               "GET /conversions/{id}",
               "GET /conversions/reference/{reference}",
               "GET /conversions/customer-reference/{customerReference}",
