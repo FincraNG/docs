@@ -63,10 +63,10 @@
               "directory": "api"
             },
             "pages": [
-              "GET /business/me",
-              "GET /merchants/me",
-              "PATCH /business/{businessID}/settings",
-              "GET /business"
+              "GET /profile/business/me",
+              "GET /profile/merchants/me",
+              "PATCH /profile/business/{businessID}/settings",
+              "GET /profile/business"
             ]
           }
         ]

@@ -7,17 +7,15 @@ info:
     your business settings. Captured from fincra-profile and checked against
     sandbox. During the code freeze this file lives in the docs repository.
 servers:
-  - url: https://sandboxapi.fincra.com/profile
+  - url: https://sandboxapi.fincra.com
     description: Sandbox
-  - url: https://api.fincra.com/profile
-    description: Production
 security:
   - apiKey: []
 tags:
   - name: Business
     description: Your business, your merchant account and your business settings.
 paths:
-  /business/me:
+  /profile/business/me:
     get:
       operationId: getBusinessDetails
       summary: Get business details
@@ -66,7 +64,7 @@ paths:
                   updatedAt: "2026-10-09T10:00:00.000Z"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /merchants/me:
+  /profile/merchants/me:
     get:
       operationId: getMerchantDetails
       summary: Get merchant details
@@ -119,7 +117,7 @@ paths:
                 success: false
                 error: Merchant does not have a business attached to it.
                 errorType: RESOURCE_NOT_FOUND
-  /business:
+  /profile/business:
     get:
       operationId: listBusinesses
       summary: List businesses
@@ -159,7 +157,7 @@ paths:
                     isKYCApproved: true
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /business/{businessID}/settings:
+  /profile/business/{businessID}/settings:
     patch:
       operationId: updateBusinessSettings
       summary: Update business settings
