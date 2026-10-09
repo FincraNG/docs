@@ -9,7 +9,14 @@
   },
   "navigation": {
     "pages": [
-      "index"
+      "index",
+      {
+        "group": "Quickstart",
+        "pages": [
+          "quickstart/create-a-sandbox-account",
+          "quickstart/send-your-first-api-request"
+        ]
+      }
     ]
   },
   "contextual": {
