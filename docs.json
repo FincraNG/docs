@@ -76,6 +76,18 @@
             ]
           },
           {
+            "group": "Verification",
+            "openapi": {
+              "source": "api/specs/verification.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /core/accounts/resolve",
+              "POST /core/bvn-verification",
+              "GET /checkout/resolve/bin/{bin}"
+            ]
+          },
+          {
             "group": "Payouts",
             "openapi": {
               "source": "api/specs/disbursements.yaml",
@@ -112,6 +124,16 @@
               "GET /conversions/reference/{reference}",
               "GET /conversions/customer-reference/{customerReference}",
               "GET /conversions"
+            ]
+          },
+          {
+            "group": "Reference data",
+            "openapi": {
+              "source": "api/specs/reference-data.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "GET /core/banks"
             ]
           }
         ]
@@ -155,7 +177,8 @@
     "examples": {
       "languages": [
         "bash",
-        "node"
+        "node",
+        "python"
       ],
       "defaults": "required"
     }

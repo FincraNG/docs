@@ -1,0 +1,733 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Verification"
+  version: "1.0"
+  description: >
+    Verify a beneficiary's account before a payout, verify a Nigerian BVN and
+    look up the issuer and card details associated with a BIN. Captured from fincra-core and
+    checkout-core. During the code freeze this file lives in the docs
+    repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Verification
+    description: Check account, identity and card details before you use them.
+paths:
+  /core/accounts/resolve:
+    post:
+      operationId: verifyBeneficiaryAccount
+      summary: Verify a beneficiary account
+      description: |
+        Checks that a beneficiary's account exists before you send a payout to it. Create a payout doesn't run this check or compare the beneficiary's name, so verify the account first to catch a wrong account before any money moves.
+
+        | Account type | Currency | Identify the account with |
+        | --- | --- | --- |
+        | Bank account | NGN | `accountNumber` and `bankCode` |
+        | Bank account | GHS | `accountNumber` and `bankSwiftCode` |
+        | Bank account | KES | `accountNumber` and `bankCode` |
+        | Mobile money | GHS, KES | `accountNumber` and `mobileMoneyCode` |
+        | IBAN | Not sent | `iban` |
+        | Interac email | CAD | `interacEmail` |
+      tags: [Verification]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/NgnBankAccountCheck"
+                - $ref: "#/components/schemas/GhsBankAccountCheck"
+                - $ref: "#/components/schemas/KesBankAccountCheck"
+                - $ref: "#/components/schemas/MobileMoneyCheck"
+                - $ref: "#/components/schemas/IbanCheck"
+                - $ref: "#/components/schemas/InteracEmailCheck"
+            examples:
+              "NGN bank account":
+                summary: NGN bank account
+                value:
+                  type: nuban
+                  currency: NGN
+                  accountNumber: "0987654321"
+                  bankCode: "305"
+              "GHS bank account":
+                summary: GHS bank account
+                value:
+                  type: bank_account
+                  currency: GHS
+                  accountNumber: "4005006007"
+                  bankSwiftCode: ECOCGHAC
+              "KES bank account":
+                summary: KES bank account
+                value:
+                  type: bank_account
+                  currency: KES
+                  accountNumber: "1000012345"
+                  bankCode: "76"
+              "GHS mobile money":
+                summary: GHS mobile money
+                value:
+                  type: mobile_money
+                  currency: GHS
+                  accountNumber: "233541234567"
+                  mobileMoneyCode: AIRTEL
+              "KES mobile money":
+                summary: KES mobile money
+                value:
+                  type: mobile_money
+                  currency: KES
+                  accountNumber: "254722345678"
+                  mobileMoneyCode: SAFARICOM
+              "IBAN":
+                summary: IBAN
+                value:
+                  type: iban
+                  iban: GB29NWBK60161331926819
+              "Interac email":
+                summary: Interac email
+                value:
+                  type: interac_etransfer
+                  interacEmail: john.barret@example.com
+      responses:
+        "200":
+          description: Fincra verified the account.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: Always `true` when Fincra verified the account.
+                  message:
+                    type: string
+                    description: Always `Account resolve successful`.
+                  data:
+                    oneOf:
+                      - $ref: "#/components/schemas/VerifiedAccount"
+                      - $ref: "#/components/schemas/VerifiedIban"
+                      - $ref: "#/components/schemas/VerifiedInteracEmail"
+              examples:
+                "NGN bank account":
+                  summary: NGN bank account
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      accountName: Grace Okoro
+                      accountNumber: "0987654321"
+                      bankCode: "305"
+                "GHS bank account":
+                  summary: GHS bank account
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      accountName: Ecobank Ghana Test
+                      accountNumber: "4005006007"
+                      bankCode: ECOCGHAC
+                "KES bank account":
+                  summary: KES bank account
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      accountName: UBA Kenya Test Account
+                      accountNumber: "1000012345"
+                      bankCode: "76"
+                "GHS mobile money":
+                  summary: GHS mobile money
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      accountName: Ama Boateng
+                      accountNumber: "233541234567"
+                      bankCode: AIRTEL
+                "KES mobile money":
+                  summary: KES mobile money
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      accountName: James Kariuki
+                      accountNumber: "254722345678"
+                      bankCode: SAFARICOM
+                "IBAN":
+                  summary: IBAN
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      iban: GB29NWBK60161331926819
+                      accountNumber: GB29NWBK60161331926819
+                      bankName: NatWest Bank
+                      bankCode: NWBK
+                      bic: NWBKGB2L
+                      branchName: London City Branch
+                      branchCode: "001"
+                      country: United Kingdom
+                      countryIso: GB
+                      address: 123 Canary Wharf, London
+                      city: London
+                      state: England
+                      zip: E14 5AB
+                "Interac email, Autodeposit on":
+                  summary: Interac email, Autodeposit on
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      email: john.barret@example.com
+                      accountName: John Barret
+                      autoDepositEnabled: true
+                "Interac email, Autodeposit off":
+                  summary: Interac email, Autodeposit off
+                  value:
+                    success: true
+                    message: Account resolve successful
+                    data:
+                      email: john.barret+noautodeposit@example.com
+                      accountName: null
+                      autoDepositEnabled: false
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: >
+            Fincra couldn't verify the account, or a field is missing or in the
+            wrong format. When `errorType` is `ACCOUNT_RESOLVE_FAILED`, the error
+            doesn't say which detail was wrong, so check the account number and
+            the bank or operator code together. In sandbox, only Fincra's test
+            accounts can be verified, and any other account returns
+            `ACCOUNT_RESOLVE_FAILED`. The examples on this page use test accounts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoreError"
+              examples:
+                "Account not verified":
+                  summary: Account not verified
+                  value:
+                    success: false
+                    error: Account could not be resolved. Please check your selection and try again or contact support for assistance
+                    errorType: ACCOUNT_RESOLVE_FAILED
+                "Invalid field":
+                  summary: Invalid field
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. NGN account number must be exactly 10 digits
+                    errorType: VALIDATION_FAILED
+                    errors:
+                      - Error occurred during payload validation. NGN account number must be exactly 10 digits
+
+  /core/bvn-verification:
+    post:
+      operationId: verifyBvn
+      summary: Verify a BVN
+      description: >
+        Verifies a Nigerian Bank Verification Number and returns the identity
+        details attached to it. BVN Verification must be enabled for your
+        business, and your NGN balance must cover the verification fee. Fincra
+        completes the charge only when the verification succeeds.
+      tags: [Verification]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bvn, business]
+              properties:
+                bvn:
+                  type: string
+                  minLength: 11
+                  maxLength: 11
+                  pattern: "^[0-9]{11}$"
+                  description: The 11-digit BVN to verify.
+                business:
+                  type: string
+                  minLength: 24
+                  maxLength: 24
+                  description: Your Business ID.
+            example:
+              bvn: "54651333604"
+              business: 64f1c2a9e4b0a1b2c3d4e5f6
+      responses:
+        "200":
+          description: The BVN was verified.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: Always `true` when the BVN was verified.
+                  message:
+                    type: string
+                    description: Always `Bvn verification successful`.
+                  data:
+                    $ref: "#/components/schemas/BvnVerification"
+              example:
+                success: true
+                message: Bvn verification successful
+                data:
+                  verificationStatus: verified
+                  message: Verification Successfull
+                  response:
+                    firstName: John
+                    middleName: Doe
+                    lastName: Jane
+                    dateOfBirth: 01-Jan-2000
+                    phoneNo: "08012345678"
+                    bvn: "54651333604"
+                    watchListed: false
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: BVN Verification is not enabled for your business.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoreError"
+        "404":
+          description: Your business does not have an NGN wallet.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoreError"
+              example:
+                success: false
+                error: NGN wallet not found
+                errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: >
+            The BVN could not be verified, your NGN balance cannot cover the
+            fee or the request failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoreError"
+
+  /checkout/resolve/bin/{bin}:
+    get:
+      operationId: lookUpBin
+      summary: Look up a card BIN
+      description: >
+        Returns the card scheme, issuer, country, type and supported card
+        number lengths for a BIN. Send at least the first six digits of the
+        card number. If you send more, Fincra uses the first six.
+      tags: [Verification]
+      parameters:
+        - name: bin
+          in: path
+          required: true
+          description: At least the first six digits of the card number.
+          schema:
+            type: string
+            pattern: "^[0-9]{6,}$"
+          example: "531931"
+      responses:
+        "200":
+          description: The card details associated with the BIN.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message, data]
+                properties:
+                  status:
+                    type: boolean
+                    description: Always `true` when the BIN was resolved.
+                  message:
+                    type: string
+                    description: Always `Bin resolved`.
+                  data:
+                    $ref: "#/components/schemas/BinDetails"
+              example:
+                status: true
+                message: Bin resolved
+                data:
+                  bin: "531931"
+                  scheme: mastercard
+                  brand: Mastercard
+                  country:
+                    code: NG
+                    name: Nigeria
+                    emoji: "🇳🇬"
+                  bank: Example Bank
+                  type: debit
+                  lengths: [16]
+        "400":
+          description: The BIN contains non-numeric characters or has fewer than six digits.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutError"
+              example:
+                statusCode: 400
+                message: BIN length must be 6
+                error: Bad Request
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Fincra could not find card details for the BIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutError"
+              example:
+                statusCode: 404
+                message: No record found for this BIN
+                error: Not Found
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: No API key found in request
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+  schemas:
+    NgnBankAccountCheck:
+      title: NGN bank
+      description: A Nigerian bank account, identified by its account number and bank code.
+      type: object
+      required: [accountNumber, bankCode]
+      properties:
+        type:
+          type: string
+          enum: [nuban]
+          default: nuban
+          description: The account type. If you leave it out, Fincra checks a Nigerian bank account.
+        currency:
+          type: string
+          enum: [NGN]
+          default: NGN
+          description: The account's currency. If you leave it out, Fincra uses `NGN`.
+        accountNumber:
+          type: string
+          pattern: "^[0-9]{10}$"
+          description: The beneficiary's 10-digit bank account number.
+          example: "0987654321"
+        bankCode:
+          type: string
+          pattern: "^[0-9]{3,6}$"
+          description: The beneficiary's bank, as a 3 to 6 digit code from List banks.
+          example: "305"
+    GhsBankAccountCheck:
+      title: GHS bank
+      description: A Ghanaian bank account, identified by its account number and the bank's SWIFT code.
+      type: object
+      required: [type, currency, accountNumber, bankSwiftCode]
+      properties:
+        type:
+          type: string
+          enum: [bank_account]
+          description: The account type.
+        currency:
+          type: string
+          enum: [GHS]
+          description: The account's currency.
+        accountNumber:
+          type: string
+          pattern: "^[0-9]+$"
+          description: The beneficiary's bank account number, in digits only.
+          example: "4005006007"
+        bankSwiftCode:
+          type: string
+          pattern: "^[A-Za-z]{8,11}$"
+          description: The SWIFT code of the beneficiary's bank, 8 to 11 letters.
+          example: ECOCGHAC
+    KesBankAccountCheck:
+      title: KES bank
+      description: A Kenyan bank account, identified by its account number and bank code.
+      type: object
+      required: [type, currency, accountNumber, bankCode]
+      properties:
+        type:
+          type: string
+          enum: [bank_account]
+          description: The account type.
+        currency:
+          type: string
+          enum: [KES]
+          description: The account's currency.
+        accountNumber:
+          type: string
+          pattern: "^[0-9]+$"
+          description: The beneficiary's bank account number, in digits only. Kenyan account numbers vary in length by bank.
+          example: "1000012345"
+        bankCode:
+          type: string
+          pattern: "^[0-9]{1,4}$"
+          description: The beneficiary's bank, as a 1 to 4 digit Central Bank of Kenya code from List banks.
+          example: "76"
+    MobileMoneyCheck:
+      title: Mobile money
+      description: A mobile money wallet in Ghana or Kenya, identified by its number and operator.
+      type: object
+      required: [type, currency, accountNumber, mobileMoneyCode]
+      properties:
+        type:
+          type: string
+          enum: [mobile_money]
+          description: The account type.
+        currency:
+          type: string
+          enum: [GHS, KES]
+          description: The wallet's currency.
+        accountNumber:
+          type: string
+          pattern: "^[0-9]+$"
+          description: The beneficiary's mobile money number, starting with the country code and without `+`.
+          example: "233541234567"
+        mobileMoneyCode:
+          type: string
+          pattern: "^[A-Za-z]{2,20}$"
+          description: The beneficiary's mobile money operator, as the `code` from List banks, such as `SAFARICOM` for M-Pesa or `AIRTEL`.
+          example: AIRTEL
+    IbanCheck:
+      title: IBAN
+      description: >
+        An account identified by its IBAN. Fincra reads the country and bank
+        from the IBAN, so don't send `currency`. Sending `EUR` or `GBP` returns
+        a `VALIDATION_FAILED` error.
+      type: object
+      required: [type, iban]
+      properties:
+        type:
+          type: string
+          enum: [iban]
+          description: The account type.
+        iban:
+          type: string
+          description: The beneficiary's IBAN.
+          example: GB29NWBK60161331926819
+    InteracEmailCheck:
+      title: Interac
+      description: >
+        A Canadian beneficiary identified by the email they registered with
+        Interac. In sandbox, every email returns the name John Barret. An
+        email that contains `noautodeposit` returns `autoDepositEnabled` as
+        `false`, and any other email returns `true`.
+      type: object
+      required: [type, interacEmail]
+      properties:
+        type:
+          type: string
+          enum: [interac_etransfer]
+          description: The account type.
+        currency:
+          type: string
+          enum: [CAD]
+          default: CAD
+          description: The account's currency. If you leave it out, Fincra uses `CAD`.
+        interacEmail:
+          type: string
+          format: email
+          description: The email address the beneficiary registered with Interac.
+          example: john.barret@example.com
+    VerifiedAccount:
+      title: Bank or mobile money
+      description: A bank account or mobile money wallet returns the name registered to it.
+      type: object
+      required: [accountName, accountNumber, bankCode]
+      properties:
+        accountName:
+          type: string
+          description: The name registered to the account. Compare it with the name your customer gave you. If the names don't match, confirm the details with your customer before you create the payout.
+        accountNumber:
+          type: string
+          description: The account number or mobile money number you sent.
+        bankCode:
+          type: string
+          description: The code you sent to identify the bank or operator. For a GHS bank account, this is the bank's SWIFT code from `bankSwiftCode`, not its bank code. For mobile money, it is the operator code.
+    VerifiedIban:
+      title: IBAN
+      description: An IBAN returns the bank and branch that hold the account. It doesn't return the account holder's name.
+      type: object
+      required: [iban, accountNumber, bankName, bankCode, bic, country, countryIso]
+      properties:
+        iban:
+          type: string
+          description: The IBAN you sent.
+        accountNumber:
+          type: string
+          description: The IBAN you sent, repeated.
+        bankName:
+          type: string
+          description: The name of the bank that holds the account.
+        bankCode:
+          type: string
+          description: The bank code taken from the IBAN.
+        bic:
+          type: string
+          description: The bank's BIC, also called its SWIFT code.
+        branchName:
+          type: string
+          description: The branch that holds the account, when the bank directory has it.
+        branchCode:
+          type: string
+          description: The branch code, when the bank directory has it.
+        country:
+          type: string
+          description: The country of the bank, in full.
+        countryIso:
+          type: string
+          description: The two-letter ISO 3166 code of the bank's country.
+        address:
+          type: string
+          description: The branch's street address, when the bank directory has it.
+        city:
+          type: string
+          description: The branch's city, when the bank directory has it.
+        state:
+          type: string
+          description: The branch's state or region, when the bank directory has it.
+        zip:
+          type: string
+          description: The branch's postcode, when the bank directory has it.
+    VerifiedInteracEmail:
+      title: Interac
+      description: An Interac email returns whether the beneficiary has Interac Autodeposit turned on, and their name when it is on.
+      type: object
+      required: [email, accountName, autoDepositEnabled]
+      properties:
+        email:
+          type: string
+          format: email
+          description: The Interac email you sent.
+        accountName:
+          type: [string, "null"]
+          description: The beneficiary's name. `null` when Autodeposit is off.
+        autoDepositEnabled:
+          type: boolean
+          description: >
+            `true` when the beneficiary has Interac Autodeposit turned on, so a
+            payout to this email is deposited without the beneficiary having
+            to accept it. When `false`, a payout to this email must include
+            `beneficiary.securityQuestion` and `beneficiary.securityAnswer`,
+            which the beneficiary uses to accept the payout. Without them,
+            Fincra rejects the payout.
+    BvnVerification:
+      type: object
+      required: [verificationStatus]
+      properties:
+        verificationStatus:
+          type: string
+          enum: [verified]
+        message:
+          type: string
+          description: The verification message returned by the identity provider.
+        response:
+          type: object
+          additionalProperties: true
+          properties:
+            firstName:
+              type: string
+            middleName:
+              type: [string, "null"]
+            lastName:
+              type: string
+            bvn:
+              type: string
+            gender:
+              type: [string, "null"]
+            dateOfBirth:
+              type: [string, "null"]
+            phoneNo:
+              type: [string, "null"]
+            phoneNo2:
+              type: [string, "null"]
+            pixBase64:
+              type: [string, "null"]
+            watchListed:
+              type: [boolean, "null"]
+            watchListMessage:
+              type: [string, "null"]
+    BinDetails:
+      type: object
+      required: [bin, scheme, brand, country, bank, type, lengths]
+      properties:
+        bin:
+          type: string
+          description: The first six digits Fincra used for the lookup.
+        scheme:
+          type: [string, "null"]
+          description: The card scheme, such as `visa` or `mastercard`.
+        brand:
+          type: [string, "null"]
+          description: The card brand returned by the BIN data provider.
+        country:
+          type: object
+          required: [code, name, emoji]
+          properties:
+            code:
+              type: [string, "null"]
+              description: The two-letter country code.
+            name:
+              type: [string, "null"]
+            emoji:
+              type: [string, "null"]
+        bank:
+          type: [string, "null"]
+          description: The issuing bank.
+        type:
+          type: [string, "null"]
+          description: The card type, such as `debit` or `credit`.
+        lengths:
+          type: [array, "null"]
+          description: Card number lengths supported by the scheme.
+          items:
+            type: integer
+    CoreError:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+          description: A clear description of what failed.
+        errorType:
+          type: [string, "null"]
+          description: A stable code for handling the failure in your integration.
+        errors:
+          type: array
+          items:
+            type: string
+          description: One message for each invalid field. Only present when `errorType` is `VALIDATION_FAILED`.
+    CheckoutError:
+      type: object
+      required: [statusCode, message, error]
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string

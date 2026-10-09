@@ -485,9 +485,11 @@ paths:
       operationId: uploadPayoutDocument
       summary: Upload a payout document
       description: >
-        Uploads a supporting document, such as an invoice, for a payout that
-        needs one. A payout needs documents when its `isDocumentRequired` is
-        `true`.
+        Uploads a supporting document for a payout that needs one. When a
+        payout's `isDocumentRequired` is `true`, Fincra holds it until you
+        upload every document type in its `documentsRequired`, one document
+        per request. When the last one arrives, the payout moves to
+        `processing`.
       tags: [Payouts]
       requestBody:
         required: true
@@ -495,32 +497,131 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [name, type, reference, file]
+              required: [reference, type, name, file]
               properties:
                 reference:
                   type: string
-                  description: The reference of the payout the document belongs to.
+                  description: Fincra's `reference` for the payout, not your `customerReference`.
+                  example: a1b2c3d4e5f6
+                type:
+                  $ref: "#/components/schemas/PayoutDocumentType"
                 name:
                   type: string
-                  description: The document name.
-                type:
-                  type: string
-                  description: The document type, such as `invoice`.
+                  description: A name for the document, such as the invoice number.
+                  example: Invoice INV-1024
                 file:
                   type: string
                   format: binary
-                  description: The document file.
+                  description: The document, as a PDF, JPG, JPEG or PNG file of up to 10 MB.
       responses:
         "200":
-          description: Fincra received the document.
+          description: Fincra attached the document to the payout.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: Always `true` when Fincra attached the document.
+                  message:
+                    type: string
+                    description: Always `Transaction document uploaded successfully`.
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: Fincra's numeric ID for the payout.
+                      reference:
+                        type: string
+                        description: Fincra's reference for the payout.
+                      customerReference:
+                        type: string
+                        description: Your reference for the payout.
+                      status:
+                        $ref: "#/components/schemas/PayoutStatus"
+                      isDocumentUploaded:
+                        type: boolean
+                        description: >
+                          `true` when you have uploaded every document in
+                          `documentsRequired` and the payout has moved to
+                          `processing`. `false` while documents are still
+                          missing.
+              examples:
+                "Last document uploaded":
+                  summary: Last document uploaded
+                  value:
+                    success: true
+                    message: Transaction document uploaded successfully
+                    data:
+                      id: 1024
+                      reference: a1b2c3d4e5f6
+                      customerReference: payout-0001
+                      status: processing
+                      isDocumentUploaded: true
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: >
+            The file is larger than 10 MB. This response is plain text, not
+            JSON: `File size limit exceeded.`
         "422":
-          description: The request failed validation.
+          description: >
+            Fincra couldn't attach the document. Every failure here has
+            `errorType` set to `UNPROCESSABLE_ENTITY`, except a missing or
+            invalid field, which has `VALIDATION_FAILED`. Read `error` to see
+            what went wrong.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+              examples:
+                "Payout not found":
+                  summary: Payout not found
+                  value:
+                    success: false
+                    error: Payout reference not found
+                    errorType: UNPROCESSABLE_ENTITY
+                "Document not required":
+                  summary: Document not required
+                  value:
+                    success: false
+                    error: Document not required for this payout
+                    errorType: UNPROCESSABLE_ENTITY
+                "Wrong document type":
+                  summary: Wrong document type
+                  value:
+                    success: false
+                    error: "Document type 'invoice' is not required for this payout. Required types: bill_of_lading, packing_list"
+                    errorType: UNPROCESSABLE_ENTITY
+                "Type already uploaded":
+                  summary: Type already uploaded
+                  value:
+                    success: false
+                    error: Document of type 'invoice' has already been uploaded for this payout
+                    errorType: UNPROCESSABLE_ENTITY
+                "All documents already uploaded":
+                  summary: All documents already uploaded
+                  value:
+                    success: false
+                    error: Document already uploaded for this payout
+                    errorType: UNPROCESSABLE_ENTITY
+                "File type not accepted":
+                  summary: File type not accepted
+                  value:
+                    success: false
+                    error: Error occured during file upload, please try again.
+                    errorType: UNPROCESSABLE_ENTITY
+                "Missing field":
+                  summary: Missing field
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. type is required
+                    errorType: VALIDATION_FAILED
+                    errors:
+                      - Error occurred during payload validation. type is required
 components:
   securitySchemes:
     apiKey:
@@ -567,6 +668,11 @@ components:
             error: Payout not found
             errorType: RESOURCE_NOT_FOUND
   schemas:
+    PayoutDocumentType:
+      type: string
+      description: The document type. It must be one of the types in the payout's `documentsRequired`.
+      example: invoice
+      enum: [invoice, bill_of_lading, airway_bill, packing_list, delivery_note, service_contract, demand_notice, demand_notice_or_invoice, purchase_agreement, construction_contract, vendor_contract, source_bank_statement, advertising_contract_award_letter, currency_exchange_agreement, payment_instruction, investment_agreement, board_resolution, form_a, mutual_funds_subscription_mandate, loan_contract, demand_notice_or_payment_instruction, agreement, merchant_agreement, sale_exit_agreement, evidence_of_initial_investment, rental_agreement, mortgage_contract, intellectual_property_registration, intellectual_property_lease_sale_contract, evidence_of_relationship_to_beneficiary, admission_letter, medical_report, payment_service_agreement, payroll_schedule, user_profile, annual_financial_statement, tax_demand_notice, insurance_contract, customer_profile, executed_claim_offer, donation_request]
     PayoutStatus:
       type: string
       enum: [initiated, processing, successful, failed, change_requested]
@@ -594,8 +700,8 @@ components:
         documentsRequired:
           type: array
           items:
-            type: string
-          description: The documents Fincra needs. Empty when none are needed.
+            $ref: "#/components/schemas/PayoutDocumentType"
+          description: The document types Fincra needs. Empty when none are needed. Send each one with Upload a payout document.
     PayoutResponse:
       type: object
       properties:
