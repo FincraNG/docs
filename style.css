@@ -47,3 +47,17 @@ html.dark .sidebar-group:has(> li[id="/developer-tools/overview"]) {
 #topbar-cta-button a {
   padding-right: 0.75rem;
 }
+
+/* The Documentation and API reference tabs drive separate sidebars. Hide the tab row: the top bar links switch between them. */
+#navbar div:has(> .nav-tabs) {
+  display: none;
+}
+
+/* Show "API Reference" in the documentation and "Documentation" in the API reference. */
+html:not([data-current-path^="/api/"]) li.navbar-link:has(> a[href="/"]) {
+  display: none;
+}
+
+html[data-current-path^="/api/"] li.navbar-link:has(> a[href="/api/introduction"]) {
+  display: none;
+}

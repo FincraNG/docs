@@ -8,40 +8,55 @@
     "dark": "#15803D"
   },
   "navigation": {
-    "pages": [
-      "index",
+    "tabs": [
       {
-        "group": "Quickstart",
+        "tab": "Documentation",
         "pages": [
-          "quickstart/create-a-sandbox-account",
-          "quickstart/send-your-first-api-request"
+          "index",
+          {
+            "group": "Quickstart",
+            "pages": [
+              "quickstart/create-a-sandbox-account",
+              "quickstart/send-your-first-api-request"
+            ]
+          },
+          {
+            "group": "Products",
+            "pages": [
+              "payments/overview",
+              "payouts/overview",
+              "virtual-accounts/overview",
+              "fx-and-conversion/overview",
+              "wallets-and-balances/overview",
+              "direct-debit/overview",
+              "issuing/overview",
+              "verification/overview"
+            ]
+          },
+          "developer-tools/overview",
+          "api-reference",
+          "changelog",
+          "support",
+          "glossary"
         ]
       },
       {
-        "group": "Products",
+        "tab": "API reference",
         "pages": [
-          "payments/overview",
-          "payouts/overview",
-          "virtual-accounts/overview",
-          "fx-and-conversion/overview",
-          "wallets-and-balances/overview",
-          "direct-debit/overview",
-          "issuing/overview",
-          "verification/overview"
+          "api/introduction"
         ]
-      },
-      "developer-tools/overview",
-      "api-reference/overview",
-      "changelog",
-      "support",
-      "glossary"
+      }
     ]
   },
   "navbar": {
     "links": [
       {
         "label": "API Reference",
-        "href": "/api-reference/overview"
+        "href": "/api/introduction"
+      },
+      {
+        "label": "Documentation",
+        "href": "/"
       },
       {
         "label": "Log in",
