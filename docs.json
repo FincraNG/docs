@@ -55,7 +55,20 @@
           "api/idempotency",
           "api/rate-limits",
           "api/webhooks",
-          "api/versioning"
+          "api/versioning",
+          {
+            "group": "Business",
+            "openapi": {
+              "source": "api/specs/profile.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "GET /business/me",
+              "GET /merchants/me",
+              "PATCH /business/{businessID}/settings",
+              "GET /business"
+            ]
+          }
         ]
       }
     ]

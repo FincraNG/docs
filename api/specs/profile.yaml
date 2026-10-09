@@ -1,0 +1,405 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Business"
+  version: "1.0"
+  description: >
+    Read your business and merchant details, list your businesses and update
+    your business settings. Captured from fincra-profile and checked against
+    sandbox. During the code freeze this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com/profile
+    description: Sandbox
+  - url: https://api.fincra.com/profile
+    description: Production
+security:
+  - apiKey: []
+tags:
+  - name: Business
+    description: Your business, your merchant account and your business settings.
+paths:
+  /business/me:
+    get:
+      operationId: getBusinessDetails
+      summary: Get business details
+      description: >
+        Returns the business your secret key belongs to. Use it to confirm your
+        key works and to get your Business ID.
+      tags: [Business]
+      responses:
+        "200":
+          description: Your business details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    $ref: "#/components/schemas/Business"
+              example:
+                success: true
+                message: Parent business fetched successfully
+                data:
+                  _id: 64f1c2a9e4b0a1b2c3d4e5f6
+                  name: Tumaini Enterprises
+                  email: tumaini@example.com
+                  mobile: "8000000000"
+                  countryCallingCode: "+234"
+                  country: NG
+                  businessType: Fintech
+                  status: enabled
+                  isKYCApproved: true
+                  settings:
+                    feeBearer: business
+                    settlementDestination: wallet
+                    enableWebhook: true
+                    enableWebhookRetry: true
+                    callbackURL: https://example.com/webhooks
+                    acceptMispayments: true
+                  createdAt: "2026-10-09T10:00:00.000Z"
+                  updatedAt: "2026-10-09T10:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /merchants/me:
+    get:
+      operationId: getMerchantDetails
+      summary: Get merchant details
+      description: >
+        Returns the merchant account your secret key belongs to, and the IDs of
+        the businesses under it.
+      tags: [Business]
+      responses:
+        "200":
+          description: Your merchant details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    $ref: "#/components/schemas/Merchant"
+              example:
+                success: true
+                message: Merchant details fetched successfully
+                data:
+                  _id: 64f1c2a9e4b0a1b2c3d4e5f0
+                  name: Tumaini Moyo
+                  email: tumaini@example.com
+                  country: NG
+                  mobile: "8000000000"
+                  business:
+                    id: 64f1c2a9e4b0a1b2c3d4e5f6
+                    subBusinessIds: []
+                  createdAt: "2026-10-09T10:00:00.000Z"
+                  updatedAt: "2026-10-09T10:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: >
+            Fincra couldn't find your merchant account, or no business is
+            attached to it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Merchant does not have a business attached to it.
+                errorType: RESOURCE_NOT_FOUND
+  /business:
+    get:
+      operationId: listBusinesses
+      summary: List businesses
+      description: >
+        Returns every business under your merchant account. The list isn't
+        paginated.
+      tags: [Business]
+      responses:
+        "200":
+          description: Your businesses.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    type: array
+                    description: Your businesses.
+                    items:
+                      $ref: "#/components/schemas/Business"
+              example:
+                success: true
+                message: Merchant businesses fetched successfully
+                data:
+                  - _id: 64f1c2a9e4b0a1b2c3d4e5f6
+                    name: Tumaini Enterprises
+                    email: tumaini@example.com
+                    country: NG
+                    status: enabled
+                    isKYCApproved: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /business/{businessID}/settings:
+    patch:
+      operationId: updateBusinessSettings
+      summary: Update business settings
+      description: >
+        Updates the settings of one of your businesses. Send only the settings
+        you want to change. You can only update businesses under your own
+        merchant account.
+      tags: [Business]
+      parameters:
+        - name: businessID
+          in: path
+          required: true
+          description: Your Business ID. It has 24 characters.
+          schema:
+            type: string
+            minLength: 24
+            maxLength: 24
+          example: 64f1c2a9e4b0a1b2c3d4e5f6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                callbackURL:
+                  type: string
+                  format: uri
+                  description: The URL Fincra sends webhooks to.
+                  example: https://example.com/webhooks
+                enableWebhook:
+                  type: boolean
+                  description: Turns webhooks on or off.
+                enableWebhookRetry:
+                  type: boolean
+                  description: >
+                    Turns automatic retries on or off for webhooks your server
+                    doesn't accept.
+                feeBearer:
+                  type: string
+                  enum: [business, customer]
+                  description: >
+                    Who pays the transaction fee by default: your business or
+                    your customer.
+                acceptMispayments:
+                  type: boolean
+                  description: >
+                    Whether Fincra accepts a bank transfer into a temporary
+                    virtual account when the amount doesn't match the amount
+                    expected.
+            example:
+              callbackURL: https://example.com/webhooks
+              enableWebhook: true
+              enableWebhookRetry: true
+      responses:
+        "200":
+          description: The business with its updated settings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    $ref: "#/components/schemas/Business"
+              example:
+                success: true
+                message: You have successfully updated your business settings
+                data:
+                  _id: 64f1c2a9e4b0a1b2c3d4e5f6
+                  name: Tumaini Enterprises
+                  settings:
+                    enableWebhook: true
+                    enableWebhookRetry: true
+                    callbackURL: https://example.com/webhooks
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The business doesn't exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Cannot update setting. Business not found
+                errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: The request body has no settings to update.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Cannot continue. No setting provided for update
+                errorType: UNPROCESSABLE_ENTITY
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Always `Unauthorized`.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+  schemas:
+    Business:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The Business ID. Send it as `business` where an endpoint asks for it.
+        name:
+          type: string
+          description: The business name.
+        email:
+          type: string
+          description: The business email address.
+        mobile:
+          type: string
+          description: The business phone number, without the country calling code.
+        countryCallingCode:
+          type: string
+          description: The country calling code for `mobile`, such as `+234`.
+        country:
+          type: string
+          description: The business country, as a two-letter ISO 3166-1 code.
+        businessType:
+          type: string
+          description: The type of business chosen at sign-up.
+        status:
+          type: string
+          enum: [enabled, disabled]
+          description: Whether the business can transact.
+        isKYCApproved:
+          type: boolean
+          description: Whether Fincra has approved the business onboarding.
+        settings:
+          type: object
+          description: The business settings.
+          properties:
+            feeBearer:
+              type: string
+              enum: [business, customer]
+              description: Who pays the transaction fee by default.
+            settlementDestination:
+              type: string
+              description: Where Fincra settles collected funds, such as `wallet`.
+            enableWebhook:
+              type: boolean
+              description: Whether webhooks are on.
+            enableWebhookRetry:
+              type: boolean
+              description: Whether failed webhooks are retried automatically.
+            callbackURL:
+              type: string
+              description: The URL Fincra sends webhooks to.
+            acceptMispayments:
+              type: boolean
+              description: >
+                Whether Fincra accepts a bank transfer into a temporary virtual
+                account when the amount doesn't match the amount expected.
+        createdAt:
+          type: string
+          format: date-time
+          description: When the business was created, in UTC.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the business was last updated, in UTC.
+    Merchant:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: The merchant ID.
+        name:
+          type: string
+          description: The merchant name.
+        email:
+          type: string
+          description: The merchant email address.
+        country:
+          type: string
+          description: The merchant country, as a two-letter ISO 3166-1 code.
+        mobile:
+          type: string
+          description: The merchant phone number.
+        business:
+          type: object
+          description: The businesses under this merchant account.
+          properties:
+            id:
+              type: string
+              description: The Business ID of the main business.
+            subBusinessIds:
+              type: array
+              items:
+                type: string
+              description: The Business IDs of any other businesses under this merchant account.
+        createdAt:
+          type: string
+          format: date-time
+          description: When the merchant account was created, in UTC.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the merchant account was last updated, in UTC.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.
