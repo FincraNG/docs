@@ -32,7 +32,8 @@
                 "group": "Payouts",
                 "pages": [
                   "payouts/overview",
-                  "payouts/requirements"
+                  "payouts/requirements",
+                  "payouts/beneficiaries"
                 ]
               },
               "virtual-accounts/overview",
@@ -101,6 +102,20 @@
               "directory": "api"
             },
             "pages": [
+              {
+                "group": "Beneficiaries",
+                "openapi": {
+                  "source": "api/specs/beneficiaries.yaml",
+                  "directory": "api/payouts"
+                },
+                "pages": [
+                  "GET /profile/beneficiaries/business/{businessID}",
+                  "POST /profile/beneficiaries/business/{businessID}",
+                  "GET /profile/beneficiaries/business/{businessID}/{beneficiaryID}",
+                  "PATCH /profile/beneficiaries/business/{businessID}/{beneficiaryID}",
+                  "DELETE /profile/beneficiaries/business/{businessID}/{beneficiaryID}"
+                ]
+              },
               "POST /disbursements/payouts",
               "GET /disbursements/payouts/reference/{reference}",
               "GET /disbursements/payouts/customer-reference/{customerReference}",

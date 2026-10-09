@@ -1,0 +1,52 @@
+---
+title: "Beneficiaries"
+description: "Save the people and businesses you pay, and use their saved details in a payout."
+keywords: ["beneficiary", "recipient", "saved beneficiary", "payout", "address book"]
+---
+
+A beneficiary is a person or business you send payouts to. Save a beneficiary once, and you don't have to collect their account details again for every payout.
+
+## How saved beneficiaries work with payouts
+
+Create a payout doesn't take a beneficiary's ID. To pay a saved beneficiary, get it with [Get a beneficiary](/api/payouts/beneficiaries/get-a-beneficiary) and copy its details into the payout's `beneficiary` object:
+
+| Saved beneficiary | Payout field |
+|---|---|
+| `type` | `beneficiary.type` |
+| `firstName` and `lastName` | `beneficiary.firstName` and `beneficiary.lastName` |
+| `accountHolderName` | `beneficiary.accountHolderName` |
+| `destinationAddress` | `beneficiary.accountNumber` |
+| `bank.code` | `beneficiary.bankCode`, or `beneficiary.mobileMoneyCode` for a mobile money wallet |
+| `bank.swiftCode` | `beneficiary.bankSwiftCode` |
+| `bank.name` | `beneficiary.bankName` |
+| `bank.sortCode` | `beneficiary.sortCode` |
+| `interacEmail` | `beneficiary.interacEmail` |
+| `address` | `beneficiary.address`, and `address.country` as `beneficiary.country` |
+| `email` and `phoneNumber` | `beneficiary.email` and `beneficiary.phone` |
+| `currency` | `destinationCurrency` |
+| `paymentDestination` | `paymentDestination` |
+
+<Note>
+A saved `paymentScheme` doesn't always use the same value as a payout. For example, payouts use `fed_wire` for a US wire. Always set the payout's `paymentScheme` from the [payout requirements](/payouts/requirements).
+</Note>
+
+## Verify before you save
+
+Fincra saves a beneficiary exactly as you send it and doesn't check that the account exists. Before you save one, check the account with [Verify a beneficiary account](/api/verification/verify-a-beneficiary-account) and compare the name it returns with the name your customer gave you.
+
+## Rules
+
+- You can save each account once per currency. Saving the same account number and bank code, or the same Interac email, again returns `409 This beneficiary already exists`.
+- For a corporate beneficiary, Fincra uses `accountHolderName` as the name. You don't need `firstName`.
+- To change a beneficiary, send every required field with [Update a beneficiary](/api/payouts/beneficiaries/update-a-beneficiary), not only the ones that change.
+- Deleting a beneficiary doesn't affect payouts you already sent to them.
+
+## API reference
+
+| To | Use |
+|---|---|
+| Save a beneficiary | [Create a beneficiary](/api/payouts/beneficiaries/create-a-beneficiary) |
+| See all saved beneficiaries | [List beneficiaries](/api/payouts/beneficiaries/list-beneficiaries) |
+| Get one beneficiary | [Get a beneficiary](/api/payouts/beneficiaries/get-a-beneficiary) |
+| Change a beneficiary | [Update a beneficiary](/api/payouts/beneficiaries/update-a-beneficiary) |
+| Remove a beneficiary | [Delete a beneficiary](/api/payouts/beneficiaries/delete-a-beneficiary) |
