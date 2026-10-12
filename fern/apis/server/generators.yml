@@ -1,0 +1,57 @@
+auth-schemes:
+  ApiKey:
+    header: api-key
+    name: apiKey
+    type: string
+api:
+  auth: ApiKey
+  headers:
+    x-business-id:
+      name: businessId
+      type: optional<string>
+    x-pub-key:
+      name: pubKey
+      type: optional<string>
+  specs:
+    - openapi: ../../../api/specs/profile.yaml
+    - openapi: ../../../api/specs/verification.yaml
+    - openapi: ../../../api/specs/disbursements.yaml
+    - openapi: ../../../api/specs/beneficiaries.yaml
+    - openapi: ../../../api/specs/quotes.yaml
+    - openapi: ../../../api/specs/conversions.yaml
+    - openapi: ../../../api/specs/checkout.yaml
+    - openapi: ../../../api/specs/collections.yaml
+    - openapi: ../../../api/specs/refunds.yaml
+    - openapi: ../../../api/specs/chargebacks.yaml
+    - openapi: ../../../api/specs/virtual-accounts.yaml
+    - openapi: ../../../api/specs/wallets.yaml
+    - openapi: ../../../api/specs/sandbox.yaml
+    - openapi: ../../../api/specs/reference-data.yaml
+default-group: postman
+groups:
+  postman:
+    generators:
+      - name: fernapi/fern-postman
+        version: 0.4.0
+        output:
+          location: local-file-system
+          path: /private/tmp/claude-501/-Users-taofiqaiyelabegan/1e358bd3-15b0-4f40-a28e-e13afa885411/scratchpad/postman-out
+  node:
+    generators:
+      - name: fernapi/fern-typescript-sdk
+        version: 2.0.0
+        output:
+          location: local-file-system
+          path: /Users/taofiqaiyelabegan/Desktop/fincra-node-sdk
+        config:
+          namespaceExport: Fincra
+          outputSourceFiles: true
+  python:
+    generators:
+      - name: fernapi/fern-python-sdk
+        version: 5.40.0
+        output:
+          location: local-file-system
+          path: /Users/taofiqaiyelabegan/Desktop/fincra-python-sdk
+        config:
+          client_class_name: Fincra

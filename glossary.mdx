@@ -9,7 +9,7 @@ keywords: ["glossary", "terms", "definitions", "wallet", "collection", "virtual 
 - **Business ID**: Fincra's ID for your business. Some requests need it, and [Get business details](/api/business/get-business-details) returns it as `_id`. Sandbox and production have different Business IDs.
 - **BVN**: Bank Verification Number. An 11-digit number that identifies a person across Nigerian banks. Fincra uses it to verify people and to open NGN virtual accounts. See [Verify a BVN](/api/verification/verify-a-bvn).
 - **Chargeback**: A dispute a cardholder raises with their bank about a card payment. You accept it, or reject it with proof. See [Chargebacks](/api/payments/chargebacks/list-chargebacks).
-- **Collection**: Fincra's record of money you received, whichever way it came in: a virtual account, checkout, card or mobile money. See [When money arrives](/when-money-arrives).
+- **Collection**: Fincra's record of money you received, whichever way it came in: a virtual account, checkout, card or mobile money. See [Collections](/api/collections/list-collections).
 - **Conversion**: Exchanging money from a wallet in one currency to a wallet in another. See [Create a conversion](/api/conversions/create-a-conversion).
 - **Customer reference**: Your own reference for a payout or conversion, sent as `customerReference`. Fincra accepts each one once, so you can safely retry a request with the same reference.
 - **Ledger balance**: The total money in a wallet: available, locked and rolling reserve together.

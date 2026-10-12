@@ -28,15 +28,31 @@ html.dark .card [data-component-part="card-icon"] svg {
   background-color: #FFFFFF;
 }
 
-/* Divider between Products and the last sidebar section, matching Mintlify's group dividers. */
-.sidebar-group:has(> li[id="/developer-tools/overview"]) {
-  border-top: 1px solid rgb(238, 242, 240);
-  padding-top: 0.75rem;
-  margin-top: 0.75rem;
+/* Dividers after Products: Developer Tools and API Reference form one block, Changelog, Support and Glossary another.
+   Same line and spacing as Mintlify's group dividers (12px either side, plus the 8px group margin). */
+.sidebar-group:has(> li[id="/developer-tools/overview"]),
+.sidebar-group:has(> li[id="/changelog"]) {
+  display: flow-root;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
-html.dark .sidebar-group:has(> li[id="/developer-tools/overview"]) {
-  border-top-color: rgba(255, 255, 255, 0.1);
+.sidebar-group:has(> li[id="/developer-tools/overview"])::before,
+.sidebar-group:has(> li[id="/changelog"])::before {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 12px 4px 12px;
+  background-color: rgb(238, 242, 240);
+}
+
+.sidebar-group:has(> li[id="/changelog"])::before {
+  margin-top: 20px;
+}
+
+html.dark .sidebar-group:has(> li[id="/developer-tools/overview"])::before,
+html.dark .sidebar-group:has(> li[id="/changelog"])::before {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Top bar button without the arrow. */
@@ -54,12 +70,18 @@ html.dark .sidebar-group:has(> li[id="/developer-tools/overview"]) {
 }
 
 /* Show "API Reference" in the documentation and "Documentation" in the API reference. */
-html:not([data-current-path^="/api/"]) li.navbar-link:has(> a[href="/"]) {
+html:not([data-current-path^="/api/"]):not([data-current-path^="/developer-tools/"]):not([data-current-path^="/virtual-accounts/"]) li.navbar-link:has(> a[href="/"]) {
   display: none;
 }
 
 html[data-current-path^="/api/"] li.navbar-link:has(> a[href="/api/introduction"]) {
   display: none;
+}
+
+/* Developer tools and product sections have their own sidebar: offer a way back to the Documentation, like the API reference. */
+html[data-current-path^="/developer-tools/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/virtual-accounts/"] li.navbar-link:has(> a[href="/"]) {
+  display: list-item;
 }
 
 /* API Reference introduction: base URL table in a bordered box, after the Airwallex benchmark. */
@@ -94,4 +116,58 @@ html.dark .base-url-table table,
 html.dark .base-url-table th,
 .boxed-table th {
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* Internal section shortcuts open in the same tab (same-tab-links.js), so hide the external-link arrow. */
+a[target="_blank"][href^="/"] svg {
+  display: none;
+}
+
+/* Page titles: smaller, matching the Airwallex benchmark (24px, one line on most pages). */
+#page-title {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+
+/* Section headings sit below the title, as on Airwallex (20px). */
+#content.mdx-content h2 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+/* Sidebar links: 13px Inter, which reads like Airwallex's 14px Circular. */
+#navigation-items .sidebar-group a {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+/* Tables: light row lines, no outer border, top-aligned cells, as on Airwallex. */
+#content.mdx-content table {
+  border-collapse: collapse;
+}
+#content.mdx-content th {
+  font-weight: 500;
+  padding: 10px;
+  vertical-align: middle;
+}
+#content.mdx-content td {
+  padding: 10px;
+  vertical-align: top;
+}
+#content.mdx-content tr {
+  border-bottom: 1px solid rgb(232, 234, 237);
+}
+html.dark #content.mdx-content tr {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+#content.mdx-content table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Divider under a page title: keep it close to the text that follows. */
+#content.mdx-content > hr:first-child {
+  margin-bottom: 1.5rem;
 }

@@ -27,37 +27,16 @@
           {
             "group": "Products",
             "pages": [
+              "virtual-accounts",
               "payments/overview",
-              {
-                "group": "Payouts",
-                "pages": [
-                  "payouts/overview",
-                  "payouts/requirements",
-                  "payouts/beneficiaries"
-                ]
-              },
-              {
-                "group": "Virtual Accounts",
-                "pages": [
-                  "virtual-accounts/overview"
-                ]
-              },
+              "payouts/overview",
               "fx-and-conversion/overview",
-              {
-                "group": "Wallets and Balances",
-                "pages": [
-                  "wallets-and-balances/overview",
-                  "wallets-and-balances/test-in-sandbox",
-                  "wallets-and-balances/reconcile"
-                ]
-              },
               "direct-debit/overview",
               "issuing/overview",
               "verification/overview"
             ]
           },
-          "when-money-arrives",
-          "developer-tools/overview",
+          "developer-tools",
           "api-reference",
           "changelog",
           "support",
@@ -229,6 +208,30 @@
             "group": "Issuing",
             "pages": [
               "api/issuing/overview"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Virtual Accounts",
+        "pages": [
+          "virtual-accounts/overview",
+          "virtual-accounts/supported-countries-and-currencies"
+        ]
+      },
+      {
+        "tab": "Developer tools",
+        "pages": [
+          {
+            "group": "Developer tools",
+            "pages": [
+              "developer-tools/overview"
+            ]
+          },
+          {
+            "group": "Test",
+            "pages": [
+              "developer-tools/sandbox"
             ]
           }
         ]

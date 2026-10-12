@@ -1,0 +1,42 @@
+---
+title: "Sandbox"
+description: "Build and test your integration without moving real money."
+keywords: ["sandbox", "test", "test data", "test BVN", "simulate", "fund wallet"]
+---
+
+Sandbox is a separate environment for building and testing. Nothing you do in sandbox moves real money, and sandbox has its own secret key and Business ID. When your integration works end to end in sandbox, switch to your production key and base URL.
+
+| | Sandbox | Production |
+|---|---|---|
+| Base URL | `https://sandboxapi.fincra.com` | `https://api.fincra.com` |
+| Money | Test money only | Real money |
+| Keys and Business ID | Your sandbox ones | Your production ones |
+
+## Add test money
+
+New sandbox wallets are empty. Add test money to any wallet with [Fund a sandbox wallet](/api/sandbox-simulation/fund-a-sandbox-wallet). See [Test in sandbox](/wallets-and-balances/test-in-sandbox).
+
+## Make things happen
+
+In production, some events only happen when your customer acts. In sandbox, you trigger them yourself:
+
+| To test | Use | Outcomes |
+|---|---|---|
+| A customer paying into a virtual account | [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection) | Any amount succeeds. `999` fails. 10,000 or more in EUR or CAD is held for review |
+| A customer paying a bank transfer checkout | [Simulate a bank transfer checkout payment](/api/sandbox-simulation/simulate-a-bank-transfer-checkout-payment) | The exact amount completes the payment. A different amount is a mispayment |
+
+Each simulation sends the same webhooks you get in production.
+
+## Test values
+
+| To test | Use |
+|---|---|
+| Verify a BVN | BVN `22222222222` |
+| Open an NGN virtual account | BVN `22222222222` |
+| Verify an NGN bank account | Account `0987654321`, bank code `305` |
+| Verify a GHS bank account | Account `4005006007`, SWIFT code `ECOCGHAC` |
+| Verify a KES bank account | Account `1000012345`, bank code `76` |
+| Verify a KES Airtel Money wallet | Number `254731234567`, operator `AIRTEL` |
+| Verify an IBAN | `GB29NWBK60161331926819` |
+
+Other account numbers return `ACCOUNT_RESOLVE_FAILED` in sandbox.
