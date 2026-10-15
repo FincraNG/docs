@@ -4,3 +4,26 @@ sidebarTitle: "Overview"
 description: "Receive bank transfers into permanent or temporary virtual accounts."
 keywords: ["virtual account", "permanent account", "temporary account", "dynamic account", "NGN", "USD", "collections", "BVN"]
 ---
+
+A virtual account is a real account number you give to someone who pays you. When they send a bank transfer to it, Fincra credits your wallet in that currency and sends you a webhook.
+
+## Account types
+
+- **Permanent**: keeps the same details for as long as you use it. Give one to each customer so you know who paid.
+- **Temporary**: expires after the time you set. Use it to collect one payment, such as an order or invoice. Available in NGN.
+
+## How it works
+
+1. Request a virtual account through the API.
+2. Share its details with the person paying you.
+3. They send a bank transfer.
+4. Fincra credits your wallet and sends you a collection webhook.
+
+<CardGroup cols={2}>
+  <Card title="Supported countries and currencies" icon="globe" href="/virtual-accounts/supported-countries-and-currencies">
+    Where you can open accounts and how each one receives money.
+  </Card>
+  <Card title="API reference" icon="code" href="/api/virtual-accounts/request-a-permanent-virtual-account">
+    Request permanent and temporary accounts.
+  </Card>
+</CardGroup>

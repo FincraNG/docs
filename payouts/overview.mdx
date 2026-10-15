@@ -2,3 +2,27 @@
 title: "Payouts"
 description: "Send payouts to bank accounts and mobile money wallets."
 ---
+
+Send money from your Fincra wallet to bank accounts and mobile money wallets, in the same currency or across currencies.
+
+## How it works
+
+1. Fund the wallet you're paying from.
+2. For a payout in another currency, get a quote to lock the rate.
+3. Create the payout with the recipient's details and your own `customerReference`.
+4. Fincra sends the money and tells you the result by webhook.
+
+## Good to know
+
+- **Beneficiaries**: save the people and businesses you pay often, so you don't collect their details every time.
+- **Safe retries**: Fincra accepts each `customerReference` once, so you can retry a request without paying twice.
+- **Verify first**: check an account number and name before you send money.
+
+<CardGroup cols={2}>
+  <Card title="Create a payout" icon="paper-plane" href="/api/payouts/create-a-payout">
+    Request fields and examples for each currency.
+  </Card>
+  <Card title="Verification" icon="circle-check" href="/verification/overview">
+    Confirm account details before you pay.
+  </Card>
+</CardGroup>
