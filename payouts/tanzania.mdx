@@ -1,0 +1,31 @@
+---
+title: "Tanzania"
+sidebarTitle: "Tanzania"
+description: "Payout coverage for Tanzania, bank account and mobile money payouts in TZS."
+---
+
+## Overview
+
+| | Bank Account | Mobile Money |
+|---|---|---|
+| **Currency** | TZS | TZS |
+| **Scheme** | Local rails | Local rails |
+| **Settlement** | Instant | Instant |
+
+Tanzania supports payouts to both bank accounts and mobile money wallets in TZS.
+
+## Bank account payouts
+
+Send TZS to Tanzanian bank accounts via local clearing rails.
+
+- **Payment destination:** `bank_account`
+- **No payment scheme required**, Fincra routes automatically.
+- **Bank code required**, Pass the recipient's bank code in the request.
+
+## Mobile money payouts
+
+Send TZS to mobile money wallets in Tanzania.
+
+- **Payment destination:** `mobile_money_wallet`
+- **Mobile money code required**, Pass the `mobileMoneyCode` for the recipient's provider. Retrieve available providers from the List Banks endpoint.
+- **Phone number format**, Use country code + number without the `+` symbol (e.g., `255712345678`).

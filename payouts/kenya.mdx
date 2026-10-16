@@ -1,0 +1,31 @@
+---
+title: "Kenya"
+sidebarTitle: "Kenya"
+description: "Payout coverage for Kenya, bank account and mobile money payouts in KES."
+---
+
+## Overview
+
+| | Bank Account | Mobile Money |
+|---|---|---|
+| **Currency** | KES | KES |
+| **Scheme** | Local rails | Local rails |
+| **Settlement** | Instant | Instant |
+
+Kenya supports payouts to both bank accounts and mobile money wallets in KES.
+
+## Bank account payouts
+
+Send KES to any Kenyan bank account via local clearing rails.
+
+- **Payment destination:** `bank_account`
+- **No payment scheme required**, Fincra routes automatically.
+- **Bank code required**, Pass the recipient's bank code in the request.
+
+## Mobile money payouts
+
+Send KES to mobile money wallets in Kenya.
+
+- **Payment destination:** `mobile_money_wallet`
+- **Mobile money code required**, Pass the `mobileMoneyCode` for the recipient's provider (e.g., M-Pesa). Retrieve available providers from the List Banks endpoint.
+- **Phone number format**, Use country code + number without the `+` symbol (e.g., `254712345678`).

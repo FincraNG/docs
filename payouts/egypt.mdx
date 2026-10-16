@@ -1,0 +1,31 @@
+---
+title: "Egypt"
+sidebarTitle: "Egypt"
+description: "Payout coverage for Egypt, bank account and mobile money payouts in EGP."
+---
+
+## Overview
+
+| | Bank Account | Mobile Money |
+|---|---|---|
+| **Currency** | EGP | EGP |
+| **Scheme** | Local rails | Local rails |
+| **Settlement** | Instant | Instant |
+
+Egypt supports payouts to both bank accounts and mobile money wallets in EGP.
+
+## Bank account payouts
+
+Send EGP to Egyptian bank accounts via local clearing rails.
+
+- **Payment destination:** `bank_account`
+- **No payment scheme required**, Fincra routes automatically.
+- **Bank code required**, Pass the recipient's bank code in the request.
+
+## Mobile money payouts
+
+Send EGP to mobile money wallets in Egypt.
+
+- **Payment destination:** `mobile_money_wallet`
+- **Mobile money code required**, Pass the `mobileMoneyCode` for the recipient's provider. Retrieve available providers from the List Banks endpoint.
+- **Phone number format**, Use country code + number without the `+` symbol (e.g., `201012345678`).

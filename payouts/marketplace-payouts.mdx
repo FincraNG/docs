@@ -1,0 +1,81 @@
+---
+title: "Marketplace Payouts"
+description: "Disburse earnings to sellers, creators, and service providers on your platform."
+---
+
+If you run a marketplace, for e-commerce, freelance services, digital content, or gig work, Fincra's payout API lets you disburse earnings to sellers and creators across Africa and internationally.
+
+<Note>
+  Fincra does not offer a native split payments product. Your platform manages the disbursement logic: how much each seller receives, when, and in what currency. Fincra handles the actual transfer to each recipient's bank account or mobile money wallet.
+</Note>
+
+## How it works
+
+<Steps>
+  <Step title="Collect payment from the buyer">
+    Accept payment from the buyer using [Fincra Payments](/payments/overview), via checkout, payment link, or direct charge. Funds settle into your Fincra wallet.
+  </Step>
+  <Step title="Calculate seller earnings">
+    Your platform handles the business logic: deduct your marketplace fee, apply any holds or escrow periods, and determine the net amount each seller is owed.
+  </Step>
+  <Step title="Save sellers as beneficiaries">
+    Create a [beneficiary record](/payouts/create-beneficiaries) for each seller during onboarding. Store the returned beneficiary ID in your platform's seller profile, you'll reference it for every disbursement.
+  </Step>
+  <Step title="Disburse to each seller">
+    For each seller in a settlement run, call the [Initiate Transfer](/payouts/initiate-transfer) endpoint using their saved beneficiary ID. Use `customerReference` to link the payout to the order or settlement ID in your system.
+  </Step>
+  <Step title="Confirm disbursement">
+    Listen for `payout.successful` and `payout.failed` webhooks per seller. Update your seller dashboard and retry any failures after investigating the cause.
+  </Step>
+</Steps>
+
+<Note>
+  **Diagram needed:** Marketplace disbursement flow, buyer pays → funds settle to platform wallet → platform applies fee logic → loop per seller → individual payout initiated → webhook received per seller → seller balance updated.
+</Note>
+
+## Recommended customerReference format
+
+Tie each payout to a specific order and seller for clean reconciliation:
+
+```
+order-{orderId}-seller-{sellerId}
+
+Examples:
+order-ORD82910-seller-SLR004
+order-ORD82910-seller-SLR017
+```
+
+## Disbursement architecture
+
+Since Fincra processes payouts one at a time, structure your disbursement logic accordingly:
+
+```
+Order settled
+      ↓
+Calculate per-seller net earnings
+      ↓
+For each seller:
+  → Retrieve beneficiary ID from seller profile
+  → Generate quote (if cross-currency)
+  → Initiate payout
+  → Store Fincra payout reference in your records
+      ↓
+Webhook received → Update seller payout status
+```
+
+## Key considerations
+
+<CardGroup cols={2}>
+  <Card title="Your fee logic, Fincra's rails" icon="sliders">
+    Fincra transfers exactly what you instruct it to. Deduct your marketplace fees before initiating each payout, Fincra does not apply any split or fee logic on your behalf.
+  </Card>
+  <Card title="Onboard sellers early" icon="users">
+    Create beneficiary records when sellers join your platform, not at settlement time. Waiting until payout time introduces delays in your disbursement cycle.
+  </Card>
+  <Card title="Pay in local currency" icon="globe">
+    Disburse to sellers in their local currency regardless of what the buyer paid in. Fincra handles the FX through the quote flow.
+  </Card>
+  <Card title="Track at order level" icon="tag">
+    Link each payout to a specific order and seller using `customerReference`. This makes disputes and reconciliation straightforward.
+  </Card>
+</CardGroup>

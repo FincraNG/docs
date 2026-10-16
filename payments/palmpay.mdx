@@ -1,0 +1,43 @@
+---
+title: "PalmPay"
+sidebarTitle: "PalmPay"
+description: "Accept payments from PalmPay wallet users in Nigeria."
+---
+
+PalmPay is a Nigerian digital wallet and payment app with a large user base. Customers pay directly from their PalmPay balance, fast, seamless, and no bank details required.
+
+## Availability
+
+| Currency | Country | Available via |
+|---|---|---|
+| NGN | Nigeria | Checkout (HPP, Drop-in), Direct Charge |
+
+## How it works
+
+**Via Checkout (Hosted Payment Page or Drop-in):**
+
+1. Customer selects **PalmPay** on the checkout page.
+2. Customer is prompted to authenticate using their PalmPay credentials.
+3. The payment is approved from their PalmPay wallet balance.
+4. Fincra confirms the payment and marks it as successful.
+5. Your wallet is credited and a `charge.successful` webhook fires.
+
+**Via Direct Charge API:**
+
+Use `"type": "palmpay"` in your charge request.
+
+```json
+{
+  "type": "palmpay",
+  "amount": 5000,
+  "currency": "NGN",
+  "customer": {
+    "name": "Amara Okonkwo",
+    "email": "amara@example.com"
+  }
+}
+```
+
+## Settlement
+
+PalmPay payments settle **instantly** into your Fincra NGN wallet.

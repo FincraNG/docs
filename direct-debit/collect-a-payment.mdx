@@ -1,0 +1,105 @@
+---
+title: "Collect a Payment"
+sidebarTitle: "Collect a Payment"
+description: "Initiate a debit on an active mandate and handle webhook notifications for successful and failed collections."
+---
+
+Once a mandate is `approved`, use the Initiate Debit endpoint to pull funds from the customer's bank account.
+
+## Prerequisites
+
+- **Approved mandate**, The mandate status must be `approved`. See [Manage Mandates](/direct-debit/manage-mandates) to check status.
+- **Within date range**, The current date must fall between the mandate's `startDate` and `endDate`.
+- **Webhook configured**, Set up a webhook to receive `direct_debit.success` and `direct_debit.failed` events. See [Configure Webhooks](/developer-tools/webhooks/configure).
+
+## Initiate a debit
+
+<Note>
+  **Design team:** Flow diagram needed here, visual showing: Merchant calls Initiate Debit → Fincra sends to NIBSS → NIBSS debits customer's bank → Funds settle to merchant's Fincra wallet → Webhook fires.
+</Note>
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/mandate-mgt/mandates/payment' \
+--header 'api-key: YOUR_API_KEY' \
+--header 'Content-Type: application/json' \
+--data '{
+    "mandateReference": "mr_923c73c9-8f3a-478c-934a-2e472568891b"
+}'
+```
+
+### Request body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `mandateReference` | string | Yes | The reference of the approved mandate to debit against. |
+
+The debit amount is determined by the mandate's `amount` field, you do not specify an amount per debit.
+
+## Verify debit status
+
+After initiating a debit, you can check its status using the debit reference.
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/mandate-mgt/mandates/payment/YOUR_DEBIT_REFERENCE' \
+--header 'api-key: YOUR_API_KEY'
+```
+
+## Webhooks
+
+Fincra sends webhook events for every debit attempt:
+
+| Event | Description |
+|---|---|
+| `direct_debit.success` | The debit was successful. Funds have been collected and will settle to your wallet. |
+| `direct_debit.failed` | The debit failed. Common reasons include insufficient funds, account restrictions, or the mandate's `endDate` having passed. |
+
+<Warning>
+  Always listen for webhooks as the primary way to confirm debit outcomes. The Verify endpoint is a backup for reconciliation, webhooks give you real-time results.
+</Warning>
+
+For webhook setup and signature validation, see [Webhooks](/developer-tools/webhooks/overview).
+
+## Collection patterns
+
+### One-time collection
+
+For a single collection (e.g., a one-off loan repayment), create a mandate and initiate a single debit after activation. The mandate remains available for future debits if needed.
+
+### Recurring collection
+
+For recurring collections (e.g., monthly insurance premiums), set up a cron job or scheduler in your system that calls the Initiate Debit endpoint on your desired schedule. Fincra does not schedule debits for you, your system controls the timing.
+
+```
+Example: Monthly loan repayment
+- Mandate: ₦10,000, startDate: 2026-03-01, endDate: 2026-12-31
+- Your system: Cron job on the 1st of each month → calls Initiate Debit
+- Result: 10 monthly debits of ₦10,000 each
+```
+
+### Handling failed debits
+
+When a debit fails:
+
+1. **Check the webhook payload**, The `direct_debit.failed` event includes details on why the debit failed.
+2. **Retry if appropriate**, For transient failures (e.g., insufficient funds), you may retry after a delay. Implement exponential backoff.
+3. **Notify the customer**, If the failure is due to insufficient funds, notify the customer to fund their account.
+4. **Check the mandate**, If debits consistently fail, verify the mandate is still within its date range.
+
+## Settlement
+
+Successful debits settle to your Fincra NGN wallet. The default is **instant settlement**, funds are available immediately. Your business may have custom settlement settings. See [How Direct Debit Works](/direct-debit/how-direct-debit-works#settlement) for details.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Manage Mandates" icon="list-check" href="/direct-debit/manage-mandates">
+    Check mandate status and list all mandates.
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/direct-debit/troubleshooting">
+    Diagnose and resolve common direct debit issues.
+  </Card>
+</CardGroup>

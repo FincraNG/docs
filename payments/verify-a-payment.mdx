@@ -1,0 +1,77 @@
+---
+title: "Verify a Payment"
+sidebarTitle: "Verify a Payment"
+description: "Confirm the status of a payment before delivering your product or service."
+---
+
+Always verify a payment server-side before delivering value to your customer. Fincra provides three endpoints for verifying a payment, use whichever fits your flow.
+
+These endpoints work across all payment types: [Hosted Payment Page](/payments/hosted-payment-page), [Drop-in Checkout](/payments/drop-in-checkout), [Direct Charge API](/payments/accept-a-payment), and [Virtual Accounts](/virtual-accounts/overview).
+
+## Verify endpoints
+
+<Tabs>
+  <Tab title="By Fincra reference">
+    Use this when you have Fincra's internal reference, returned in the checkout response as `reference` or `payCode`.
+
+    **Endpoint:** `GET /checkout-core/charges/reference/:reference`
+
+    ```bash
+    curl --request GET \
+      --url https://api.fincra.com/checkout-core/charges/reference/fcr-p-2fe90fa19d \
+      --header 'api-key: <YOUR_SECRET_KEY>'
+    ```
+  </Tab>
+  <Tab title="By merchant reference">
+    Use this when you have your own reference, the one you passed when creating the payment.
+
+    **Endpoint:** `GET /checkout-core/charges/merchant-reference/:merchantReference`
+
+    ```bash
+    curl --request GET \
+      --url https://api.fincra.com/checkout-core/charges/merchant-reference/order-001 \
+      --header 'api-key: <YOUR_SECRET_KEY>'
+    ```
+  </Tab>
+  <Tab title="By charge ID (poll)">
+    Use this to actively poll a charge that is still pending or processing. Pass `?statusCheck=true` to trigger a live status check against the payment processor.
+
+    **Endpoint:** `GET /checkout-core/charges/:id/verify`
+
+    ```bash
+    curl --request GET \
+      --url 'https://api.fincra.com/checkout-core/charges/1093510/verify?statusCheck=true' \
+      --header 'api-key: <YOUR_SECRET_KEY>'
+    ```
+
+    <Note>
+      The charge `id` is the numeric ID returned in the payment response or webhook payload, not the reference string.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Payment statuses
+
+| Status | Description | Action |
+|---|---|---|
+| `success` | Payment completed and confirmed. | Safe to deliver your product or service. |
+| `pending` | Payment initiated but not yet completed. | Do not deliver. Continue polling or wait for the webhook. |
+| `processing` | Payment is being processed by the payment provider. | Do not deliver. Continue polling. |
+| `failed` | Payment failed, was declined, or expired. | Do not deliver. Notify the customer. |
+
+## Which endpoint should I use?
+
+| Situation | Recommended endpoint |
+|---|---|
+| Customer redirected back from HPP with reference in URL | By merchant reference |
+| `onSuccess` callback fires in Drop-in Checkout | By Fincra reference |
+| You need to check status of a pending Direct Charge | By charge ID with `?statusCheck=true` |
+| Reconciling payments after the fact | By merchant reference |
+
+## Best practices
+
+- **Never rely solely on the redirect or `onSuccess` callback** to confirm payment. Always verify server-side.
+- **Listen for webhooks** as your primary signal. The `charge.successful` event fires even if the customer closes their browser before being redirected back.
+- **Poll with care.** If you're polling a pending charge, use exponential backoff to avoid hitting rate limits. See [Rate Limits](/developer-tools/rate-limits).
+
+For full webhook details, see [Webhooks](/developer-tools/webhooks/overview).

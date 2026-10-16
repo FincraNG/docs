@@ -1,0 +1,39 @@
+---
+title: "Travel & Hospitality"
+sidebarTitle: "Travel & Hospitality"
+description: "How travel platforms and hospitality businesses use currency conversion to manage multi-currency bookings."
+---
+
+Travel platforms, OTAs, and hospitality businesses deal with multi-currency pricing daily. A hotel in Lagos lists rooms in NGN, but a traveler in Nairobi wants to see prices in KES. A tour operator in Accra needs to quote safari packages in EUR for European customers. In every case, the platform needs to show accurate prices in the traveler's currency, and lock in the rate at the moment of booking to protect margins.
+
+Fincra's Currency Conversion helps travel businesses display live exchange rates to customers and lock in a guaranteed rate at booking time, eliminating FX risk between when a price is shown and when a booking is confirmed.
+
+## How it works
+
+<Note>
+  **Design team:** Flow diagram needed here, visual showing: Travel platform lists property in NGN → Fetches rate via Rates API → Displays KES price to traveler → Traveler books → Platform generates quote → Conversion executes at locked rate → Funds settle in NGN wallet.
+</Note>
+
+1. **Property listed in local currency**, A hotel, flight, or tour package is listed on the platform in the supplier's local currency (e.g., NGN).
+2. **Platform fetches live rates**, The platform calls the [Rates API](/fx-and-conversion/rates) to get the current exchange rate for KES-NGN and displays the equivalent price to the traveler in KES.
+3. **Traveler initiates a booking**, The traveler sees the KES price and decides to book.
+4. **Platform locks the rate**, The platform calls the [Quotes API](/fx-and-conversion/quotes) to generate a quote for the exact booking amount, locking the exchange rate for 30 seconds.
+5. **Conversion executes**, The platform passes the `quoteReference` to the [conversion endpoint](/fx-and-conversion/create-a-conversion) to convert KES to NGN at the guaranteed rate.
+6. **Funds settle**, The converted NGN settles in the platform's NGN wallet within 5 to 10 minutes, ready to pay the supplier.
+
+## Which FX solution to use
+
+| Stage | Solution | Why |
+|---|---|---|
+| Browsing & pricing | [Rates](/fx-and-conversion/rates) | Show indicative prices to travelers without commitment. Rates update in real-time so displayed prices stay current. |
+| Booking confirmation | [Quotes](/fx-and-conversion/quotes) | Lock the exchange rate at the moment the traveler confirms. The 30-second quote window is enough to complete the booking flow. |
+
+## Why this matters
+
+- **No FX surprises**, The traveler sees one price and pays that price. No adjustments after booking.
+- **Margin protection**, The platform locks the rate before confirming the booking, so currency movement between browsing and booking doesn't eat into margins.
+- **Real-time pricing**, Rates update continuously, so displayed prices reflect current market conditions.
+
+<Card title="Create a Conversion" icon="arrow-right-arrow-left" href="/fx-and-conversion/create-a-conversion">
+  Follow the step-by-step guide to implement this flow.
+</Card>

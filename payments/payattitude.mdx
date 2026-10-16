@@ -1,0 +1,52 @@
+---
+title: "PayAttitude (USSD)"
+sidebarTitle: "PayAttitude (USSD)"
+description: "Accept payments from Nigerian customers via USSD, no internet required."
+---
+
+PayAttitude is a USSD-based payment method available to Nigerian bank customers. Customers dial a USSD code on any mobile phone, smartphone or feature phone, to authorise payment directly from their bank account. No internet connection required.
+
+## Availability
+
+| Currency | Country | Available via |
+|---|---|---|
+| NGN | Nigeria | Checkout (HPP, Drop-in), Direct Charge |
+
+## How it works
+
+**Via Checkout (Hosted Payment Page or Drop-in):**
+
+1. Customer selects **PayAttitude** on the checkout page.
+2. Customer dials the USSD code displayed (e.g., `*322*0#`) on their phone.
+3. They follow the prompts to authenticate and approve the payment.
+4. Fincra confirms the payment and marks it as successful.
+5. Your wallet is credited and a `charge.successful` webhook fires.
+
+**Via Direct Charge API:**
+
+Use `"type": "payattitude"` in your charge request. The customer will be prompted to complete the USSD flow on their phone.
+
+```json
+{
+  "type": "payattitude",
+  "amount": 5000,
+  "currency": "NGN",
+  "customer": {
+    "name": "Amara Okonkwo",
+    "email": "amara@example.com"
+  }
+}
+```
+
+## Settlement
+
+PayAttitude payments settle **instantly** into your Fincra NGN wallet.
+
+## When to use PayAttitude
+
+PayAttitude is particularly valuable when:
+- Your customers may not have smartphones or data access
+- You want to maximise payment method coverage for Nigerian customers
+- You are serving customers in areas with poor internet connectivity
+
+For customers with internet access and smartphones, [Bank Transfer](/payments/bank-transfer) and [Cards](/payments/cards) may be preferred.

@@ -1,0 +1,56 @@
+---
+title: "Troubleshooting"
+description: "Find, diagnose, and resolve webhook delivery failures."
+---
+
+Delivery issues typically fall into two categories:
+
+- Fincra cannot reach your webhook endpoint
+- Your network connectivity is intermittent
+
+If you're having issues with webhook delivery or validation, review the possible causes and solutions below.
+
+## I didn't receive my webhook
+
+### Cause
+
+Fincra sends webhook notifications within 60 seconds of the associated event. Your server must respond with an `HTTP 2xx` status code within ~10 seconds to acknowledge delivery. Unsuccessful deliveries are retried for up to ~24 hours (when retries are enabled for your business).
+
+### Retry behaviour
+
+When automatic retry is enabled (`settings.enableWebhookRetry`), Fincra retries a failed delivery up to **5 times** on an exponential back-off:
+
+| Attempt | Delay after the initial delivery |
+| ------- | -------------------------------- |
+| 1       | 5 minutes                        |
+| 2       | 30 minutes                       |
+| 3       | 2 hours                          |
+| 4       | 6 hours                          |
+| 5       | 24 hours                         |
+
+> **Note:** each attempt has a ~10-second delivery timeout, if your endpoint has not responded with a 2xx by then, the attempt is treated as failed and re-scheduled per the table above. You can also re-trigger delivery manually with the resend endpoints (`POST /payouts/resend-webhook`, `POST /notifications/outgoing-webhooks/resend`).
+
+### Solution
+
+Verify that your application responds to webhook deliveries promptly with an `HTTP 2xx` status code.
+
+## I cannot validate a webhook notification
+
+### Cause
+
+The signature in the request header doesn't match what your server computed.
+
+### Solution
+
+Verify you're using the correct webhook secret key and following the signature validation steps in [Securing your webhooks](#).
+
+## Webhook delivery errors
+
+| Status             | Description                                                              | Fix                                                                        |
+| ------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Unable to connect  | Fincra cannot establish a connection to your server.                     | Ensure your endpoint is publicly accessible.                               |
+| 3xx (redirect)     | Your server redirected the request. Fincra treats redirects as failures. | Set your webhook URL to the final destination, not a redirect.             |
+| 4xx (client error) | Your server rejected the request (e.g., 401, 403, 404).                  | Ensure your endpoint is public, accepts POST requests, and the URL exists. |
+| 5xx (server error) | Your server encountered an error processing the request.                 | Check your application logs to identify the issue.                         |
+| TLS error          | Fincra couldn't establish a secure connection.                           | Verify your SSL/TLS certificate is valid and properly configured.          |
+| Timeout            | Your server took too long to respond.                                    | Respond immediately with 2xx, then process the webhook asynchronously.     |

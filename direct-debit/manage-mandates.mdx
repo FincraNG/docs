@@ -1,0 +1,121 @@
+---
+title: "Manage Mandates"
+sidebarTitle: "Manage Mandates"
+description: "Fetch mandate status, list all mandates, and understand mandate states throughout the lifecycle."
+---
+
+After creating a mandate, use these endpoints to check its status and retrieve mandate details.
+
+## Fetch a mandate
+
+Retrieve a single mandate by its reference to check the current status or review its details.
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/v2/mandate-mgt/mandates/mr_923c73c9-8f3a-478c-934a-2e472568891b' \
+--header 'api-key: YOUR_API_KEY'
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `reference` | path | Yes | The mandate reference returned when the mandate was created (e.g., `mr_923c73c9-...`). |
+
+### Response
+
+```json
+{
+    "amount": 1000,
+    "description": "Direct Debit of Loan",
+    "startDate": "2026-03-01T00:00:00.000Z",
+    "endDate": "2026-12-31T00:00:00.000Z",
+    "status": "approved",
+    "reference": "mr_923c73c9-8f3a-478c-934a-2e472568891b",
+    "createdAt": "2026-02-17T05:48:37.000Z"
+}
+```
+
+## List mandates
+
+Retrieve all mandates for your business.
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/v2/mandate-mgt/mandates' \
+--header 'api-key: YOUR_API_KEY'
+```
+
+### Response
+
+```json
+{
+    "data": [
+        {
+            "amount": 1000,
+            "description": "Direct Debit of Loan",
+            "startDate": "2026-03-01T00:00:00.000Z",
+            "endDate": "2026-12-31T00:00:00.000Z",
+            "status": "approved",
+            "reference": "mr_923c73c9-8f3a-478c-934a-2e472568891b",
+            "createdAt": "2026-02-17T05:48:37.000Z"
+        },
+        {
+            "amount": 5000,
+            "description": "Insurance Premium Collection",
+            "startDate": "2026-04-01T00:00:00.000Z",
+            "endDate": "2027-03-31T00:00:00.000Z",
+            "status": "initiated",
+            "reference": "mr_a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "createdAt": "2026-02-18T10:15:00.000Z"
+        }
+    ]
+}
+```
+
+## Understanding mandate statuses
+
+| Status | Meaning | Can you collect? |
+|---|---|---|
+| `initiated` | Mandate created, waiting for customer to complete the ₦50 activation payment. | No |
+| `approved` | Customer has authorized the mandate. Ready for collections. | Yes |
+| `declined` | Authorization failed or was declined by the customer's bank. | No |
+
+### After `endDate` passes
+
+When a mandate's `endDate` passes, the status remains `approved`, it does not change to "expired." However, any debit attempts after the `endDate` will fail date validation. If you need to continue collecting from the same customer, create a new mandate with an updated date range.
+
+### No cancel or suspend
+
+There is no API to cancel, suspend, or revoke an active mandate. Once approved, a mandate stays approved until its `endDate` passes. To stop collecting from a customer, simply stop initiating debits against their mandate.
+
+## Common patterns
+
+### Polling for activation
+
+After creating a mandate and directing the customer to complete the ₦50 payment, poll the fetch endpoint to detect when the status changes to `approved`:
+
+1. Create the mandate and display the activation instructions to the customer.
+2. Poll `GET /v2/mandate-mgt/mandates/{reference}` at reasonable intervals (e.g., every 30 seconds).
+3. When `status` changes to `approved`, notify the customer and begin collections.
+
+### Checking mandates before collecting
+
+Before initiating a debit, verify that:
+- The mandate status is `approved`
+- The current date falls within the mandate's `startDate` and `endDate`
+
+This avoids failed debit attempts and unnecessary error handling.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Collect a Payment" icon="money-bill-wave" href="/direct-debit/collect-a-payment">
+    Initiate a debit on an approved mandate.
+  </Card>
+  <Card title="Create a Mandate" icon="file-signature" href="/direct-debit/create-a-mandate">
+    Set up a new mandate for a customer.
+  </Card>
+</CardGroup>

@@ -1,0 +1,64 @@
+---
+title: "Mobile Money"
+sidebarTitle: "Mobile Money"
+description: "Accept mobile money payments from customers across Africa."
+---
+
+Mobile Money lets customers pay using their mobile money wallet, M-Pesa, MTN Mobile Money, Airtel Money, and others. It is the primary payment method across most African markets outside Nigeria.
+
+## Supported currencies and countries
+
+| Currency | Country | Operators |
+|---|---|---|
+| KES | Kenya | M-Pesa, Airtel Money |
+| GHS | Ghana | MTN Mobile Money, Vodafone Cash, AirtelTigo |
+| UGX | Uganda | MTN Mobile Money, Airtel Money |
+| ZMW | Zambia | MTN Mobile Money, Airtel Money |
+| TZS | Tanzania | M-Pesa, Tigo Pesa, Airtel Money, Halopesa |
+| XAF | Cameroon, Central Africa | MTN Mobile Money, Orange Money |
+| XOF | Senegal, West Africa | Orange Money, Wave, Free Money |
+
+## Available via
+
+| Integration | Supported |
+|---|---|
+| Hosted Payment Page | ✅ |
+| Drop-in Checkout | ✅ |
+| Direct Charge API | ✅ |
+
+## How it works
+
+**Via Checkout (Hosted Payment Page or Drop-in):**
+
+1. Customer selects **Mobile Money** on the checkout page.
+2. Customer enters their mobile number registered with their mobile money provider.
+3. The customer receives a payment prompt on their phone and approves the transaction.
+4. Fincra confirms the payment and marks it as successful.
+5. Your wallet is credited and a `charge.successful` webhook fires.
+
+**Via Direct Charge API:**
+
+Include the customer's `phoneNumber` in the request payload. The customer receives a push prompt on their device to approve the charge. Poll the verify endpoint or listen for the webhook to confirm completion.
+
+```json
+{
+  "type": "mobile_money",
+  "amount": 1500,
+  "currency": "KES",
+  "customer": {
+    "name": "Brian Kariuki",
+    "email": "brian@example.com",
+    "phoneNumber": "0712345678"
+  }
+}
+```
+
+## Settlement
+
+Mobile Money payments settle **instantly** into your Fincra wallet.
+
+## Notes
+
+- The customer's phone number must be registered with the mobile money operator for the prompt to be delivered.
+- For XAF and XOF countries, mobile money is the only available payment method, there is no bank transfer or card option.
+- For ZMW, both Mobile Money and Card are available, you can offer both or restrict to one using the `paymentMethods` parameter.

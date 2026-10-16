@@ -1,0 +1,46 @@
+---
+title: "BVN Verification"
+sidebarTitle: "BVN Verification"
+description: "Verify a customer's Bank Verification Number (BVN) for identity validation."
+---
+
+BVN (Bank Verification Number) is a unique 11-digit identifier assigned to every bank account holder in Nigeria. Use this endpoint to verify a customer's identity by resolving their BVN against Fincra's verification service.
+
+| Attribute | Details |
+|---|---|
+| Country | Nigeria |
+| Endpoint | `POST /core/bvn-verification` |
+| Pricing | NGN 50 per call (production). Free in sandbox. |
+
+## Required fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bvn` | string | Yes | The customer's 11-digit Bank Verification Number |
+| `business` | string | Yes | Your Fincra business ID |
+
+## Response fields
+
+A successful verification returns the following information:
+
+| Field | Description |
+|---|---|
+| `verificationStatus` | The result of the verification (e.g. `verified`) |
+| `firstName` | Customer's first name |
+| `lastName` | Customer's last name |
+| `middleName` | Customer's middle name |
+| `gender` | Customer's gender |
+| `dateOfBirth` | Customer's date of birth |
+| `phoneNo` | Phone number linked to the BVN |
+| `pixBase64` | Base64-encoded photo linked to the BVN |
+
+<Warning>
+  The BVN verification response contains sensitive personal information (PII), including a photo. Ensure you handle this data in compliance with Nigeria's data protection regulations (NDPR). Do not store or expose this data unnecessarily.
+</Warning>
+
+## Result handling
+
+| Response | Action |
+|---|---|
+| `verificationStatus: verified` | BVN is valid. Use the returned details to confirm the customer's identity. |
+| `success: false` (422) | BVN not found. Ask the customer to verify their BVN and try again. |

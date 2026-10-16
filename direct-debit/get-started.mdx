@@ -1,0 +1,84 @@
+---
+title: "Get Started with Direct Debit"
+sidebarTitle: "Get Started with Direct Debit"
+description: "Prerequisites, activation requirements, and everything you need before creating your first mandate."
+---
+
+This guide walks you through what you need before creating your first direct debit mandate.
+
+## Prerequisites
+
+Before you can use Direct Debit, ensure you have:
+
+- **Fincra account**, [Create an account](https://dashboard.fincra.com) if you don't have one.
+- **KYC verification**, Complete your business verification. See [Complete Verification](/quickstart/create-a-sandbox-account).
+- **API key**, Generate your production API key from the dashboard. See [Manage API Keys](/developer-tools/manage-api-keys).
+- **Webhook URL**, Configure a webhook endpoint to receive `direct_debit.success` and `direct_debit.failed` events. See [Configure Webhooks](/developer-tools/webhooks/configure).
+
+<Warning>
+  Direct Debit does not have a sandbox environment. All testing and integration happens in production. See the [Integration Checklist](/direct-debit/integration-checklist) for production testing guidance.
+</Warning>
+
+## Step 1: Confirm activation
+
+Direct Debit may require activation by your Fincra account manager. Contact your account manager or the sales team to confirm that Direct Debit is enabled for your business.
+
+## Step 2: Collect customer details
+
+To create a mandate, you'll need the following from your customer:
+
+| Field | Description |
+|---|---|
+| Account number | The customer's Nigerian bank account number (NUBAN) |
+| Bank code | The NIBSS bank code for the customer's bank. See [Supported Banks](/direct-debit/supported-banks). |
+| Account name | The full name on the customer's bank account |
+| Phone number | Customer's phone number |
+| Email | Customer's email address |
+| Address | Customer's address |
+
+<Tip>
+  Use [Account Verification](/verification/verify-a-beneficiary-account) to validate the customer's account number and name before creating a mandate. This avoids failed mandates from incorrect details.
+</Tip>
+
+## Step 3: Define mandate parameters
+
+Decide the terms of the mandate:
+
+| Parameter | What to decide |
+|---|---|
+| **Amount** | How much to debit per collection (in NGN) |
+| **Start date** | When the mandate becomes effective |
+| **End date** | When the mandate expires, debits after this date will fail |
+| **Description** | A human-readable label for the mandate (e.g., "Monthly loan repayment") |
+
+## Step 4: Build your integration
+
+With your prerequisites in place, you're ready to integrate:
+
+1. **Create a mandate**, Call the Create Mandate API with the customer's details and mandate parameters. See [Create a Mandate](/direct-debit/create-a-mandate).
+2. **Handle activation**, Display the `responseDescription` from the API response to your customer so they can complete the ₦50 token payment.
+3. **Monitor mandate status**, Poll the [Manage Mandates](/direct-debit/manage-mandates) endpoint or wait for the status to change to `approved`.
+4. **Collect payments**, Once approved, initiate debits using the [Collect a Payment](/direct-debit/collect-a-payment) endpoint.
+5. **Handle webhooks**, Process `direct_debit.success` and `direct_debit.failed` events to update your system.
+
+## Step 5: Test in production
+
+Since there's no sandbox, test your full integration in production with a small amount:
+
+- [ ] Create a mandate with a real bank account (use your own for testing)
+- [ ] Complete the ₦50 activation flow
+- [ ] Initiate a small debit and confirm it succeeds
+- [ ] Verify webhook delivery
+
+See the full [Integration Checklist](/direct-debit/integration-checklist) for a complete testing guide.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Create a Mandate" icon="file-signature" href="/direct-debit/create-a-mandate">
+    Follow the step-by-step guide to create your first mandate.
+  </Card>
+  <Card title="How Direct Debit Works" icon="gears" href="/direct-debit/how-direct-debit-works">
+    Understand the mandate lifecycle, activation flow, and settlement.
+  </Card>
+</CardGroup>

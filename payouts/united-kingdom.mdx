@@ -1,0 +1,51 @@
+---
+title: "United Kingdom"
+sidebarTitle: "United Kingdom"
+description: "Payout coverage for the United Kingdom, GBP payouts via FPS, CHAPS, and SWIFT."
+---
+
+## Overview
+
+| | FPS | CHAPS | SWIFT |
+|---|---|---|---|
+| **Currency** | GBP | GBP | GBP |
+| **Method** | Bank account | Bank account | Bank account |
+| **Settlement** | Within 1 hour | Within 1 hour | 1-2 business days |
+
+The United Kingdom supports three payment schemes for GBP bank account payouts.
+
+## Payment schemes
+
+### Faster Payments (FPS)
+
+The UK's near-instant payment system. Best for fast, low-value payouts.
+
+- **API value:** `fps`
+- **Settlement:** Within 1 hour
+- **Payment destination:** `bank_account`
+
+### CHAPS
+
+The Clearing House Automated Payment System. Best for high-value, time-sensitive payouts.
+
+- **API value:** `chaps`
+- **Settlement:** Within 1 hour
+- **Payment destination:** `bank_account`
+
+<Warning>
+  CHAPS is only available **Monday to Friday, 08:00 to 17:00 UK time** (excluding UK public holidays). Payouts submitted outside this window will be processed on the next business day.
+</Warning>
+
+### SWIFT
+
+International wire transfer network.
+
+- **API value:** `swift`
+- **Settlement:** 1-2 business days
+- **Payment destination:** `bank_account`
+
+## Requirements
+
+- **Payment scheme required**, You must specify `fps`, `chaps`, or `swift` in the request.
+- **Sort code**, UK bank accounts are identified by sort code + account number.
+- **Sender details required**, GBP payouts require sender information for compliance.

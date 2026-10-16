@@ -1,0 +1,144 @@
+---
+title: "Server-Side SDKs"
+description: "Official Fincra libraries for Node.js and Python."
+---
+
+Fincra's server-side SDKs let you integrate the API in your backend without constructing raw HTTP requests. Authentication, request formatting, error parsing, and response typing are handled out of the box.
+
+**Available at launch:** Node.js, Python
+
+<Info>
+  Fincra SDKs are auto-generated from the official OpenAPI specification. Package names, installation commands, and full reference documentation will be linked here once the SDKs are published.
+</Info>
+
+---
+
+## Node.js
+
+### Installation
+
+```bash
+npm install @fincra/node-sdk
+```
+
+### Initialization
+
+```javascript
+import Fincra from '@fincra/node-sdk';
+
+const fincra = new Fincra({
+  apiKey: process.env.FINCRA_API_KEY,
+  environment: 'production', // or 'sandbox'
+});
+```
+
+### Example, initiate a payout
+
+```javascript
+const payout = await fincra.payouts.initiate({
+  sourceCurrency: 'NGN',
+  destinationCurrency: 'NGN',
+  amount: 5000,
+  business: process.env.FINCRA_BUSINESS_ID,
+  paymentDestination: 'bank_account',
+  description: 'Vendor payment',
+  customerReference: crypto.randomUUID(),
+  beneficiary: {
+    accountHolderName: 'Amara Okonkwo',
+    firstName: 'Amara',
+    lastName: 'Okonkwo',
+    type: 'individual',
+    accountNumber: '0123456789',
+    bankCode: '044',
+  },
+});
+```
+
+<Info>
+  Full method reference and TypeScript types will be linked here once the Node.js SDK is published.
+</Info>
+
+---
+
+## Python
+
+### Installation
+
+```bash
+pip install fincra
+```
+
+### Initialization
+
+```python
+import fincra
+import os
+
+client = fincra.Client(
+    api_key=os.environ["FINCRA_API_KEY"],
+    environment="production",  # or "sandbox"
+)
+```
+
+### Example, initiate a payout
+
+```python
+import uuid
+
+payout = client.payouts.initiate(
+    source_currency="NGN",
+    destination_currency="NGN",
+    amount=5000,
+    business=os.environ["FINCRA_BUSINESS_ID"],
+    payment_destination="bank_account",
+    description="Vendor payment",
+    customer_reference=str(uuid.uuid4()),
+    beneficiary={
+        "account_holder_name": "Amara Okonkwo",
+        "first_name": "Amara",
+        "last_name": "Okonkwo",
+        "type": "individual",
+        "account_number": "0123456789",
+        "bank_code": "044",
+    },
+)
+```
+
+<Info>
+  Full method reference will be linked here once the Python SDK is published.
+</Info>
+
+---
+
+## Error handling
+
+Both SDKs surface API errors as typed exceptions:
+
+```javascript
+// Node.js
+try {
+  const payout = await fincra.payouts.initiate({ ... });
+} catch (error) {
+  if (error.errorType === 'NO_ENOUGH_MONEY_IN_WALLET') {
+    // Handle insufficient balance
+  }
+  throw error;
+}
+```
+
+```python
+# Python
+from fincra.exceptions import FincraError
+
+try:
+    payout = client.payouts.initiate(...)
+except FincraError as e:
+    if e.error_type == "NO_ENOUGH_MONEY_IN_WALLET":
+        # Handle insufficient balance
+        pass
+    raise
+```
+
+## Keeping SDKs up to date
+
+SDKs are versioned and regenerated automatically when the API specification changes. Pin your SDK version in production and test upgrades in sandbox before deploying to live.

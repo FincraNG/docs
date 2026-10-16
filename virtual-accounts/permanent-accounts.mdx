@@ -1,0 +1,31 @@
+---
+title: "Permanent accounts"
+description: "Give each customer their own account number that never expires."
+---
+
+A permanent account keeps the same details for as long as you use it. Give one to each customer, and every transfer into it is credited to your wallet with that customer's reference.
+
+## When to use one
+
+- **Wallets and top-ups**: each user funds their balance by transfer to their own account.
+- **Savings and investment apps**: customers pay in whenever they like.
+- **B2B collections**: each client pays invoices into the same account, so you always know who paid.
+
+## Individual and corporate accounts
+
+| | Individual | Corporate |
+|---|---|---|
+| Who it's for | A person | A registered business |
+| NGN | Yes, with the person's BVN | Yes, with the business's details and a director's BVN |
+| USD | No | Yes, after Fincra reviews the request |
+
+## How to create one
+
+1. Collect the account holder's details: name, contact details and, for NGN, their BVN.
+2. Call [Request a permanent virtual account](/api/virtual-accounts/request-a-permanent-virtual-account) with the currency, account type and those details.
+3. For NGN, the response includes the account number. For USD, the request is pending until Fincra approves it, and Fincra notifies you when the account is ready.
+4. Store the account details against your customer.
+
+<Tip>
+Send your own `merchantReference` with each request. Use it to find the account later and to match collections to your customer.
+</Tip>

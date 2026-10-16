@@ -1,0 +1,50 @@
+---
+title: "Loan Repayment"
+sidebarTitle: "Loan Repayment"
+description: "Use direct debit to automate loan repayment collection from borrowers on a fixed schedule."
+---
+
+Lending businesses need a reliable way to collect repayments from borrowers without depending on manual transfers. Missed payments lead to rising defaults, operational overhead from follow-up calls, and unpredictable cash flow. Direct debit solves this by letting you pull repayments directly from a borrower's bank account on your schedule.
+
+## How it works
+
+<Note>
+  **Design team:** Flow diagram needed here, visual showing: Loan disbursed → Mandate created with repayment amount and loan term → Borrower activates with ₦50 → Lender's system triggers monthly debits → Funds settle to wallet → Loan closes when term ends.
+</Note>
+
+1. **Disburse the loan**, Issue the loan to the borrower through your existing process.
+2. **Create a mandate**, Call the [Create Mandate API](/direct-debit/create-a-mandate) with the borrower's bank details. Set the `amount` to the monthly repayment amount, `startDate` to the first repayment date, and `endDate` to the final repayment date.
+3. **Borrower activates**, The borrower makes the one-time ₦50 token payment to authorize the mandate.
+4. **Schedule collections**, Set up a cron job or scheduler in your system to call [Initiate Debit](/direct-debit/collect-a-payment) on each repayment date.
+5. **Handle results**, Listen for `direct_debit.success` and `direct_debit.failed` webhooks to update your loan management system.
+6. **Mandate expires**, When the `endDate` passes (end of loan term), the mandate naturally stops accepting debits.
+
+## Example
+
+```
+Loan details:
+- Principal: ₦500,000
+- Monthly repayment: ₦50,000
+- Term: 12 months (March 2026  to  February 2027)
+
+Mandate setup:
+- amount: 50000
+- startDate: "2026-03-01"
+- endDate: "2027-02-28"
+- description: "Loan Repayment - LN-2026-0042"
+
+Collection schedule:
+- Your system triggers Initiate Debit on the 1st of each month
+- 12 debits of ₦50,000 = ₦600,000 total collected
+```
+
+## Why this matters
+
+- **Reduce defaults**, Automated collection removes the friction of manual repayment. Borrowers don't need to remember or initiate transfers.
+- **Predictable cash flow**, Collections happen on your schedule, making revenue forecasting more reliable.
+- **Lower operational cost**, No manual follow-up calls or SMS reminders for routine repayments.
+- **Instant settlement**, Collected funds settle to your wallet immediately (default), ready for re-lending or operations.
+
+<Card title="Create a Mandate" icon="file-signature" href="/direct-debit/create-a-mandate">
+  Follow the step-by-step guide to set up your first loan repayment mandate.
+</Card>

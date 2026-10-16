@@ -1,0 +1,48 @@
+---
+title: "EFT"
+sidebarTitle: "EFT"
+description: "Accept electronic fund transfers from customers in South Africa."
+---
+
+EFT (Electronic Funds Transfer) is the standard bank payment method in South Africa. Customers pay directly from their South African bank account using online banking.
+
+## Availability
+
+| Currency | Country | Available via |
+|---|---|---|
+| ZAR | South Africa | Checkout (HPP, Drop-in), Direct Charge |
+
+## How it works
+
+**Via Checkout (Hosted Payment Page or Drop-in):**
+
+1. Customer selects **EFT** on the checkout page.
+2. Customer is redirected to their bank's online banking portal via Ozow (Fincra's EFT processing partner).
+3. The customer logs in and approves the payment.
+4. Fincra confirms the payment and marks it as successful.
+5. Your wallet is credited and a `charge.successful` webhook fires.
+
+**Via Direct Charge API:**
+
+Use `"type": "eft"` in your charge request.
+
+```json
+{
+  "type": "eft",
+  "amount": 500,
+  "currency": "ZAR",
+  "customer": {
+    "name": "Thabo Dlamini",
+    "email": "thabo@example.com"
+  }
+}
+```
+
+## Settlement
+
+EFT payments settle **T+1** (next business day) into your Fincra ZAR wallet.
+
+## Notes
+
+- For South Africa, both EFT and Card are available. You can offer both or restrict to one using the `paymentMethods` parameter when creating a checkout.
+- EFT is the preferred payment method for many South African customers who prefer direct bank payments over card transactions.

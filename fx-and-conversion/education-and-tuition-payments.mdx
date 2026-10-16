@@ -1,0 +1,40 @@
+---
+title: "Education & Tuition Payments"
+sidebarTitle: "Education & Tuition Payments"
+description: "How education platforms and payment providers use currency conversion to settle tuition in foreign currencies."
+---
+
+Education payments are high-stakes and fixed-amount. A student in Nigeria owes 5,000 GBP in tuition to a UK university. A payment platform processing school fees for families across Africa needs to convert local currencies to the institution's currency. In both cases, the exact amount matters, underpaying means the fee isn't covered, and overpaying creates reconciliation problems.
+
+Fincra's Currency Conversion helps education payment platforms and businesses lock in the exact exchange rate needed to cover a tuition invoice, guaranteeing the converted amount matches what the institution requires.
+
+## How it works
+
+<Note>
+  **Design team:** Flow diagram needed here, visual showing: Student/platform has tuition invoice in GBP → Generates quote for exact GBP amount → Quote shows exact NGN cost → Executes conversion at locked rate → GBP settles in wallet → Remits to institution.
+</Note>
+
+1. **Tuition invoice received**, The student or payment platform receives a tuition invoice denominated in a foreign currency (e.g., 5,000 GBP).
+2. **Quote generated for exact amount**, The platform calls the [Quotes API](/fx-and-conversion/quotes) to generate a quote converting NGN to GBP. The response shows the exact NGN amount needed to produce 5,000 GBP.
+3. **Cost confirmed**, The platform or student reviews the quote, the `amountToCharge` shows the total NGN that will be debited, and `amountToReceive` confirms the GBP amount. The rate is locked for 30 seconds.
+4. **Conversion executes**, The platform passes the `quoteReference` to the [conversion endpoint](/fx-and-conversion/create-a-conversion) to execute the conversion at the guaranteed rate.
+5. **Funds settle**, The converted GBP settles in the platform's GBP wallet within 5 to 10 minutes.
+6. **Tuition remitted**, The platform sends the GBP to the educational institution via the [Payouts API](/payouts/overview) or bank transfer.
+
+## Which FX solution to use
+
+| Stage | Solution | Why |
+|---|---|---|
+| All stages | [Quotes](/fx-and-conversion/quotes) | Tuition is a fixed amount in a specific currency. Quotes guarantee the exact conversion so the payment covers the invoice precisely. |
+
+Rates are not recommended for tuition payments. The amount must be exact, indicative rates can shift between the time a student checks the price and the time the payment is made.
+
+## Why this matters
+
+- **Exact coverage**, The converted amount matches the tuition invoice exactly. No shortfall, no overpayment.
+- **Transparent pricing**, Students or families see the exact local currency cost before committing, with no hidden fees on top of the conversion.
+- **Fast settlement**, Funds settle in 5 to 10 minutes, enabling same-day tuition payments in most cases.
+
+<Card title="Create a Conversion" icon="arrow-right-arrow-left" href="/fx-and-conversion/create-a-conversion">
+  Follow the step-by-step guide to implement this flow.
+</Card>

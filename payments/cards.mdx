@@ -1,0 +1,56 @@
+---
+title: "Cards"
+sidebarTitle: "Cards"
+description: "Accept Visa, Mastercard, and Verve card payments across supported currencies."
+---
+
+Fincra supports card payments for customers paying with debit or credit cards. Cards work across multiple currencies and are available through both the Checkout UI and the Direct Charge API.
+
+## Supported cards
+
+- Visa
+- Mastercard
+- Verve (NGN only)
+
+## Supported currencies
+
+| Currency | Country/Region | Available via |
+|---|---|---|
+| NGN | Nigeria | Checkout, Direct Charge |
+| ZMW | Zambia | Checkout, Direct Charge |
+| ZAR | South Africa | Checkout, Direct Charge |
+| USD | United States | Checkout, Direct Charge |
+
+## How card payments work
+
+**Via Checkout (Hosted Payment Page or Drop-in):**
+
+The customer enters their card details on Fincra's secure payment form. Fincra handles the card data and authentication, your integration never touches raw card numbers.
+
+**Via Direct Charge API:**
+
+Card details are passed directly in your API request. Because card data flows through your system, your business must be **PCI-DSS compliant** before using this method.
+
+## Authentication
+
+Card payments may require additional authentication steps:
+
+| Auth method | Description |
+|---|---|
+| OTP | A one-time password is sent to the customer's registered phone number. The customer enters it to confirm the payment. |
+| 3D Secure (3DS) | The customer is redirected to their bank's authentication page. After completing verification, they are returned to your site. |
+
+For Direct Charge integrations, handle authentication based on the `authorization.mode` field in the charge response. See [Accept a Payment](/payments/accept-a-payment) for details.
+
+## Settlement
+
+Card payments settle **T+1** (next business day) into your Fincra wallet.
+
+## Requirements
+
+| Integration | Requirement |
+|---|---|
+| Checkout (HPP or Drop-in) | None, Fincra handles card data |
+| Direct Charge API | PCI-DSS compliance required + compliance approval |
+
+To request Direct Charge access, email [compliance@fincra.com](mailto:compliance@fincra.com).

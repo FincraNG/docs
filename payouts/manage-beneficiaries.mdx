@@ -1,0 +1,54 @@
+---
+title: "Manage Beneficiaries"
+description: "Update or delete saved beneficiary records."
+---
+
+## Update a beneficiary
+
+Update a beneficiary's details at any time, for example, if a recipient changes their bank account, switches banks, or updates their name.
+
+```bash
+curl --request PUT \
+  --url 'https://api.fincra.com/payouts/beneficiaries/{beneficiaryId}' \
+  --header 'api-key: YOUR_API_KEY' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    ...
+  }'
+```
+
+<Info>
+  Updatable fields and the full request/response payload will be documented here once confirmed.
+</Info>
+
+<Note>
+  If you're updating a beneficiary's account number, re-run [account verification](/verification/verify-a-beneficiary-account) on the new account before saving the change. This confirms the new details are valid before your next payout to that recipient.
+</Note>
+
+## Delete a beneficiary
+
+Remove a beneficiary record when it's no longer needed:
+
+```bash
+curl --request DELETE \
+  --url 'https://api.fincra.com/payouts/beneficiaries/{beneficiaryId}' \
+  --header 'api-key: YOUR_API_KEY'
+```
+
+<Info>
+  Delete response and confirmation fields will be documented here once confirmed.
+</Info>
+
+<Warning>
+  Deleting a beneficiary is permanent. Any payouts already sent to this beneficiary are not affected, but you will need to re-create the record if you want to pay the same recipient again in future.
+</Warning>
+
+## When to update vs delete
+
+| Scenario | Action |
+|---|---|
+| Recipient changed their bank account number | **Update**, change the account number and re-verify |
+| Recipient moved to a different bank | **Update**, change the bank code (get the new code from [List Banks](/payouts/create-beneficiaries#list-supported-banks-and-mobile-money-providers)) |
+| Recipient's name changed | **Update**, edit the name field |
+| Recipient is no longer active | **Delete**, keep your beneficiary list clean |
+| Recipient switching from bank account to mobile money | **Delete** the old record, **Create** a new one with the correct method |

@@ -1,0 +1,64 @@
+---
+title: "Vendor Payments"
+description: "Settle invoices with suppliers, contractors, and service providers."
+---
+
+Use Fincra Payouts to pay vendors across Africa and internationally. The `customerReference` field maps directly to your invoice number, keeping your accounts payable records in sync without manual matching.
+
+## How it works
+
+<Steps>
+  <Step title="Receive and approve the invoice">
+    Your vendor submits an invoice. Once approved internally, retrieve their saved beneficiary record, or create one if this is a new vendor.
+  </Step>
+  <Step title="Verify new vendor accounts">
+    For any new vendor, confirm their bank account or mobile money details before adding them as a beneficiary. This prevents failed payouts to invalid accounts.
+
+    - Nigerian bank accounts: [Verify a Beneficiary Account, Nigeria](/verification/nigeria)
+    - Ghanaian mobile money: [Verify a Beneficiary Account, Ghana](/verification/ghana)
+  </Step>
+  <Step title="Generate a quote if cross-currency">
+    If paying in a different currency from your wallet, generate a quote to lock the exchange rate before proceeding.
+  </Step>
+  <Step title="Initiate the payout">
+    Call the [Initiate Transfer](/payouts/initiate-transfer) endpoint. Pass the invoice number as `customerReference` so the payout is traceable end-to-end.
+
+    ```json
+    {
+      "customerReference": "INV-2026-00483",
+      ...
+    }
+    ```
+  </Step>
+  <Step title="Update your AP system">
+    Listen for the `payout.successful` webhook and mark the invoice as paid in your accounts payable system.
+  </Step>
+</Steps>
+
+## Reconciliation mapping
+
+Use `customerReference` to link every Fincra payout to your internal records:
+
+| Your system | Fincra |
+|---|---|
+| Invoice number | `customerReference` |
+| Vendor record | Beneficiary ID |
+| Payment date | Payout `createdAt` timestamp |
+| Payment status | `payout.successful` / `payout.failed` webhook event |
+
+## Key considerations
+
+<CardGroup cols={2}>
+  <Card title="Verify new vendors first" icon="circle-check">
+    Always verify a new vendor's account details before saving them as a beneficiary. One check upfront prevents a failed payout and a delayed payment.
+  </Card>
+  <Card title="Multi-currency vendors" icon="globe">
+    Pay vendors in their preferred currency, Fincra handles the FX. For wallet-to-wallet currency conversion before initiating a payout, see [Currency Conversion](/fx-and-conversion/overview).
+  </Card>
+  <Card title="One beneficiary per vendor" icon="building">
+    Save each vendor once and reuse their beneficiary record across all future payments. Update the record if their account details change.
+  </Card>
+  <Card title="Invoice number as reference" icon="file-invoice">
+    Using the invoice number as `customerReference` gives you a direct link between your AP system and Fincra's payout records, no manual matching required.
+  </Card>
+</CardGroup>

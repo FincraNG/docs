@@ -1,0 +1,89 @@
+---
+title: "How Fincra Payments Work"
+sidebarTitle: "How Fincra Payments Work"
+description: "Understand the payment flow from checkout to settlement."
+---
+
+Fincra Payments lets you accept payments from your customers through multiple payment options and methods. Here's how it works end to end.
+
+## The Payment Flow
+
+{" "}
+
+<Note>A flow diagram will go here showing the full payment journey.</Note>
+
+#### 1. Create a payment
+
+Your application initiates a payment using one of Fincra's payment options: Checkout, Payment Links, Direct Charge API, or Virtual Accounts. You pass the payment details (amount, currency, customer information) and Fincra returns a payment session.
+
+#### 2. Customer pays
+
+Your customer is presented with the available payment methods for their currency: cards, bank transfer, mobile money, or PayAttitude. They select their preferred method and complete the payment.
+
+#### 3. Fincra processes the payment
+
+Fincra handles the authorization, validation, and processing of the transaction. This includes fraud checks, payment method verification, and communication with the relevant payment processors.
+
+#### 4. You get notified
+
+Once the payment is processed, Fincra sends a webhook notification to your server with the payment status. You should always use webhooks to confirm payment status, never rely solely on the client-side redirect.
+
+#### 5. Funds settle
+
+After a successful payment, funds are settled into your Fincra wallet. Settlement timelines vary depending on the payment method and currency.
+
+### Payment Lifecycle
+
+Every payment moves through a series of states:
+
+| Status       | Description                                                        |
+| ------------ | ------------------------------------------------------------------ |
+| `pending`    | Payment has been initiated but not yet completed by the customer.  |
+| `successful` | Payment has been completed and confirmed.                          |
+| `failed`     | Payment was not completed; either declined, expired, or cancelled. |
+
+{" "}
+
+<Tip>
+  Always listen for webhook notifications to track payment state changes.
+</Tip>
+
+### Settlement
+
+Settlement is when the funds from a completed payment are deposited into
+your Fincra wallet.
+
+Settlement timelines depend on the payment method:
+
+| Payment Method     | Settlement Timeline |
+| ------------------ | ------------------- |
+| Bank Transfer      | Instant             |
+| Mobile Money       | Instant             |
+| PalmPay            | Instant             |
+| PayAttitude (USSD) | Instant             |
+| Cards              | T+1                 |
+| EFT                | T+1                 |
+
+Once settled, you can view your balance on the Fincra dashboard or via the Balance API, and use the funds for payouts, conversions, or withdrawals.
+
+### Webhooks
+
+Fincra uses webhooks to notify your application when a payment event occurs such as a successful payment, a failed transaction, or a completed settlement.
+To receive webhooks, you need to:
+
+1. Set up a webhook URL in your Fincra dashboard
+2. Listen for incoming POST requests on that URL
+3. Validate the webhook signature using your webhook secret key
+4. Process the event and respond with a `200` status
+
+For full details, see [Webhooks](/developer-tools/webhooks/overview).
+
+## Fees
+
+Every transaction processed through Fincra incurs a fee. You control who
+bears the fee using the `feeBearer` parameter:
+
+- `business`, your business absorbs the fee (default)
+- `customer`, the fee is added to the customer's payment amount
+
+For detailed pricing, contact our [Sales Team](https://fincra.com).

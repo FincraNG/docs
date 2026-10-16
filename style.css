@@ -70,7 +70,7 @@ html.dark .sidebar-group:has(> li[id="/changelog"])::before {
 }
 
 /* Show "API Reference" in the documentation and "Documentation" in the API reference. */
-html:not([data-current-path^="/api/"]):not([data-current-path^="/developer-tools/"]):not([data-current-path^="/virtual-accounts/"]) li.navbar-link:has(> a[href="/"]) {
+html:not([data-current-path^="/api/"]):not([data-current-path^="/developer-tools/"]):not([data-current-path^="/virtual-accounts/"]):not([data-current-path^="/payments/"]):not([data-current-path^="/payouts/"]):not([data-current-path^="/fx-and-conversion/"]):not([data-current-path^="/direct-debit/"]):not([data-current-path^="/issuing/"]):not([data-current-path^="/verification/"]) li.navbar-link:has(> a[href="/"]) {
   display: none;
 }
 
@@ -80,7 +80,13 @@ html[data-current-path^="/api/"] li.navbar-link:has(> a[href="/api/introduction"
 
 /* Developer tools and product sections have their own sidebar: offer a way back to the Documentation, like the API reference. */
 html[data-current-path^="/developer-tools/"] li.navbar-link:has(> a[href="/"]),
-html[data-current-path^="/virtual-accounts/"] li.navbar-link:has(> a[href="/"]) {
+html[data-current-path^="/virtual-accounts/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/payments/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/payouts/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/fx-and-conversion/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/direct-debit/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/issuing/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/verification/"] li.navbar-link:has(> a[href="/"]) {
   display: list-item;
 }
 

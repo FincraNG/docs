@@ -1,0 +1,289 @@
+---
+title: "Create a Conversion"
+sidebarTitle: "Create a Conversion"
+description: "Execute a currency conversion using a quote reference."
+---
+
+Use this step-by-step guide to create a currency conversion between two currencies in your Fincra wallet using the Currency Conversion APIs. For conversions that happen as part of a cross-currency payout, see [Create a Payout](/payouts/overview).
+
+## Prerequisites
+
+Before you create a conversion, ensure the following:
+
+- **Authentication**, You have a valid API key. See [Manage API Keys](/developer-tools/manage-api-keys).
+- **Funded wallet**, Your source currency wallet has sufficient funds to cover the conversion amount.
+- **Supported currency pair**, The source and destination currencies you want to convert between are supported. See [Supported Currency Pairs](/fx-and-conversion/supported-currency-pairs).
+- **Business ID**, You have your Fincra business ID, available from your dashboard.
+
+## Step 1: Get the current exchange rate
+
+<Note>
+  This step is optional. If you already know the rate you want and are ready to convert, skip to [Step 2](#step-2-lock-in-a-quote).
+</Note>
+
+Before committing to a conversion, you can check the live exchange rate for a currency pair using the Rates endpoint. This is useful for monitoring rates, displaying pricing to your users, or deciding when to convert.
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/quotes/treasury-orders/rates?currencyPair=USD-NGN' \
+--header 'api-key: YOUR_API_KEY'
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `currencyPair` | query | Either this or `currency` | The currency pair to get the rate for, formatted as `SOURCE-DESTINATION` (e.g., `USD-NGN`). |
+| `currency` | query | Either this or `currencyPair` | A single currency code to get all available rates for that currency (e.g., `USD`). |
+
+### Response
+
+```json
+{
+    "success": true,
+    "message": "Rates retrieved successfully",
+    "data": {
+        "rates": [
+            {
+                "baseCurrency": "USD",
+                "quoteCurrency": "NGN",
+                "side": "buy",
+                "price": 1380.85
+            },
+            {
+                "baseCurrency": "USD",
+                "quoteCurrency": "NGN",
+                "side": "sell",
+                "price": 1388.74
+            }
+        ],
+        "pagination": {
+            "page": 1,
+            "perPage": 10,
+            "totalItems": 2,
+            "totalPages": 1,
+            "timestamp": "2026-02-16T15:39:56.424Z"
+        }
+    }
+}
+```
+
+The response returns both `buy` and `sell` rates for the requested pair. Rates are real-time and update continuously.
+
+<Warning>
+  Rates returned by this endpoint are indicative and not guaranteed. To lock in a rate for conversion, proceed to Step 2.
+</Warning>
+
+## Step 2: Lock in a quote
+
+Generate a quote to lock in an exchange rate for your conversion. The quote is valid for **30 seconds** by default. You'll receive a `quoteReference` that you'll use in the next step to execute the conversion.
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/quotes/generate' \
+--header 'api-key: YOUR_API_KEY' \
+--header 'Content-Type: application/json' \
+--data '{
+    "sourceCurrency": "KES",
+    "destinationCurrency": "NGN",
+    "action": "send",
+    "transactionType": "conversion",
+    "amount": "2",
+    "business": "YOUR_BUSINESS_ID"
+}'
+```
+
+### Request body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `sourceCurrency` | string | Yes | The currency you are converting from (e.g., `KES`). |
+| `destinationCurrency` | string | Yes | The currency you are converting to (e.g., `NGN`). |
+| `action` | string | Yes | The action type. Use `send` for conversions. |
+| `transactionType` | string | Yes | The transaction type. Use `conversion`. |
+| `amount` | string | Yes | The amount to convert. |
+| `business` | string | Yes | Your Fincra business ID. |
+
+### Response
+
+```json
+{
+    "success": true,
+    "message": "Quote generated successfully",
+    "data": {
+        "sourceCurrency": "KES",
+        "destinationCurrency": "NGN",
+        "sourceAmount": 2,
+        "destinationAmount": 21.4,
+        "action": "send",
+        "transactionType": "conversion",
+        "fee": 0,
+        "initialAmount": 2,
+        "quotedAmount": 21.4,
+        "rate": 10.6998542306,
+        "amountToCharge": 2,
+        "amountToReceive": 21.4,
+        "price": 10.7,
+        "reference": "2b3e6890-8fc6-4c6d-b573-6f3591fec898",
+        "expireAt": "2026-02-16T15:42:11.452Z",
+        "rounding": null,
+        "settlementDate": "2026-02-16T15:41:41.430Z"
+    }
+}
+```
+
+The `reference` field is the `quoteReference` you'll use in the next step. The `amountToCharge` is the total debited from your source wallet, and `amountToReceive` is what you'll get in the destination wallet.
+
+<Warning>
+  Save the `reference` from the response, you'll pass it as `quoteReference` when creating the conversion. The quote expires after **30 seconds**. If it expires, generate a new quote and try again.
+</Warning>
+
+## Step 3: Execute the conversion
+
+With your `quoteReference` in hand, call the Create Conversion endpoint to execute the conversion. Fincra will debit the source currency from your wallet and credit the destination currency.
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/conversions/initiate' \
+--header 'api-key: YOUR_API_KEY' \
+--header 'Content-Type: application/json' \
+--data '{
+    "business": "YOUR_BUSINESS_ID",
+    "quoteReference": "2b3e6890-8fc6-4c6d-b573-6f3591fec898",
+    "customerReference": "your-internal-reference-123"
+}'
+```
+
+### Request body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `business` | string | Yes | Your Fincra business ID. |
+| `quoteReference` | string | Yes | The quote reference returned in Step 2. |
+| `customerReference` | string | Yes | Your own unique reference for this conversion. Use this to reconcile conversions in your system. |
+
+### Response
+
+```json
+{
+    "success": true,
+    "message": "Conversion initiated successfully",
+    "data": {
+        "_id": 55070,
+        "id": 55070,
+        "reference": "8a16de68-28d4-418e-ab81-3444fbb9cbe1",
+        "customerReference": "your-internal-reference-123"
+    }
+}
+```
+
+The conversion has been initiated. Save the `reference`, you'll use it to verify the conversion status. The conversion will settle in your destination currency wallet within **5 to 10 minutes**.
+
+## Step 4: Verify the conversion
+
+After initiating a conversion, you can verify its status using the conversion reference. This is useful as a backup to webhooks or for reconciliation.
+
+### Request
+
+```bash
+curl --location 'https://api.fincra.com/conversions/reference/YOUR_CONVERSION_REFERENCE' \
+--header 'api-key: YOUR_API_KEY'
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "message": "Conversion fetched successfully",
+    "data": {
+        "id": 55070,
+        "_id": "55070",
+        "amountCharged": 2,
+        "amountReceived": 21.4,
+        "sourceCurrency": "KES",
+        "destinationCurrency": "NGN",
+        "sourceFee": 0,
+        "destinationFee": 0,
+        "settlementDate": "2026-02-16T15:41:41.000Z",
+        "settledAt": "2026-02-16T15:42:00.000Z",
+        "sourceExchangeRate": 0.0934579439,
+        "destinationExchangeRate": 10.6998542306,
+        "status": "successful",
+        "reference": "8a16de68-28d4-418e-ab81-3444fbb9cbe1",
+        "isSubAccount": 0,
+        "description": null,
+        "settlementDestination": "wallet",
+        "customerReference": "your-internal-reference-123",
+        "message": "Conversion Successful",
+        "price": 10.7,
+        "createdAt": "2026-02-16T15:41:51.000Z",
+        "updatedAt": "2026-02-16T15:42:00.000Z"
+    }
+}
+```
+
+Key fields to check:
+- `status`, The conversion status. `successful` means funds have settled.
+- `amountCharged`, The amount debited from your source currency wallet.
+- `amountReceived`, The amount credited to your destination currency wallet.
+- `settlementDestination`, Where funds were settled (always `wallet`).
+
+<Note>
+  You can also list all conversions for your business:
+
+  ```bash
+  curl --location 'https://api.fincra.com/conversions?business=YOUR_BUSINESS_ID' \
+  --header 'api-key: YOUR_API_KEY'
+  ```
+
+  ```json
+  {
+      "success": true,
+      "message": "Conversions fetched successfully",
+      "data": {
+          "results": [
+              {
+                  "id": 55070,
+                  "_id": "55070",
+                  "amountCharged": 2,
+                  "amountReceived": 21.4,
+                  "sourceCurrency": "KES",
+                  "destinationCurrency": "NGN",
+                  "fee": 0,
+                  "settlementDate": "2026-02-16T15:41:41.000Z",
+                  "settledAt": "2026-02-16T15:42:00.000Z",
+                  "sourceExchangeRate": 0.0934579439,
+                  "destinationExchangeRate": 10.6998542306,
+                  "status": "successful",
+                  "reference": "8a16de68-28d4-418e-ab81-3444fbb9cbe1",
+                  "price": 10.7,
+                  "createdAt": "2026-02-16T15:41:51.000Z",
+                  "updatedAt": "2026-02-16T15:42:00.000Z"
+              }
+          ],
+          "total": 17
+      }
+  }
+  ```
+</Note>
+
+## Webhooks
+
+Fincra sends a `conversion.successful` webhook event when a conversion has been processed and funds have settled in your destination currency wallet. We recommend listening for this event rather than polling the verification endpoint.
+
+For details on setting up and validating webhooks, see [Webhooks](/developer-tools/webhooks/overview).
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Choose Your FX Solution" icon="scale-balanced" href="/fx-and-conversion/choose-your-fx-solution">
+    Understand when to use Rates vs Quotes for your integration.
+  </Card>
+  <Card title="Supported Currency Pairs" icon="arrows-rotate" href="/fx-and-conversion/supported-currency-pairs">
+    Check which currency pairs are available for conversion.
+  </Card>
+</CardGroup>

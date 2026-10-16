@@ -1,0 +1,60 @@
+---
+title: "Quotes"
+sidebarTitle: "Quotes"
+description: "Lock in a guaranteed exchange rate before creating a conversion."
+---
+
+Quotes let you lock in an exchange rate before executing a conversion. When you generate a quote, Fincra guarantees the rate for **30 seconds**, giving you a fixed price to convert at, regardless of market movement during that window.
+
+Every conversion on Fincra requires a quote. You cannot create a conversion without a `quoteReference`.
+
+## How Quotes work
+
+<Note>
+  **Design team:** Flow diagram needed here, visual showing the Quotes flow: Generate quote → Receive guaranteed rate + quoteReference (30s validity) → Pass quoteReference to conversion endpoint → Conversion executes at guaranteed rate.
+</Note>
+
+1. **Generate a quote**, Call `POST /quotes/generate` with your source currency, destination currency, and the amount you want to convert (in source currency).
+2. **Receive a guaranteed rate**, Fincra returns the locked exchange rate, the converted amount, and a `quoteReference`. This rate is guaranteed for 30 seconds.
+3. **Create the conversion**, Pass the `quoteReference` to the conversion endpoint within the 30-second window. The conversion executes at the guaranteed rate.
+
+If the quote expires before you create the conversion, the `quoteReference` becomes invalid. Generate a new quote and try again.
+
+## What's in a quote response
+
+When you generate a quote, the response includes:
+
+| Field | Description |
+|---|---|
+| `reference` | The quote reference. Pass this as `quoteReference` when creating a conversion. |
+| `sourceCurrency` | The currency you are converting from. |
+| `destinationCurrency` | The currency you are converting to. |
+| `sourceAmount` | The amount being converted (in source currency). |
+| `destinationAmount` | The amount you will receive (in destination currency). |
+| `rate` | The full exchange rate. |
+| `price` | The rounded exchange rate. |
+| `fee` | The conversion fee. Always `0`, Fincra does not charge conversion fees. |
+| `amountToCharge` | The total amount debited from your source currency wallet. |
+| `amountToReceive` | The total amount credited to your destination currency wallet. |
+| `expireAt` | The timestamp when this quote expires. |
+| `settlementDate` | The expected settlement date for the conversion. |
+
+## When to use Quotes
+
+- **Every conversion**, Quotes are required. There is no way to convert without one.
+- **Price-sensitive workflows**, Lock the rate when you need to show your customer an exact amount before committing (e.g., checkout, booking confirmation, tuition payment).
+- **Batch planning**, Generate quotes for multiple conversions to preview exact costs before executing.
+
+## Pricing
+
+There are no separate fees for quotes or conversions. The exchange rate returned in the quote is the all-in rate, what you see is what you get.
+
+## Key things to know
+
+- **30-second validity**, Quotes expire after 30 seconds. If you don't create a conversion within this window, generate a new quote.
+- **Amount is in source currency**, The `amount` field in your request represents the source currency amount you want to convert.
+- **One quote, one conversion**, Each `quoteReference` can only be used for a single conversion.
+- **`action` is always `send`**, For conversion quotes, the `action` field is always set to `send`.
+- **`transactionType` is always `conversion`**, This distinguishes conversion quotes from other quote types.
+
+For the full implementation guide with code examples, see [Create a Conversion](/fx-and-conversion/create-a-conversion).

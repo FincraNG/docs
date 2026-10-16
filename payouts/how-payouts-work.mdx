@@ -1,0 +1,165 @@
+---
+title: "How Fincra Payouts Work"
+sidebarTitle: "How Fincra Payouts Work"
+description: "Understand the payout flow, statuses, cross-currency quotes, payment schemes, and settlement for Fincra Payouts."
+---
+
+This page explains how Fincra Payouts work end-to-end, from funding your wallet to funds arriving in the recipient's account. Read this before you start building.
+
+## The payout flow
+
+Fincra uses a single, unified API for all payouts. Whether you're sending NGN to a Nigerian bank account or USD to a UK bank via SWIFT, the flow is the same, cross-currency payouts simply add a quote step.
+
+<Note>
+  **Design team:** Flow diagram needed here, visual showing the unified payout flow with two paths:
+
+  **Same-currency path:** Fund wallet → Submit payout (with beneficiary details) → Fincra routes via local rails → Funds arrive → Webhook fires.
+
+  **Cross-currency path:** Fund wallet → Generate quote (30s lock) → Submit payout (with quote reference) → Fincra converts + routes → Funds arrive → Webhook fires.
+
+  Show the quote step as a conditional branch splitting from the main flow.
+</Note>
+
+### Same-currency payouts
+
+When the source and destination currencies match (e.g., NGN → NGN, GHS → GHS):
+
+1. **Fund your wallet**, Ensure your source currency wallet has sufficient funds.
+2. **Submit the payout**, Call the Payout API with the recipient's details, amount, and `customerReference`.
+3. **Fincra routes the payout**, Funds are sent via local clearing rails to the recipient's bank account or mobile money wallet.
+4. **Recipient receives funds**, Settlement times vary by country and method.
+5. **Webhook fires**, You receive a `payout.successful` or `payout.failed` event.
+
+### Cross-currency payouts
+
+When the source and destination currencies differ (e.g., NGN → GHS, USD → KES):
+
+1. **Fund your wallet**, Ensure your source currency wallet has sufficient funds.
+2. **Generate a quote**, Call the Quote API with `sourceCurrency`, `destinationCurrency`, `amount`, and `transactionType: "disbursement"`. You receive a `quoteReference` valid for **30 seconds**.
+3. **Submit the payout**, Call the Payout API with the recipient's details, amount, and the `quoteReference` from step 2.
+4. **Fincra converts and routes**, Funds are converted at the locked rate and routed to the recipient.
+5. **Recipient receives funds**, Settlement times vary by country, method, and payment scheme.
+6. **Webhook fires**, You receive a `payout.successful` or `payout.failed` event.
+
+<Warning>
+  The quote expires after **30 seconds**. If it expires before you submit the payout, generate a new quote and try again.
+</Warning>
+
+## Payout lifecycle
+
+Every payout goes through a simple status progression:
+
+<Note>
+  **Design team:** State diagram needed here, visual showing: `processing` → `successful` or `processing` → `failed`. Keep it simple, only 3 states.
+</Note>
+
+| Status | Description |
+|---|---|
+| `processing` | The payout has been submitted and is being processed by Fincra and the destination bank/wallet. |
+| `successful` | The payout was completed successfully. Funds have been sent to the recipient. |
+| `failed` | The payout failed. Check the webhook payload for failure details. |
+
+<Warning>
+  **Only retry payouts with an explicit `failed` status.** A payout in `processing` is still in progress, do not resubmit it. If you don't receive a webhook, use the verify endpoint to check the status before taking action.
+</Warning>
+
+### Preventing duplicates
+
+Include a `customerReference` (your own unique identifier) in every payout request. Fincra uses this to detect and reject duplicate submissions. If a payout with the same `customerReference` already exists, the API will return an error instead of creating a duplicate.
+
+## Cross-currency quotes
+
+For cross-currency payouts, you must generate a quote before submitting the payout. The quote locks in the exchange rate and calculates the exact amounts.
+
+### Quote request
+
+```bash
+curl --location 'https://api.fincra.com/quotes/generate' \
+--header 'api-key: YOUR_API_KEY' \
+--header 'Content-Type: application/json' \
+--data '{
+    "sourceCurrency": "NGN",
+    "destinationCurrency": "KES",
+    "amount": "50000",
+    "action": "send",
+    "transactionType": "disbursement",
+    "business": "YOUR_BUSINESS_ID"
+}'
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `sourceCurrency` | string | Yes | The currency you're paying from (e.g., `NGN`). |
+| `destinationCurrency` | string | Yes | The currency the recipient receives (e.g., `KES`). |
+| `amount` | string | Yes | The amount in the source currency. |
+| `action` | string | Yes | Use `send`. |
+| `transactionType` | string | Yes | Use `disbursement` for payouts. |
+| `business` | string | Yes | Your Fincra business ID. |
+
+The response includes a `reference` field, this is the `quoteReference` you pass to the Payout API. The quote expires after **30 seconds**.
+
+## Payment schemes
+
+For international payouts in USD, GBP, and EUR, you must specify a payment scheme. The scheme determines how the funds are routed, how fast they arrive, and any limits that apply.
+
+| Currency | Scheme | API value | Settlement speed |
+|---|---|---|---|
+| USD | ACH | `ach` | 1-3 business days |
+| USD | Fedwire | `fed_wire` | Same day |
+| USD | SWIFT | `swift` | 1-2 business days |
+| GBP | Faster Payments (FPS) | `fps` | Within 1 hour |
+| GBP | CHAPS | `chaps` | Within 1 hour |
+| GBP | SWIFT | `swift` | 1-2 business days |
+| EUR | SEPA | `sepa` | Within 1 day |
+| EUR | SEPA Instant | `sepa_instant` | Within seconds |
+| EUR | SWIFT | `swift` | 1-2 business days |
+
+<Note>
+  **CHAPS** is only available Monday to Friday, 08:00 to 17:00 UK time (excluding UK public holidays).
+</Note>
+
+African currency payouts (NGN, GHS, KES, UGX, ZMW, TZS, XAF, XOF, ZAR, EGP) do not require a payment scheme, Fincra automatically routes through local clearing rails.
+
+For a deeper look at each scheme, see [Payment Schemes](/payouts/payout-coverage).
+
+## Beneficiaries
+
+A beneficiary is the person or organization receiving the payout. Fincra supports two types:
+
+| Type | Description |
+|---|---|
+| `individual` | A person (sole beneficiary) |
+| `corporate` | An organization or company |
+
+You can save beneficiaries for reuse, create them once and reference them in future payouts. This avoids re-entering recipient details for repeat payments. See [Beneficiaries](/payouts/beneficiaries) for details on creating and managing beneficiaries.
+
+## Webhooks
+
+Fincra sends webhook events for every payout:
+
+| Event | Description |
+|---|---|
+| `payout.successful` | The payout completed successfully. Funds have been sent to the recipient. |
+| `payout.failed` | The payout failed. The payload includes details on the failure reason. |
+
+Listen for these events as the primary way to confirm payout outcomes. Use the verify endpoint as a backup for reconciliation. For webhook setup and signature validation, see [Webhooks](/developer-tools/webhooks/overview).
+
+## Key things to know
+
+- **Sandbox available**, Test your payout integration in sandbox before going live. Use the sandbox base URL: `https://sandboxapi.fincra.com`.
+- **Dashboard + API**, You can send payouts manually from the [Fincra dashboard](https://dashboard.fincra.com) or programmatically via the API.
+- **`customerReference` is critical**, Always include a unique `customerReference` in every payout to prevent duplicate transactions.
+- **Only retry on `failed`**, Never resubmit a payout that is still `processing`. Use the verify endpoint to check status if you haven't received a webhook.
+- **Quote expiry**, Cross-currency quotes expire after 30 seconds. Generate a new one if it lapses.
+- **Sender details required for international**, USD, GBP, and EUR payouts require sender information (name, ID, country of origin) for compliance.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Currency Precision" icon="calculator" href="/payouts/currency-precision">
+    Check decimal precision rules for each payout currency.
+  </Card>
+  <Card title="Payout Coverage" icon="globe-africa" href="/payouts/payout-coverage">
+    See which countries, currencies, and methods are available.
+  </Card>
+</CardGroup>

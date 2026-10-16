@@ -1,0 +1,291 @@
+---
+title: "Webhook Verification"
+description: "Learn how to verify that you receive webhook events and validates that the notification originated from Fincra"
+---
+
+Fincra signs all webhook events with a signature included in the request's `signature` header. This allows you to verify that events were sent by Fincra and not by a third party. Before processing any webhook payload, you should always verify its signature. This protects your application from fraudulent or tampered requests.
+
+## How webhook signatures work
+
+Each webhook request includes a `signature` header containing an `HMAC-SHA-512` hash generated using:
+
+- Your webhook secret key
+- The raw request body
+
+## Verifying webhook signatures
+
+Follow these steps to verify a webhook signature:
+
+1. **Extract the signature from the header** - Retrieve the `signature` header from the incoming request. This is the `HMAC-SHA-512` hash that Fincra generated.
+2. **Get your webhook secret key** - Retrieve your webhook secret key from your environment variables. You can find this in the [Fincra Dashboard](https://app.fincra.com) under **Settings → API Keys & Webhooks**. Never hardcode this value.
+3. **Compute the expected signature** - Using your webhook secret key and the raw request body, generate a `HMAC-SHA-512` hash. Use the raw request body exactly as received, before any JSON parsing.
+4. **Compare signatures** - Compare your computed signature with the one in the header. If they match, the webhook is authentic. Use a timing-safe comparison function to prevent timing attacks.
+
+## Code examples
+
+<CodeGroup>
+
+```javascript Node.js
+import crypto from "crypto";
+import express from "express";
+
+const app = express();
+
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString();
+    },
+  })
+);
+
+app.post("/webhook", (req, res) => {
+  const signature = req.headers["signature"];
+  const secret = process.env.FINCRA_WEBHOOK_SECRET;
+
+  const expectedSignature = crypto
+    .createHmac("sha512", secret)
+    .update(req.rawBody)
+    .digest("hex");
+
+  const isValid = crypto.timingSafeEqual(
+    Buffer.from(expectedSignature),
+    Buffer.from(signature)
+  );
+
+  if (!isValid) {
+    return res.status(401).json({ error: "Invalid signature" });
+  }
+
+  const { event, data } = req.body;
+  // Process the webhook
+
+  res.status(200).json({ received: true });
+});
+
+app.listen(3000);
+```
+
+```python Python
+import hmac
+import hashlib
+import os
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    signature = request.headers.get('signature')
+    secret = os.environ.get('FINCRA_WEBHOOK_SECRET')
+
+    expected_signature = hmac.new(
+        secret.encode('utf-8'),
+        request.data,
+        hashlib.sha512
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, signature):
+        return jsonify({'error': 'Invalid signature'}), 401
+
+    payload = request.get_json()
+    event = payload.get('event')
+    data = payload.get('data')
+    # Process the webhook
+
+    return jsonify({'received': True}), 200
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+
+```go Go
+package main
+
+import (
+	"crypto/hmac"
+	"crypto/sha512"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"net/http"
+	"os"
+)
+
+func webhookHandler(w http.ResponseWriter, r *http.Request) {
+	signature := r.Header.Get("signature")
+	secret := os.Getenv("FINCRA_WEBHOOK_SECRET")
+
+	body, _ := io.ReadAll(r.Body)
+
+	mac := hmac.New(sha512.New, []byte(secret))
+	mac.Write(body)
+	expectedSignature := hex.EncodeToString(mac.Sum(nil))
+
+	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) {
+		http.Error(w, `{"error": "Invalid signature"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var payload map[string]interface{}
+	json.Unmarshal(body, &payload)
+	// Process the webhook
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"received": true})
+}
+
+func main() {
+	http.HandleFunc("/webhook", webhookHandler)
+	http.ListenAndServe(":3000", nil)
+}
+```
+
+```ruby Ruby
+require 'sinatra'
+require 'openssl'
+require 'json'
+
+post '/webhook' do
+  payload = request.body.read
+  signature = request.env['HTTP_SIGNATURE']
+  secret = ENV['FINCRA_WEBHOOK_SECRET']
+
+  expected_signature = OpenSSL::HMAC.hexdigest('sha512', secret, payload)
+
+  unless Rack::Utils.secure_compare(expected_signature, signature)
+    halt 401, { 'Content-Type' => 'application/json' }, { error: 'Invalid signature' }.to_json
+  end
+
+  data = JSON.parse(payload)
+  event = data['event']
+  # Process the webhook
+
+  status 200
+  { received: true }.to_json
+end
+```
+
+```php PHP
+<?php
+
+$payload = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_SIGNATURE'] ?? '';
+$secret = getenv('FINCRA_WEBHOOK_SECRET');
+
+$expectedSignature = hash_hmac('sha512', $payload, $secret);
+
+if (!hash_equals($expectedSignature, $signature)) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Invalid signature']);
+    exit;
+}
+
+$data = json_decode($payload, true);
+$event = $data['event'];
+// Process the webhook
+
+http_response_code(200);
+echo json_encode(['received' => true]);
+```
+
+```csharp C#
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.AspNetCore.Mvc;
+
+[ApiController]
+[Route("webhook")]
+public class WebhookController : ControllerBase
+{
+    [HttpPost]
+    public async Task HandleWebhook()
+    {
+        using var reader = new StreamReader(Request.Body);
+        var payload = await reader.ReadToEndAsync();
+
+        var signature = Request.Headers["signature"].ToString();
+        var secret = Environment.GetEnvironmentVariable("FINCRA_WEBHOOK_SECRET");
+
+        using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(secret));
+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        var expectedSignature = Convert.ToHexString(hash).ToLower();
+
+        if (!CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(expectedSignature),
+            Encoding.UTF8.GetBytes(signature)))
+        {
+            return Unauthorized(new { error = "Invalid signature" });
+        }
+
+        var data = System.Text.Json.JsonSerializer.Deserialize(payload);
+        var eventType = data.GetProperty("event").GetString();
+        // Process the webhook
+
+        return Ok(new { received = true });
+    }
+}
+```
+
+```java Java
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Map;
+
+@RestController
+public class WebhookController {
+
+    @PostMapping("/webhook")
+    public ResponseEntity handleWebhook(
+            @RequestBody String payload,
+            @RequestHeader("signature") String signature) throws Exception {
+
+        String secret = System.getenv("FINCRA_WEBHOOK_SECRET");
+        String expectedSignature = computeHmacSha512(payload, secret);
+
+        if (!MessageDigest.isEqual(
+                expectedSignature.getBytes(StandardCharsets.UTF_8),
+                signature.getBytes(StandardCharsets.UTF_8))) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid signature"));
+        }
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode data = mapper.readTree(payload);
+        String event = data.get("event").asText();
+        // Process the webhook
+
+        return ResponseEntity.ok(Map.of("received", true));
+    }
+
+    private String computeHmacSha512(String data, String secret) throws Exception {
+        Mac hmac = Mac.getInstance("HmacSHA512");
+        SecretKeySpec secretKey = new SecretKeySpec(
+            secret.getBytes(StandardCharsets.UTF_8), "HmacSHA512");
+        hmac.init(secretKey);
+        byte[] hash = hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) hexString.append('0');
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
+}
+```
+
+</CodeGroup>
+
+## Testing webhooks
+
+When testing webhooks, use your **Sandbox** environment to avoid processing live data. You can verify webhook delivery using:
+
+- A local server exposed via [ngrok](https://ngrok.com)
+- Public tools like [Webhook.site](https://webhook.site) or [RequestBin](https://requestbin.com)

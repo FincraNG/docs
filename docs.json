@@ -28,12 +28,12 @@
             "group": "Products",
             "pages": [
               "virtual-accounts",
-              "payments/overview",
-              "payouts/overview",
-              "fx-and-conversion/overview",
-              "direct-debit/overview",
-              "issuing/overview",
-              "verification/overview"
+              "payments",
+              "payouts",
+              "fx-and-conversion",
+              "direct-debit",
+              "issuing",
+              "verification"
             ]
           },
           "developer-tools",
@@ -216,16 +216,293 @@
         "tab": "Virtual Accounts",
         "pages": [
           "virtual-accounts/overview",
+          "virtual-accounts/permanent-accounts",
+          "virtual-accounts/temporary-accounts",
           "virtual-accounts/supported-countries-and-currencies"
         ]
       },
       {
-        "tab": "Developer tools",
+        "tab": "Payments",
+        "groups": [
+          {
+            "group": "Payments",
+            "pages": [
+              "payments/overview",
+              "payments/how-payments-work",
+              "payments/supported-currencies",
+              "payments/get-started"
+            ]
+          },
+          {
+            "group": "Checkout",
+            "pages": [
+              "payments/hosted-payment-page",
+              "payments/drop-in-checkout"
+            ]
+          },
+          {
+            "group": "Payment links",
+            "pages": [
+              "payments/payment-links",
+              "payments/create-a-payment-link",
+              "payments/manage-payment-links"
+            ]
+          },
+          {
+            "group": "Direct charge",
+            "pages": [
+              "payments/direct-charge",
+              "payments/accept-a-payment"
+            ]
+          },
+          {
+            "group": "Payment methods",
+            "pages": [
+              "payments/cards",
+              "payments/bank-transfer",
+              "payments/mobile-money",
+              "payments/payattitude",
+              "payments/palmpay",
+              "payments/eft"
+            ]
+          },
+          {
+            "group": "Manage payments",
+            "pages": [
+              "payments/verify-a-payment",
+              "payments/refunds",
+              "payments/disputes",
+              "payments/settlements",
+              "payments/reporting"
+            ]
+          },
+          {
+            "group": "Test and go live",
+            "pages": [
+              "payments/integration-checklist",
+              "payments/error-codes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Payouts",
+        "groups": [
+          {
+            "group": "Payouts",
+            "pages": [
+              "payouts/overview",
+              "payouts/how-payouts-work",
+              "payouts/requirements",
+              "payouts/currency-precision"
+            ]
+          },
+          {
+            "group": "Coverage",
+            "pages": [
+              "payouts/payout-coverage",
+              "payouts/nigeria",
+              "payouts/ghana",
+              "payouts/kenya",
+              "payouts/uganda",
+              "payouts/zambia",
+              "payouts/tanzania",
+              "payouts/cameroon",
+              "payouts/senegal",
+              "payouts/south-africa",
+              "payouts/egypt",
+              "payouts/united-states",
+              "payouts/united-kingdom",
+              "payouts/eurozone"
+            ]
+          },
+          {
+            "group": "Send money",
+            "pages": [
+              "payouts/initiate-transfer",
+              "payouts/wallet-transfers",
+              "payouts/track-payouts",
+              "payouts/reporting"
+            ]
+          },
+          {
+            "group": "Beneficiaries",
+            "pages": [
+              "payouts/beneficiaries",
+              "payouts/create-beneficiaries",
+              "payouts/retrieve-beneficiaries",
+              "payouts/manage-beneficiaries"
+            ]
+          },
+          {
+            "group": "Use cases",
+            "pages": [
+              "payouts/remittance",
+              "payouts/payroll",
+              "payouts/vendor-payments",
+              "payouts/marketplace-payouts"
+            ]
+          },
+          {
+            "group": "Test and go live",
+            "pages": [
+              "payouts/integration-checklist",
+              "payouts/error-codes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "FX and Conversion",
+        "groups": [
+          {
+            "group": "FX and Conversion",
+            "pages": [
+              "fx-and-conversion/overview",
+              "fx-and-conversion/how-currency-conversion-works",
+              "fx-and-conversion/supported-currency-pairs"
+            ]
+          },
+          {
+            "group": "Get started",
+            "pages": [
+              "fx-and-conversion/create-a-conversion",
+              "fx-and-conversion/choose-your-fx-solution",
+              "fx-and-conversion/quotes",
+              "fx-and-conversion/rates"
+            ]
+          },
+          {
+            "group": "Use cases",
+            "pages": [
+              "fx-and-conversion/travel-and-hospitality",
+              "fx-and-conversion/payroll",
+              "fx-and-conversion/digital-marketplaces",
+              "fx-and-conversion/international-trade-settlement",
+              "fx-and-conversion/education-and-tuition-payments"
+            ]
+          },
+          {
+            "group": "Test and go live",
+            "pages": [
+              "fx-and-conversion/integration-checklist",
+              "fx-and-conversion/error-codes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Direct Debit",
+        "groups": [
+          {
+            "group": "Direct Debit",
+            "pages": [
+              "direct-debit/overview",
+              "direct-debit/how-direct-debit-works",
+              "direct-debit/supported-banks",
+              "direct-debit/get-started"
+            ]
+          },
+          {
+            "group": "Mandates",
+            "pages": [
+              "direct-debit/create-a-mandate",
+              "direct-debit/manage-mandates"
+            ]
+          },
+          {
+            "group": "Collect",
+            "pages": [
+              "direct-debit/collect-a-payment"
+            ]
+          },
+          {
+            "group": "Use cases",
+            "pages": [
+              "direct-debit/loan-repayment",
+              "direct-debit/insurance-premiums",
+              "direct-debit/subscription-billing",
+              "direct-debit/savings-and-investments"
+            ]
+          },
+          {
+            "group": "Test and go live",
+            "pages": [
+              "direct-debit/integration-checklist",
+              "direct-debit/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Issuing",
         "pages": [
+          "issuing/overview"
+        ]
+      },
+      {
+        "tab": "Verification",
+        "groups": [
+          {
+            "group": "Verification",
+            "pages": [
+              "verification/overview",
+              "verification/verify-a-beneficiary-account",
+              "verification/nigeria",
+              "verification/ghana"
+            ]
+          },
+          {
+            "group": "Identity",
+            "pages": [
+              "verification/verify-a-bvn"
+            ]
+          },
+          {
+            "group": "Cards",
+            "pages": [
+              "verification/resolve-a-card-bin"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developer tools",
+        "groups": [
           {
             "group": "Developer tools",
             "pages": [
               "developer-tools/overview"
+            ]
+          },
+          {
+            "group": "API",
+            "pages": [
+              "developer-tools/api",
+              "developer-tools/manage-api-keys",
+              "developer-tools/ip-whitelisting",
+              "developer-tools/rate-limits",
+              "developer-tools/postman-collection"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "developer-tools/sdks",
+              "developer-tools/server-side-sdks",
+              "developer-tools/mobile-sdks"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "pages": [
+              "developer-tools/webhooks/overview",
+              "developer-tools/webhooks/configure",
+              "developer-tools/webhooks/verify",
+              "developer-tools/webhooks/payload",
+              "developer-tools/webhooks/events",
+              "developer-tools/webhooks/best-practices",
+              "developer-tools/webhooks/troubleshooting"
             ]
           },
           {

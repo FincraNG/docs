@@ -1,0 +1,65 @@
+---
+title: "Remittance"
+description: "Send money across borders to individuals and families across Africa and beyond."
+---
+
+Remittance is one of the most common use cases for Fincra Payouts. Whether you're building a consumer money transfer app, a diaspora platform, or a gig economy product that pays workers in their local currency, Fincra's payout infrastructure handles the cross-border complexity for you.
+
+## How it works
+
+<Steps>
+  <Step title="Collect sender and recipient details">
+    Your customer provides the transfer amount, destination country, and the recipient's bank account or mobile money details.
+  </Step>
+  <Step title="Verify the recipient's account">
+    Before initiating a transfer, confirm the recipient's account details are valid. See [Verify a Beneficiary Account](/verification/verify-a-beneficiary-account).
+  </Step>
+  <Step title="Generate a quote for cross-currency transfers">
+    If the sender's currency differs from the recipient's, call the Generate Quote endpoint to lock in an exchange rate. The quote is valid for **30 seconds**, build your UI to show a countdown and prompt confirmation before expiry.
+  </Step>
+  <Step title="Save the recipient as a beneficiary">
+    Store the recipient's details as a [beneficiary](/payouts/create-beneficiaries). This lets your customer send to the same person again without re-entering their details.
+  </Step>
+  <Step title="Initiate the payout">
+    Call the [Initiate Transfer](/payouts/initiate-transfer) endpoint with the beneficiary details, amount, and currency. Pass your internal transfer ID as `customerReference` for reconciliation.
+  </Step>
+  <Step title="Notify the sender">
+    Listen for the `payout.successful` or `payout.failed` webhook and update your customer on the transfer outcome in real time.
+  </Step>
+</Steps>
+
+<Note>
+  **Diagram needed:** End-to-end remittance flow, sender initiates → (cross-currency branch: quote generated → rate confirmed) → payout triggered → Fincra processes on local rails → recipient receives → webhook fires.
+</Note>
+
+## Supported corridors
+
+Fincra supports remittance to [13 destinations](/payouts/payout-coverage) across Africa and internationally. Key corridors:
+
+| Source currency | Destination | Method |
+|---|---|---|
+| USD, GBP, EUR | NGN | Bank transfer |
+| USD, GBP, EUR | KES | Bank transfer, Mobile money |
+| USD, GBP, EUR | GHS | Bank transfer, Mobile money |
+| USD, GBP, EUR | UGX, TZS, ZMW | Bank transfer, Mobile money |
+| NGN | KES, GHS, UGX, TZS | Bank transfer, Mobile money |
+| USD (SWIFT) | Global | Bank transfer |
+
+For the full country and method breakdown, see [Payout Coverage](/payouts/payout-coverage).
+
+## Key considerations
+
+<CardGroup cols={2}>
+  <Card title="Lock rates fast" icon="clock">
+    Cross-currency quotes expire in **30 seconds**. Generate the quote immediately before your customer confirms, not when they first see the rate.
+  </Card>
+  <Card title="Verify before sending" icon="circle-check">
+    Run account verification before initiating a payout to catch invalid account numbers early. Saves failed payouts and customer frustration.
+  </Card>
+  <Card title="African rails are instant" icon="bolt">
+    Payouts to African bank accounts and mobile money wallets settle instantly. International transfers vary by payment scheme, see [settlement speeds](/payouts/how-payouts-work#payment-schemes).
+  </Card>
+  <Card title="Track with customerReference" icon="tag">
+    Pass your internal transfer ID as `customerReference` to link each Fincra payout to a record in your system.
+  </Card>
+</CardGroup>

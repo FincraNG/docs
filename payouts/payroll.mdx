@@ -1,0 +1,73 @@
+---
+title: "Payroll"
+description: "Pay employees and contractors across Africa and internationally."
+---
+
+Use Fincra Payouts to run payroll for distributed teams, whether you're paying full-time employees or contractors spread across multiple countries and currencies.
+
+<Note>
+  Fincra processes each payout individually. For a payroll run covering multiple employees, initiate one payout per recipient. We recommend building a queue on your end to dispatch payouts in sequence and track each one separately.
+</Note>
+
+## How it works
+
+<Steps>
+  <Step title="Prepare your payroll list">
+    Compile your list of employees or contractors: name, bank account or mobile money details, currency, and net pay amount.
+  </Step>
+  <Step title="Save employees as beneficiaries">
+    Create a [beneficiary record](/payouts/create-beneficiaries) for each employee during onboarding, not at pay run time. This keeps their details on file and speeds up each payroll cycle.
+  </Step>
+  <Step title="Handle cross-currency employees">
+    If you pay employees in a currency different from your wallet, [generate a quote](/payouts/how-payouts-work#payment-flow) for each before initiating their payout. Generate the quote immediately before initiating, quotes expire in 30 seconds.
+  </Step>
+  <Step title="Initiate payouts">
+    Loop through your payroll list and call the [Initiate Transfer](/payouts/initiate-transfer) endpoint for each employee. Use a consistent `customerReference` format to track each payout (see below).
+  </Step>
+  <Step title="Confirm and reconcile">
+    Listen for `payout.successful` and `payout.failed` webhooks per employee. Log the outcome against your payroll records and investigate any failures before retrying.
+  </Step>
+</Steps>
+
+<Note>
+  **Diagram needed:** Payroll cycle flow, payroll list compiled → loop per employee → cross-currency branch (generate quote) → initiate payout → webhook received → reconciliation log updated.
+</Note>
+
+## customerReference format for payroll
+
+Use `customerReference` to tie each payout back to a specific employee and pay run. A consistent format makes reconciliation straightforward:
+
+```
+payroll-{YYYY-MM}-{employeeId}
+
+Examples:
+payroll-2026-03-EMP001
+payroll-2026-03-EMP047
+```
+
+## Handling failed payouts
+
+If a payout fails, Fincra fires a `payout.failed` webhook with a reason. Common causes and next steps:
+
+| Cause | Action |
+|---|---|
+| Invalid account number | Re-verify the employee's account. Update their [beneficiary record](/payouts/manage-beneficiaries) and retry. |
+| Insufficient wallet balance | Top up your Fincra wallet, then retry. |
+| Quote expired | Generate a new quote and re-initiate the payout. |
+
+## Key considerations
+
+<CardGroup cols={2}>
+  <Card title="Onboard early" icon="users">
+    Create beneficiary records when employees join, not at pay run time. This removes a blocker from your payroll cycle.
+  </Card>
+  <Card title="Verify new accounts" icon="circle-check">
+    Always verify a new employee's account before saving them as a beneficiary. See [Verify a Beneficiary Account](/verification/verify-a-beneficiary-account).
+  </Card>
+  <Card title="Pay in local currency" icon="globe">
+    Pay employees in their local currency. Use Fincra's FX quote to handle conversion from your wallet currency at the time of each payout.
+  </Card>
+  <Card title="Log every reference" icon="tag">
+    Store the Fincra payout reference returned on each initiation alongside your internal payroll record. You'll need it if you ever need to investigate a payout.
+  </Card>
+</CardGroup>

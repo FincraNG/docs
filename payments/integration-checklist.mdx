@@ -1,0 +1,65 @@
+---
+title: "Integration Checklist"
+sidebarTitle: "Integration Checklist"
+description: "Everything to verify before going live with Fincra Payments."
+---
+
+Use this checklist to confirm your Payments integration is production-ready before switching to live credentials.
+
+## Sandbox testing
+
+<Steps>
+  <Step title="Test all payment methods you plan to use">
+    Run a full payment flow in sandbox for each method, Checkout, Payment Links, Direct Charge, or Virtual Accounts. Use Fincra's [test values](/developer-tools/sandbox) to simulate successful and failed payments.
+  </Step>
+  <Step title="Verify payments server-side">
+    Confirm you are calling the verify endpoint after every payment and checking the `status` field before delivering value.
+  </Step>
+  <Step title="Handle webhook events">
+    Confirm your webhook endpoint receives and processes `charge.successful`. Test that your server responds with `200 OK` and handles the payload correctly.
+  </Step>
+  <Step title="Verify webhook signatures">
+    Confirm you are validating the webhook signature using your webhook secret. Never process unverified webhooks in production. See [Verify Webhooks](/developer-tools/webhooks/verify).
+  </Step>
+  <Step title="Test failure scenarios">
+    Simulate failed payments and confirm your application handles them gracefully, no value delivered, appropriate error shown to customer.
+  </Step>
+  <Step title="Test reference uniqueness">
+    Confirm every payment you create uses a unique `reference`. Duplicate references will be rejected.
+  </Step>
+</Steps>
+
+## Pre-launch checklist
+
+<Steps>
+  <Step title="Complete KYC and compliance review">
+    Your Fincra account must be fully approved before accepting live payments. Check your account status in the dashboard.
+  </Step>
+  <Step title="Request activation for restricted methods">
+    If you plan to use **Direct Charge**, **card collections**, or **mobile money**, contact your account manager or email [compliance@fincra.com](mailto:compliance@fincra.com) to request activation. Allow time for compliance review.
+  </Step>
+  <Step title="Switch to production credentials">
+    Replace sandbox API keys with your live API keys and update the base URL from `sandboxapi.fincra.com` to `api.fincra.com`.
+  </Step>
+  <Step title="Update your webhook URL">
+    Ensure your production webhook URL is configured in the dashboard and points to your live server. See [Configure Webhooks](/developer-tools/webhooks/configure).
+  </Step>
+  <Step title="IP whitelisting (if applicable)">
+    If you have IP whitelisting enabled, add your production server IP addresses. See [IP Whitelisting](/developer-tools/ip-whitelisting).
+  </Step>
+  <Step title="Run a live smoke test">
+    Make a real payment in production using your own card or bank account. Verify the webhook fires, the payment verifies correctly, and funds appear in your wallet.
+  </Step>
+</Steps>
+
+## Payment method requirements summary
+
+| Payment Method | Requirement |
+|---|---|
+| Checkout (HPP, Drop-in) | None, available after KYC approval |
+| Payment Links | None, available after KYC approval |
+| Virtual Accounts (NGN) | BVN required per account request |
+| Virtual Accounts (USD/EUR/GBP) | Additional compliance requirements, contact account manager |
+| Direct Charge API | Compliance approval required, email compliance@fincra.com |
+| Card via Direct Charge | PCI-DSS compliance required in addition to above |
+| Mobile Money via Direct Charge | Compliance approval required |

@@ -1,0 +1,240 @@
+---
+title: "Drop-in Checkout"
+sidebarTitle: "Drop-in Checkout"
+description: "Embed Fincra's payment modal directly into your page using the JavaScript SDK."
+---
+
+The Drop-in Checkout embeds a Fincra payment modal directly on your page. Your customer never leaves your site, the modal appears as an overlay, they complete their payment, and control returns to your page.
+
+**Best for:** Businesses that want to keep customers on their site throughout the payment experience without building a custom UI.
+
+## How it works
+
+<Steps>
+  <Step title="Load the Fincra JS SDK">
+    Include the Fincra checkout script on your page.
+  </Step>
+  <Step title="Collect payment details">
+    Gather the amount, currency, and customer details, from a form or your database.
+  </Step>
+  <Step title="Open the modal">
+    Call `Fincra.initialize()` with the payment details. The modal opens on your page.
+  </Step>
+  <Step title="Customer pays">
+    The customer selects their payment method and completes the transaction inside the modal.
+  </Step>
+  <Step title="Handle the result">
+    Use the `onSuccess` callback to confirm payment on the client side, then verify server-side and listen for the webhook.
+  </Step>
+</Steps>
+
+<Note>
+  Always verify the payment server-side after `onSuccess` fires. The callback confirms the customer completed the flow, not that funds have been confirmed.
+</Note>
+
+## 1. Load the SDK
+
+Add the Fincra checkout script to your page. Load it before you call `Fincra.initialize()`.
+
+```html
+<script src="https://unpkg.com/@fincra-engineering/checkout@2.2.0/dist/inline.min.js"></script>
+```
+
+## 2. Initialize the payment
+
+Call `Fincra.initialize()` with your payment details. Typically this is triggered by a button click.
+
+```javascript
+Fincra.initialize({
+  key: "<YOUR_PUBLIC_KEY>",
+  amount: 10000,
+  currency: "NGN",
+  customer: {
+    name: "Amara Okonkwo",
+    email: "amara@example.com",
+    phoneNumber: "08012345678",
+  },
+  reference: "order-001",        // optional, auto-generated if not provided
+  feeBearer: "business",         // "business" or "customer"
+  onSuccess: function (data) {
+    // Payment flow completed, verify server-side before delivering value
+    console.log("Reference:", data.reference);
+  },
+  onClose: function () {
+    // Customer closed the modal without completing payment
+    console.log("Payment modal closed.");
+  },
+});
+```
+
+**Parameters:**
+
+| Parameter              | Type     | Required | Description                                                                                 |
+| ---------------------- | -------- | -------- | ------------------------------------------------------------------------------------------- |
+| `key`                  | string   | Yes      | Your API public key (`x-pub-key`).                                                          |
+| `amount`               | number   | Yes      | The amount to charge.                                                                       |
+| `currency`             | string   | Yes      | The currency to charge in. See [Supported Currencies](/payments/supported-currencies).      |
+| `customer`             | object   | Yes      | Customer details.                                                                           |
+| `customer.name`        | string   | Yes      | Customer's full name.                                                                       |
+| `customer.email`       | string   | Yes      | Customer's email address.                                                                   |
+| `customer.phoneNumber` | string   | No       | Customer's phone number.                                                                    |
+| `reference`            | string   | No       | Your unique reference for this transaction. Auto-generated if not provided.                 |
+| `feeBearer`            | string   | Yes      | Who bears the transaction fee. `business` (default) or `customer`.                         |
+| `paymentMethods`       | array    | No       | Restrict which payment methods are shown. See table below.                                  |
+| `defaultPaymentMethod` | string   | No       | The payment method selected by default when the modal opens.                                |
+| `metadata`             | object   | No       | Additional data to attach to the transaction.                                               |
+| `onSuccess`            | function | No       | Callback fired when the customer completes the payment flow.                                |
+| `onClose`              | function | No       | Callback fired when the customer closes the modal without completing payment.               |
+
+### Restricting payment methods
+
+Use `paymentMethods` to show only specific methods. If omitted, all available methods for the currency are shown.
+
+```javascript
+Fincra.initialize({
+  // ...
+  paymentMethods: ["card"],           // NGN: show card only
+  defaultPaymentMethod: "card",
+});
+```
+
+Available values per currency:
+
+| Currency | Available values                                      |
+| -------- | ----------------------------------------------------- |
+| NGN      | `card`, `bank_transfer`, `payattitude`, `palmpay`     |
+| KES      | `mobile_money`                                        |
+| GHS      | `mobile_money`                                        |
+| UGX      | `mobile_money`                                        |
+| ZMW      | `card`, `mobile_money`                                |
+| TZS      | `mobile_money`                                        |
+| ZAR      | `card`, `eft`                                         |
+| XAF      | `mobile_money`                                        |
+| XOF      | `mobile_money`                                        |
+| USD      | `card`                                                |
+
+## 3. Verify the payment
+
+The `onSuccess` callback receives the transaction `reference`. Use it to verify the payment server-side before delivering your product or service.
+
+<Tabs>
+  <Tab title="By Fincra reference">
+    ```bash
+    curl --request GET \
+      --url https://api.fincra.com/checkout-core/charges/reference/<reference> \
+      --header 'api-key: <YOUR_SECRET_KEY>'
+    ```
+  </Tab>
+  <Tab title="By merchant reference">
+    ```bash
+    curl --request GET \
+      --url https://api.fincra.com/checkout-core/charges/merchant-reference/order-001 \
+      --header 'api-key: <YOUR_SECRET_KEY>'
+    ```
+  </Tab>
+</Tabs>
+
+Only deliver value when `status` is `success`.
+
+## 4. Handle the webhook
+
+Fincra sends a `charge.successful` webhook when a payment is confirmed. Use this as your primary signal, it fires even if the customer closes their browser before `onSuccess` runs.
+
+```json
+{
+  "event": "charge.successful",
+  "data": {
+    "reference": "fcr-p-2fe90fa19d",
+    "merchantReference": "order-001",
+    "amount": 10000,
+    "amountReceived": 10000,
+    "amountToSettle": 9750,
+    "currency": "NGN",
+    "fee": 250,
+    "status": "success",
+    "type": "card",
+    "feeBearer": "business",
+    "settlementDestination": "wallet",
+    "customer": {
+      "name": "Amara Okonkwo",
+      "email": "amara@example.com",
+      "phoneNumber": "08012345678"
+    }
+  }
+}
+```
+
+For full webhook setup and signature verification, see [Webhooks](/developer-tools/webhooks/overview).
+
+## Full example
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Checkout</title>
+  </head>
+  <body>
+    <button id="pay-btn">Pay ₦10,000</button>
+
+    <script src="https://unpkg.com/@fincra-engineering/checkout@2.2.0/dist/inline.min.js"></script>
+    <script>
+      document.getElementById("pay-btn").addEventListener("click", function () {
+        Fincra.initialize({
+          key: "<YOUR_PUBLIC_KEY>",
+          amount: 10000,
+          currency: "NGN",
+          customer: {
+            name: "Amara Okonkwo",
+            email: "amara@example.com",
+          },
+          feeBearer: "business",
+          reference: "order-001",
+          onSuccess: function (data) {
+            // Verify server-side using data.reference
+            fetch("/verify-payment", {
+              method: "POST",
+              body: JSON.stringify({ reference: data.reference }),
+              headers: { "Content-Type": "application/json" },
+            });
+          },
+          onClose: function () {
+            console.log("Payment cancelled.");
+          },
+        });
+      });
+    </script>
+  </body>
+</html>
+```
+
+## Sandbox testing
+
+To test in sandbox, use your sandbox public key. The modal will open in test mode and you can use Fincra's [test card and account numbers](/developer-tools/sandbox) to simulate different payment outcomes.
+
+## Hosted Payment Page vs Drop-in Checkout
+
+| | Hosted Payment Page | Drop-in Checkout |
+|---|---|---|
+| Integration | Server-side API call | Client-side JS SDK |
+| Customer experience | Redirected to Fincra's page | Modal on your page |
+| Customer leaves your site | Yes | No |
+| `redirectUrl` support | Yes | No (use `onSuccess` callback) |
+| Best for | Fastest integration | Keeping customers on your site |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Hosted Payment Page" icon="arrow-up-right-from-square" href="/payments/hosted-payment-page">
+    Use a redirect-based checkout instead.
+  </Card>
+  <Card title="Direct Charge API" icon="code" href="/payments/direct-charge">
+    Build a fully custom payment flow with your own UI.
+  </Card>
+  <Card title="Webhooks" icon="bell" href="/developer-tools/webhooks/overview">
+    Set up and verify webhook notifications.
+  </Card>
+  <Card title="Test Cards & Accounts" icon="flask" href="/developer-tools/sandbox">
+    Test your integration with sandbox test values.
+  </Card>
+</CardGroup>
