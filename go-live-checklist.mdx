@@ -1,0 +1,113 @@
+---
+title: "Go-live checklist"
+description: "Everything to do before you move your Fincra integration to production."
+keywords: ["go live", "production", "checklist", "compliance", "KYB", "live mode", "API keys"]
+---
+
+<hr />
+
+Work through these steps before you send real money. Production has its own Business ID, secret key, public key and webhook key, so nothing from sandbox carries over.
+
+## 1. Get your business approved
+
+<Steps>
+  <Step title="Complete business onboarding">
+    In the dashboard, open **Onboarding** and complete each section: business information, documents, directors and shareholders. You need your incorporation certificate, articles of association and a utility bill for your business address.
+  </Step>
+  <Step title="Wait for approval">
+    Fincra's compliance team reviews your submission and emails you when your business is approved, or if they need more information. You can keep building in sandbox while you wait.
+  </Step>
+</Steps>
+
+## 2. Get your production keys
+
+<Steps>
+  <Step title="Switch to live mode">
+    Turn off the **Test Mode** toggle at the top of the dashboard.
+  </Step>
+  <Step title="Generate your keys">
+    Open the profile menu, then **My Account** > **API Keys & Webhooks** > **Generate API Keys**. Enter the 6-digit code from your email, then copy your secret key, public key and webhook key.
+  </Step>
+  <Step title="Store them securely">
+    Keep your secret key on your server, in an environment variable or secrets manager. Fincra shows it only once.
+  </Step>
+</Steps>
+
+<Warning>
+  Never put your secret key in a browser, mobile app or public repository. If it leaks, generate a new key straight away.
+</Warning>
+
+## 3. Update your integration
+
+- Change the base URL from `https://sandboxapi.fincra.com` to `https://api.fincra.com`.
+- Replace your sandbox secret key, public key and webhook key with the production ones.
+- Replace your sandbox Business ID with your production Business ID. [Get business details](/api/business/get-business-details) returns it.
+- Search your code and config for any sandbox URLs or keys you missed.
+
+## 4. Set up production webhooks
+
+- In live mode, add your production webhook URL. Use your real server, not localhost or a testing tool. See [Configure webhooks](/developer-tools/webhooks/configure).
+- Verify the signature on every event with your production webhook key. See [Verify webhooks](/developer-tools/webhooks/verify).
+- Return HTTP `200` quickly and handle the same event arriving more than once.
+
+## 5. Allowlist your server IPs
+
+For payouts, add the IP addresses of the servers that call Fincra. You can add up to three in the dashboard. See [IP whitelisting](/developer-tools/ip-whitelisting).
+
+## 6. Activate the products you need
+
+Some products are ready once your business is approved. Others need your account manager to turn them on after a separate review.
+
+| Product | Ready after approval | Needs activation |
+|---|---|---|
+| Checkout and payment links | Yes | No |
+| Virtual Accounts | Yes | No |
+| Payouts | Yes | No |
+| FX and Conversion | Yes | No |
+| Direct charge | No | Yes |
+| Card and mobile money collections | No | Yes |
+| Direct Debit | No | Yes |
+| Issuing | No | Yes |
+
+## 7. Run a live test
+
+<Steps>
+  <Step title="Send a small real transaction">
+    Make a low-value payment, payout or conversion with your own details, depending on what you built.
+  </Step>
+  <Step title="Check the webhook">
+    Confirm your server received the event, processed it and returned `200`.
+  </Step>
+  <Step title="Reconcile">
+    Match the transaction in your records with the dashboard, using Fincra's `reference`.
+  </Step>
+</Steps>
+
+## Summary
+
+| Area | Check |
+|---|---|
+| Account | Business onboarding approved |
+| Keys | Production secret key, public key and webhook key in place |
+| Integration | Base URL is `https://api.fincra.com` and production Business ID is in use |
+| Webhooks | Production URL added and signatures verified |
+| Security | Server IPs allowlisted and secret key kept server-side |
+| Products | Products you need are activated |
+| Testing | Live transaction, webhook and reconciliation confirmed |
+
+## Product checklists
+
+<Columns cols={2}>
+  <Card title="Payments" icon="cart-shopping" href="/payments/integration-checklist">
+    Payment flows, statuses and verification.
+  </Card>
+  <Card title="Payouts" icon="money-bill-transfer" href="/payouts/integration-checklist">
+    Bank, mobile money and cross-currency payouts.
+  </Card>
+  <Card title="FX and Conversion" icon="arrow-right-arrow-left" href="/fx-and-conversion/integration-checklist">
+    Quotes, expiry and conversions.
+  </Card>
+  <Card title="Direct Debit" icon="repeat" href="/direct-debit/integration-checklist">
+    Mandates, activation and collections.
+  </Card>
+</Columns>
