@@ -385,6 +385,13 @@
             ]
           },
           {
+            "group": "Payout methods",
+            "pages": [
+              "payouts/bank-account",
+              "payouts/mobile-money"
+            ]
+          },
+          {
             "group": "Beneficiaries",
             "pages": [
               "payouts/beneficiaries",

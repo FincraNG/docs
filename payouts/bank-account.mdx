@@ -1,0 +1,32 @@
+---
+title: "Bank account"
+description: "Send payouts to bank accounts in Africa and internationally."
+keywords: ["bank account", "payout", "bank transfer", "SWIFT", "SEPA", "ACH", "NIP"]
+---
+
+Send money from your Fincra wallet to a bank account. Set `paymentDestination` to `bank_account`.
+
+## Supported countries and currencies
+
+| Country | Currency | Rails |
+|---|---|---|
+| Nigeria | NGN | NIP |
+| Ghana | GHS | Local bank transfer |
+| Kenya | KES | Local bank transfer |
+| Uganda | UGX | Local bank transfer |
+| Zambia | ZMW | Local bank transfer |
+| Tanzania | TZS | Local bank transfer |
+| South Africa | ZAR | Local bank transfer |
+| Egypt | EGP | Local bank transfer (account number or IBAN) |
+| United States | USD | ACH, Fedwire, SWIFT |
+| United Kingdom | GBP | FPS, CHAPS, SWIFT |
+| Eurozone | EUR | SEPA, SEPA Instant, SWIFT |
+
+## What you need
+
+- The beneficiary's name, account number and bank code.
+- For international payouts, the details the rail asks for, such as a sort code, routing number, IBAN or SWIFT code. See the country page in [Coverage](/payouts/payout-coverage).
+
+## Send a bank payout
+
+Follow [Initiate a transfer](/payouts/initiate-transfer) with `paymentDestination` set to `bank_account`. Fincra sends a webhook when the payout succeeds or fails.
