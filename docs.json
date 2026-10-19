@@ -265,9 +265,7 @@
               "directory": "api"
             },
             "pages": [
-              "POST /wallets/fund",
-              "POST /collections/transfer/simulate",
-              "POST /checkout-core/webhooks/charges/bank-transfer"
+              "POST /collections/transfer/simulate"
             ]
           },
           {

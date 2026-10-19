@@ -12,10 +12,6 @@ Sandbox is a separate environment for building and testing. Nothing you do in sa
 | Money | Test money only | Real money |
 | Keys and Business ID | Your sandbox ones | Your production ones |
 
-## Add test money
-
-New sandbox wallets are empty. Add test money to any wallet with [Fund a sandbox wallet](/api/sandbox-simulation/fund-a-sandbox-wallet). See [Test in sandbox](/wallets-and-balances/test-in-sandbox).
-
 ## Make things happen
 
 In production, some events only happen when your customer acts. In sandbox, you trigger them yourself:
@@ -23,7 +19,6 @@ In production, some events only happen when your customer acts. In sandbox, you 
 | To test | Use | Outcomes |
 |---|---|---|
 | A customer paying into a virtual account | [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection) | Any amount succeeds. `999` fails. 10,000 or more in EUR or CAD is held for review |
-| A customer paying a bank transfer checkout | [Simulate a bank transfer checkout payment](/api/sandbox-simulation/simulate-a-bank-transfer-checkout-payment) | The exact amount completes the payment. A different amount is a mispayment |
 
 Each simulation sends the same webhooks you get in production.
 
