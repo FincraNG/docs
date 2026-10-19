@@ -323,7 +323,6 @@
               "payments/cards",
               "payments/bank-transfer",
               "payments/mobile-money",
-              "payments/payattitude",
               "payments/palmpay",
               "payments/eft"
             ]

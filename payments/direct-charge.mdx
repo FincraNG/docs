@@ -18,7 +18,7 @@ The Direct Charge API gives you complete control over the payment experience. In
     Depending on the payment method, the customer may need to authenticate the transaction:
     - **Card**, may require OTP verification or 3D Secure (3DS) authentication
     - **Mobile Money**, customer receives a prompt on their mobile device to confirm the payment
-    - **Bank Transfer, PayAttitude, PalmPay, EFT**, no additional authorization step
+    - **Bank Transfer, PalmPay, EFT**, no additional authorization step
   </Step>
   <Step title="Verify the charge">
     Always verify the charge status server-side before delivering your product or service.
@@ -32,7 +32,6 @@ The Direct Charge API gives you complete control over the payment experience. In
 | Bank Transfer  | `bank_transfer` | NGN                                 |
 | Card           | `card`          | NGN, ZMW, ZAR, USD                  |
 | Mobile Money   | `mobile_money`  | KES, GHS, UGX, ZMW, TZS, XAF, XOF  |
-| PayAttitude    | `payattitude`   | NGN                                 |
 | PalmPay        | `palmpay`       | NGN                                 |
 | EFT            | `eft`           | ZAR                                 |
 
