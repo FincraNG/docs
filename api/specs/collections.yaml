@@ -188,6 +188,99 @@ paths:
                 success: false
                 error: Error occurred during payload validation. business is required
                 errorType: VALIDATION_FAILED
+  /collections/get-all-by-date:
+    get:
+      operationId: listCollectionsByDate
+      summary: List collections by date
+      description: Returns collections ordered by date for the authenticated merchant and business.
+      tags: [Collections]
+      parameters:
+        - name: business
+          in: query
+          required: true
+          description: Your Business ID.
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          schema: { type: integer, default: 10 }
+        - name: dateInitiatedFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateInitiatedTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Collections ordered by date.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    type: object
+                    additionalProperties: true
+  /collections/export:
+    post:
+      operationId: exportCollections
+      summary: Export collections
+      description: Exports matching collections as a CSV report.
+      tags: [Collections]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business]
+              properties:
+                business: { type: string }
+                sourceCurrency: { type: string }
+                destinationCurrency: { type: string }
+                dateInitiatedFrom: { type: string, format: date }
+                dateInitiatedTo: { type: string, format: date }
+                reference: { type: string }
+      responses:
+        "200":
+          description: Export result.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    description: Export result returned by Collections.
+  /collections/channel-reference:
+    get:
+      operationId: getCollectionByChannelReference
+      summary: Get a collection by channel reference
+      description: Looks up a collection by its channel name and channel reference.
+      tags: [Collections]
+      parameters:
+        - name: channelName
+          in: query
+          required: true
+          schema: { type: string }
+        - name: channelReference
+          in: query
+          required: true
+          schema: { type: string }
+        - name: business
+          in: query
+          description: Your Business ID when selecting a business context.
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/CollectionFound"
+        "404":
+          $ref: "#/components/responses/CollectionNotFound"
   /collections/{id}:
     get:
       operationId: getCollection

@@ -1,0 +1,476 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Refunds"
+  version: "1.0"
+  description: >
+    Send money you received back to the person who paid it. Captured from
+    fincra-collections. During the code freeze this file lives in the docs
+    repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Refunds
+    description: Return a collection to the payer.
+paths:
+  /collections/refund:
+    post:
+      operationId: initiateRefund
+      summary: Initiate a refund
+      description: |
+        Starts a refund of a collection to the person who paid it. Send the collection's `reference`. Fincra refunds the full amount the payer sent, either through the channel they paid with or by a transfer to their bank account.
+
+        You can refund a collection when:
+
+        - Its status is `successful`.
+        - It hasn't been refunded or reversed before. Each collection can be refunded once.
+        - Fincra has the payer's account details. For a transfer refund, it needs the payer's bank code, account number and account name, and the collection must have come into a virtual account.
+
+        The refund starts as `initiated`. Check its status with Get a refund.
+      tags: [Refunds]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transReference]
+              properties:
+                transReference:
+                  type: string
+                  description: The collection's `reference`, from the collection webhook or List collections.
+                  example: 2449fba3-3345-490a-8653-8ad4e8f752a6
+      responses:
+        "200":
+          description: Fincra started the refund.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Collection refund initiated successfully`.
+                  data:
+                    type: object
+                    properties:
+                      reference:
+                        type: string
+                        description: Fincra's reference for the refund. Use it with Get a refund.
+                      collectionReference:
+                        type: string
+                        description: The `reference` of the collection you refunded.
+                      collectionMerchantReference:
+                        type: [string, "null"]
+                        description: Your reference on the collection.
+                      amountRefunded:
+                        type: number
+                        description: The amount going back to the payer. It's the full amount they sent, not the amount after Fincra's fee.
+                      collectionAmountExpected:
+                        type: number
+                        description: The amount the collection expected.
+                      collectionAmountReceived:
+                        type: number
+                        description: The amount the payer sent.
+                      collectionAmountSettled:
+                        type: number
+                        description: The amount Fincra credited to your wallet for the collection, after its fee.
+                      collectionVarianceType:
+                        type: string
+                        enum: [fixed, overpayment, underpayment]
+                        description: "`fixed` when the payer sent the expected amount."
+              example:
+                success: true
+                message: Collection refund initiated successfully
+                data:
+                  reference: 79788eea-819e-4f7d-9767-957baa1aab22
+                  collectionReference: 2449fba3-3345-490a-8653-8ad4e8f752a6
+                  collectionMerchantReference: customer-0001
+                  amountRefunded: 1000
+                  collectionAmountExpected: 1000
+                  collectionAmountReceived: 1000
+                  collectionAmountSettled: 986
+                  collectionVarianceType: fixed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: None of your collections has that reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Collection not found
+                errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: The collection can't be refunded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                "Already refunded":
+                  summary: Already refunded
+                  value:
+                    success: false
+                    error: Refund already initiated
+                    errorType: UNPROCESSABLE_ENTITY
+                "Not successful":
+                  summary: Not successful
+                  value:
+                    success: false
+                    error: Refund cannot be processed
+                    errorType: UNPROCESSABLE_ENTITY
+                "Payer details incomplete":
+                  summary: Payer details incomplete
+                  value:
+                    success: false
+                    error: Refund cannot be processed, payment details are incomplete
+                    errorType: UNPROCESSABLE_ENTITY
+                "Missing reference":
+                  summary: Missing reference
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. transReference is required
+                    errorType: VALIDATION_FAILED
+    get:
+      operationId: listRefunds
+      summary: List refunds
+      description: Returns your refunds, newest first.
+      tags: [Refunds]
+      x-codeSamples:
+        - lang: bash
+          label: cURL
+          source: |
+            curl --request GET \
+              --url 'https://sandboxapi.fincra.com/collections/refund?business=YOUR_BUSINESS_ID' \
+              --header 'api-key: YOUR_SECRET_KEY'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const params = new URLSearchParams({ business: process.env.FINCRA_BUSINESS_ID });
+            const response = await fetch(
+              `https://sandboxapi.fincra.com/collections/refund?${params}`,
+              { headers: { "api-key": process.env.FINCRA_SECRET_KEY } }
+            );
+            const { data } = await response.json();
+        - lang: python
+          label: Python
+          source: |
+            import os
+            import requests
+
+            response = requests.get(
+                "https://sandboxapi.fincra.com/collections/refund",
+                params={"business": os.environ["FINCRA_BUSINESS_ID"]},
+                headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+            )
+            data = response.json()["data"]
+      parameters:
+        - $ref: "#/components/parameters/Business"
+        - name: status
+          in: query
+          description: Return only refunds with this status.
+          schema:
+            $ref: "#/components/schemas/RefundStatus"
+        - name: reference
+          in: query
+          description: Return the refund with this reference.
+          schema:
+            type: string
+        - name: currency
+          in: query
+          description: Return only refunds in this currency, such as `NGN`.
+          schema:
+            type: string
+        - name: dateInitiatedFrom
+          in: query
+          description: Return refunds started on or after this date, in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - name: dateInitiatedTo
+          in: query
+          description: Return refunds started on or before this date, in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: The page to return, starting at 1.
+          schema:
+            type: integer
+            default: 1
+        - name: perPage
+          in: query
+          description: How many refunds to return on each page.
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: A page of refunds.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Refunds fetched successfully`.
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Refund"
+                      total:
+                        type: integer
+                        description: How many refunds match, across all pages.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/MissingBusiness"
+  /collections/refund/{reference}:
+    get:
+      operationId: getRefund
+      summary: Get a refund
+      description: Returns one refund by its `reference`, with its current status.
+      tags: [Refunds]
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The refund's `reference`, from Initiate a refund.
+          example: 79788eea-819e-4f7d-9767-957baa1aab22
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The refund.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Refund fetched successfully`.
+                  data:
+                    $ref: "#/components/schemas/Refund"
+              example:
+                success: true
+                message: Refund fetched successfully
+                data:
+                  id: 77
+                  reference: 79788eea-819e-4f7d-9767-957baa1aab22
+                  collectionReference: 2449fba3-3345-490a-8653-8ad4e8f752a6
+                  collectionMerchantReference: customer-0001
+                  currency: NGN
+                  amountRefunded: 1000
+                  refundType: fixed
+                  refundStatus: initiated
+                  collectionExpectedAmount: 1000
+                  collectionAmountReceived: 1000
+                  collectionAmountSettled: 986
+                  collectionVarianceType: fixed
+                  collectionVirtualAccountId: 6ab4ee963eed8c38fc8b2a75
+                  metadata:
+                    customerId: sim-ngn-0001
+                  payoutReference: null
+                  completedAt: null
+                  initiatedAt: "2026-10-09 23:37:15"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: None of your refunds has that reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Refund not found
+                errorType: RESOURCE_NOT_FOUND
+  /collections/refund/export:
+    post:
+      operationId: exportRefunds
+      summary: Export refunds
+      description: Creates a CSV file of your refunds and returns a link to download it. Send the same filters as List refunds.
+      tags: [Refunds]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business]
+              properties:
+                business:
+                  type: string
+                  description: Your Business ID.
+                  example: YOUR_BUSINESS_ID
+                status:
+                  $ref: "#/components/schemas/RefundStatus"
+                currency:
+                  type: string
+                  description: Include only refunds in this currency.
+                dateInitiatedFrom:
+                  type: string
+                  format: date
+                  description: Include refunds started on or after this date.
+                dateInitiatedTo:
+                  type: string
+                  format: date
+                  description: Include refunds started on or before this date.
+      responses:
+        "200":
+          description: Fincra created the file. `data` holds the link to download it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Refunds exported successfully`.
+                  data:
+                    type: object
+                    description: The file's details, including its download link.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  parameters:
+    Business:
+      name: business
+      in: query
+      required: true
+      description: Your Business ID.
+      example: YOUR_BUSINESS_ID
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+    MissingBusiness:
+      description: "`business` is missing, or a filter is in the wrong format."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Error occurred during payload validation. business is required
+            errorType: VALIDATION_FAILED
+  schemas:
+    RefundStatus:
+      type: string
+      enum: [initiated, successful, failed, reversed]
+      description: >
+        `initiated` while Fincra sends the money back. `successful` when the
+        payer has it. `failed` when it couldn't be sent. `reversed` when a
+        sent refund came back.
+    Refund:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Fincra's numeric ID for the refund.
+        reference:
+          type: string
+          description: Fincra's reference for the refund.
+        collectionReference:
+          type: string
+          description: The `reference` of the collection you refunded.
+        collectionMerchantReference:
+          type: [string, "null"]
+          description: Your reference on the collection.
+        currency:
+          type: string
+          description: The refund's currency.
+        amountRefunded:
+          type: number
+          description: The amount going back to the payer.
+        refundType:
+          type: string
+          enum: [fixed, overpayment, underpayment]
+          description: "`fixed` for a refund of the full amount the payer sent."
+        refundStatus:
+          $ref: "#/components/schemas/RefundStatus"
+        collectionExpectedAmount:
+          type: number
+          description: The amount the collection expected.
+        collectionAmountReceived:
+          type: number
+          description: The amount the payer sent.
+        collectionAmountSettled:
+          type: number
+          description: The amount Fincra credited to your wallet for the collection.
+        collectionVarianceType:
+          type: string
+          description: "`fixed` when the payer sent the expected amount."
+        collectionVirtualAccountId:
+          type: [string, "null"]
+          description: The `_id` of the virtual account the collection came into.
+        metadata:
+          type: [object, "null"]
+          description: The collection's metadata.
+        payoutReference:
+          type: [string, "null"]
+          description: The reference of the transfer that sends the money back, once Fincra makes it.
+        completedAt:
+          type: [string, "null"]
+          description: When the refund completed.
+        initiatedAt:
+          type: string
+          description: When the refund started.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.
+        errors:
+          description: More detail about the error, when there is any.

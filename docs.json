@@ -11,6 +11,9 @@
     "light": "/logo/finc.svg",
     "dark": "/logo/finc-dark.svg"
   },
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  },
   "navigation": {
     "tabs": [
       {
@@ -55,6 +58,98 @@
           "api/rate-limits",
           "api/webhooks",
           "api/versioning",
+          {
+            "group": "Payments",
+            "openapi": {
+              "source": "api/specs/checkout.yaml",
+              "directory": "api/payments"
+            },
+            "pages": [
+              "api/payments/overview",
+              {
+                "group": "Checkout payments",
+                "pages": [
+                  "POST /checkout/payments",
+                  "GET /checkout/payments",
+                  "GET /checkout/payments/merchant-reference/{merchantReference}",
+                  "GET /checkout/payments/available-methods",
+                  "GET /checkout/payments/supported-conversion-currencies"
+                ]
+              },
+              {
+                "group": "Payment links",
+                "pages": [
+                  "POST /checkout/payment-links",
+                  "GET /checkout/payment-links",
+                  "GET /checkout/payment-links/{id}",
+                  "PATCH /checkout/payment-links/{id}",
+                  "PATCH /checkout/payment-links/{id}/disable",
+                  "PATCH /checkout/payment-links/{id}/enable",
+                  "GET /checkout/payment-links/{id}/shorten",
+                  "GET /checkout/payment-links/validate-custom-url/{customUrl}",
+                  "DELETE /checkout/payment-links/{id}"
+                ]
+              },
+              {
+                "group": "Direct charges",
+                "pages": [
+                  "POST /checkout/charges",
+                  "POST /checkout/charges/initiate",
+                  "GET /checkout/charges/reference/{reference}",
+                  "GET /checkout/charges/merchant-reference/{merchantReference}",
+                  "GET /checkout/charges/{id}/verify",
+                  "POST /checkout/charges/{id}/authorize",
+                  "POST /checkout/charges/merchant-reference/{merchantReference}/authorize",
+                  "POST /checkout/charges/{id}/capture"
+                ]
+              },
+              {
+                "group": "Transactions",
+                "openapi": {
+                  "source": "api/specs/collections.yaml",
+                  "directory": "api/payments/transactions"
+                },
+                "pages": [
+                  "GET /collections",
+                  "GET /collections/get-all-by-date",
+                  "POST /collections/export",
+                  "GET /collections/channel-reference",
+                  "GET /collections/{id}",
+                  "GET /collections/reference/{reference}",
+                  "GET /collections/merchant-reference/{merchantReference}",
+                  "GET /collections/{id}/additional-information",
+                  "PATCH /collections/{id}/additional-information"
+                ]
+              },
+              {
+                "group": "Refunds",
+                "openapi": {
+                  "source": "api/specs/refunds.yaml",
+                  "directory": "api/payments"
+                },
+                "pages": [
+                  "POST /collections/refund",
+                  "GET /collections/refund",
+                  "GET /collections/refund/{reference}",
+                  "POST /collections/refund/export"
+                ]
+              },
+              {
+                "group": "Chargebacks",
+                "openapi": {
+                  "source": "api/specs/chargebacks.yaml",
+                  "directory": "api/payments"
+                },
+                "pages": [
+                  "GET /collections/chargebacks",
+                  "GET /collections/chargebacks/{id}",
+                  "PATCH /collections/chargebacks/{id}/accept",
+                  "PATCH /collections/chargebacks/{id}/reject",
+                  "POST /collections/chargebacks/export"
+                ]
+              }
+            ]
+          },
           {
             "group": "Business",
             "openapi": {
@@ -145,21 +240,6 @@
               "POST /profile/virtual-accounts/transfer",
               "GET /profile/virtual-accounts",
               "GET /profile/virtual-accounts/{id}"
-            ]
-          },
-          {
-            "group": "Collections",
-            "openapi": {
-              "source": "api/specs/collections.yaml",
-              "directory": "api"
-            },
-            "pages": [
-              "GET /collections",
-              "GET /collections/{id}",
-              "GET /collections/reference/{reference}",
-              "GET /collections/merchant-reference/{merchantReference}",
-              "GET /collections/{id}/additional-information",
-              "PATCH /collections/{id}/additional-information"
             ]
           },
           {
@@ -515,6 +595,38 @@
       }
     ]
   },
+  "redirects": [
+    {
+      "source": "/api/collections/list-collections",
+      "destination": "/api/payments/transactions/collections/list-collections",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-a-collection",
+      "destination": "/api/payments/transactions/collections/get-a-collection",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-a-collection-by-reference",
+      "destination": "/api/payments/transactions/collections/get-a-collection-by-reference",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-a-collection-by-your-reference",
+      "destination": "/api/payments/transactions/collections/get-a-collection-by-your-reference",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-requested-information",
+      "destination": "/api/payments/transactions/collections/get-requested-information",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/respond-to-requested-information",
+      "destination": "/api/payments/transactions/collections/respond-to-requested-information",
+      "permanent": true
+    }
+  ],
   "navbar": {
     "links": [
       {
