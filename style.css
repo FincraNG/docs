@@ -177,3 +177,8 @@ html.dark #content.mdx-content tr {
 #content.mdx-content > hr:first-child {
   margin-bottom: 1.5rem;
 }
+
+/* Product links in the main sidebar: let the label use the full width instead of sharing it with the external-link icon */
+#navigation-items a[target="_blank"][href^="/"] .h-\[1lh\] {
+  display: none;
+}
