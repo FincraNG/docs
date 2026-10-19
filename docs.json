@@ -34,8 +34,6 @@
               "payments",
               "payouts",
               "fx-and-conversion",
-              "direct-debit",
-              "issuing",
               "verification"
             ]
           },
