@@ -72,7 +72,7 @@
             ]
           },
           {
-            "group": "Verification",
+            "group": "Identity Verification",
             "openapi": {
               "source": "api/specs/verification.yaml",
               "directory": "api"
