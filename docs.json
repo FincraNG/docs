@@ -201,7 +201,6 @@
             "group": "Direct charges",
             "pages": [
               "POST /checkout/charges",
-              "POST /checkout/charges/initiate",
               "GET /checkout/charges/reference/{reference}",
               "GET /checkout/charges/merchant-reference/{merchantReference}",
               "GET /checkout/charges/{id}/verify",
