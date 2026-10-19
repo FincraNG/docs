@@ -180,24 +180,6 @@
             }
           },
           {
-            "group": "Payment links",
-            "pages": [
-              "POST /checkout/payment-links",
-              "GET /checkout/payment-links",
-              "GET /checkout/payment-links/{id}",
-              "PATCH /checkout/payment-links/{id}",
-              "PATCH /checkout/payment-links/{id}/disable",
-              "PATCH /checkout/payment-links/{id}/enable",
-              "GET /checkout/payment-links/{id}/shorten",
-              "GET /checkout/payment-links/validate-custom-url/{customUrl}",
-              "DELETE /checkout/payment-links/{id}"
-            ],
-            "openapi": {
-              "source": "api/specs/checkout.yaml",
-              "directory": "api/payments"
-            }
-          },
-          {
             "group": "Direct charges",
             "pages": [
               "POST /checkout/charges",
