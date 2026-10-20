@@ -102,6 +102,7 @@
                   "DELETE /profile/beneficiaries/business/{businessID}/{beneficiaryID}"
                 ]
               },
+              "api/specs/reference-data.yaml GET /core/banks",
               "POST /disbursements/payouts",
               "GET /disbursements/payouts/reference/{reference}",
               "GET /disbursements/payouts/customer-reference/{customerReference}",
@@ -186,7 +187,9 @@
               "GET /checkout/charges/{id}/verify",
               "POST /checkout/charges/{id}/authorize",
               "POST /checkout/charges/merchant-reference/{merchantReference}/authorize",
-              "POST /checkout/charges/{id}/capture"
+              "POST /checkout/charges/{id}/capture",
+              "POST /checkout/charges/{id}/resend-otp",
+              "GET /checkout/data/mobile-money-operators"
             ],
             "openapi": {
               "source": "api/specs/checkout.yaml",
@@ -246,28 +249,6 @@
             },
             "pages": [
               "POST /collections/transfer/simulate"
-            ]
-          },
-          {
-            "group": "Reference data",
-            "openapi": {
-              "source": "api/specs/reference-data.yaml",
-              "directory": "api"
-            },
-            "pages": [
-              "GET /core/banks"
-            ]
-          },
-          {
-            "group": "Direct Debit",
-            "pages": [
-              "api/direct-debit/overview"
-            ]
-          },
-          {
-            "group": "Issuing",
-            "pages": [
-              "api/issuing/overview"
             ]
           }
         ]
