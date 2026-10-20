@@ -31,11 +31,8 @@ paths:
           application/json:
             schema:
               oneOf:
-                - $ref: "#/components/schemas/NgnBankAccountCheck"
-                - $ref: "#/components/schemas/GhsBankAccountCheck"
-                - $ref: "#/components/schemas/KesBankAccountCheck"
+                - $ref: "#/components/schemas/BankAccountCheck"
                 - $ref: "#/components/schemas/MobileMoneyCheck"
-                - $ref: "#/components/schemas/ZarPayshapCheck"
                 - $ref: "#/components/schemas/IbanCheck"
                 - $ref: "#/components/schemas/InteracEmailCheck"
             examples:
@@ -386,80 +383,43 @@ components:
             message: No API key found in request
             request_id: 5519f326100b3e2529a55b7e32bf0a64
   schemas:
-    NgnBankAccountCheck:
-      title: NGN bank
-      description: A Nigerian bank account, identified by its account number and bank code.
+    BankAccountCheck:
+      title: Bank account
+      description: A bank account in Nigeria, Ghana, Kenya or South Africa. The fields you send depend on the currency.
       type: object
-      required: [accountNumber, bankCode]
+      required: [currency, accountNumber]
       properties:
         type:
           type: string
-          enum: [nuban]
+          enum: [nuban, bank_account]
           default: nuban
-          description: The account type. If you leave it out, Fincra checks a Nigerian bank account.
+          description: "`nuban` for NGN. `bank_account` for GHS, KES and ZAR."
         currency:
           type: string
-          enum: [NGN]
+          enum: [NGN, GHS, KES, ZAR]
           default: NGN
-          description: The account's currency. If you leave it out, Fincra uses `NGN`.
+          description: The account's currency.
         accountNumber:
           type: string
-          pattern: "^[0-9]{10}$"
-          description: The beneficiary's 10-digit bank account number.
+          description: |
+            The beneficiary's account number.
+            - NGN: 10 digits.
+            - GHS and KES: digits only.
+            - ZAR: the beneficiary's PayShap ID.
           example: "0987654321"
         bankCode:
           type: string
-          pattern: "^[0-9]{3,6}$"
-          description: The beneficiary's bank, as a 3 to 6 digit code from List banks.
+          description: |
+            The beneficiary's bank, from List banks. Required for NGN, KES and ZAR.
+            - NGN: 3 to 6 digits.
+            - KES: 1 to 4 digits.
+            - ZAR: always `PAYSHAP_ID`.
           example: "305"
-    GhsBankAccountCheck:
-      title: GHS bank
-      description: A Ghanaian bank account, identified by its account number and the bank's SWIFT code.
-      type: object
-      required: [type, currency, accountNumber, bankSwiftCode]
-      properties:
-        type:
-          type: string
-          enum: [bank_account]
-          description: The account type.
-        currency:
-          type: string
-          enum: [GHS]
-          description: The account's currency.
-        accountNumber:
-          type: string
-          pattern: "^[0-9]+$"
-          description: The beneficiary's bank account number, in digits only.
-          example: "4005006007"
         bankSwiftCode:
           type: string
           pattern: "^[A-Za-z]{8,11}$"
-          description: The SWIFT code of the beneficiary's bank, 8 to 11 letters.
+          description: The SWIFT code of the beneficiary's bank, 8 to 11 letters. Required for GHS, instead of `bankCode`.
           example: ECOCGHAC
-    KesBankAccountCheck:
-      title: KES bank
-      description: A Kenyan bank account, identified by its account number and bank code.
-      type: object
-      required: [type, currency, accountNumber, bankCode]
-      properties:
-        type:
-          type: string
-          enum: [bank_account]
-          description: The account type.
-        currency:
-          type: string
-          enum: [KES]
-          description: The account's currency.
-        accountNumber:
-          type: string
-          pattern: "^[0-9]+$"
-          description: The beneficiary's bank account number, in digits only. Kenyan account numbers vary in length by bank.
-          example: "1000012345"
-        bankCode:
-          type: string
-          pattern: "^[0-9]{1,4}$"
-          description: The beneficiary's bank, as a 1 to 4 digit Central Bank of Kenya code from List banks.
-          example: "76"
     MobileMoneyCheck:
       title: Mobile money
       description: A mobile money wallet in Ghana or Kenya, identified by its number and operator.
@@ -484,28 +444,6 @@ components:
           pattern: "^[A-Za-z]{2,20}$"
           description: The beneficiary's mobile money operator, as the `code` from List banks, such as `MPESA` or `AIRTEL`.
           example: AIRTEL
-    ZarPayshapCheck:
-      title: ZAR PayShap
-      description: A South African account identified by its PayShap ID. Fincra only resolves ZAR accounts through PayShap.
-      type: object
-      required: [type, currency, accountNumber, bankCode]
-      properties:
-        type:
-          type: string
-          enum: [bank_account]
-          description: The account type.
-        currency:
-          type: string
-          enum: [ZAR]
-          description: The account's currency.
-        accountNumber:
-          type: string
-          description: The beneficiary's PayShap ID.
-          example: thabo@payshap
-        bankCode:
-          type: string
-          enum: [PAYSHAP_ID]
-          description: Always `PAYSHAP_ID`.
     IbanCheck:
       title: IBAN
       description: >
