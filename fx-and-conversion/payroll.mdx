@@ -10,10 +10,6 @@ Fincra's Currency Conversion lets businesses lock in exchange rates for each cur
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing: Business holds NGN in wallet → Payroll date approaches → Generates quote for each currency (NGN→GHS, NGN→KES, NGN→USD) → Executes conversions at locked rates → Funds settle in destination wallets → Disburses via Payouts API.
-</Note>
-
 1. **Business holds funds in source currency**, The company has funds in their Fincra NGN wallet to cover the payroll run.
 2. **Payroll amounts finalized**, The business calculates how much each employee is owed in their local currency and determines the total amount needed per currency.
 3. **Quotes generated per currency**, The business calls the [Quotes API](/fx-and-conversion/quotes) for each currency pair (e.g., NGN-GHS, NGN-KES, NGN-USD), locking in the exact exchange rate and conversion amount.

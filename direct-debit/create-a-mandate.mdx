@@ -87,10 +87,6 @@ curl --location 'https://api.fincra.com/v2/mandate-mgt/mandates/' \
 
 ## Step 2: Guide the customer through activation
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing the customer activation UX: Your app displays the NIBSS message → Customer opens banking app → Enters account number and ₦50 → Transfer completes → Mandate activated.
-</Note>
-
 The `responseDescription` field contains a NIBSS message with instructions for your customer. To activate the mandate:
 
 1. **Display the message**, Show the `responseDescription` to your customer in your application. The message contains a specific bank account number and bank name.

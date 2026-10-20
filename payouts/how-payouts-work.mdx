@@ -10,16 +10,6 @@ This page explains how Fincra Payouts work end-to-end, from funding your wallet 
 
 Fincra uses a single, unified API for all payouts. Whether you're sending NGN to a Nigerian bank account or USD to a UK bank via SWIFT, the flow is the same, cross-currency payouts simply add a quote step.
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing the unified payout flow with two paths:
-
-  **Same-currency path:** Fund wallet → Submit payout (with beneficiary details) → Fincra routes via local rails → Funds arrive → Webhook fires.
-
-  **Cross-currency path:** Fund wallet → Generate quote (30s lock) → Submit payout (with quote reference) → Fincra converts + routes → Funds arrive → Webhook fires.
-
-  Show the quote step as a conditional branch splitting from the main flow.
-</Note>
-
 ### Same-currency payouts
 
 When the source and destination currencies match (e.g., NGN → NGN, GHS → GHS):
@@ -48,10 +38,6 @@ When the source and destination currencies differ (e.g., NGN → GHS, USD → KE
 ## Payout lifecycle
 
 Every payout goes through a simple status progression:
-
-<Note>
-  **Design team:** State diagram needed here, visual showing: `processing` → `successful` or `processing` → `failed`. Keep it simple, only 3 states.
-</Note>
 
 | Status | Description |
 |---|---|

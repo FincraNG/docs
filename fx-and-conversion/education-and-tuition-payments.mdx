@@ -10,10 +10,6 @@ Fincra's Currency Conversion helps education payment platforms and businesses lo
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing: Student/platform has tuition invoice in GBP → Generates quote for exact GBP amount → Quote shows exact NGN cost → Executes conversion at locked rate → GBP settles in wallet → Remits to institution.
-</Note>
-
 1. **Tuition invoice received**, The student or payment platform receives a tuition invoice denominated in a foreign currency (e.g., 5,000 GBP).
 2. **Quote generated for exact amount**, The platform calls the [Quotes API](/fx-and-conversion/quotes) to generate a quote converting NGN to GBP. The response shows the exact NGN amount needed to produce 5,000 GBP.
 3. **Cost confirmed**, The platform or student reviews the quote, the `amountToCharge` shows the total NGN that will be debited, and `amountToReceive` confirms the GBP amount. The rate is locked for 30 seconds.

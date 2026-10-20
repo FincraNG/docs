@@ -8,10 +8,6 @@ Insurance companies need consistent premium collection to keep policies active. 
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing: Policy issued → Mandate created for premium amount and policy term → Policyholder activates with ₦50 → Insurer's system triggers periodic debits → Funds settle → Policy stays active.
-</Note>
-
 1. **Issue the policy**, Onboard the customer and issue their insurance policy.
 2. **Create a mandate**, Call the [Create Mandate API](/direct-debit/create-a-mandate) with the policyholder's bank details. Set the `amount` to the premium amount, and the date range to match the policy term.
 3. **Policyholder activates**, The customer completes the ₦50 token payment to authorize the mandate.

@@ -10,10 +10,6 @@ Every conversion on Fincra requires a quote. You cannot create a conversion with
 
 ## How Quotes work
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing the Quotes flow: Generate quote → Receive guaranteed rate + quoteReference (30s validity) → Pass quoteReference to conversion endpoint → Conversion executes at guaranteed rate.
-</Note>
-
 1. **Generate a quote**, Call `POST /quotes/generate` with your source currency, destination currency, and the amount you want to convert (in source currency).
 2. **Receive a guaranteed rate**, Fincra returns the locked exchange rate, the converted amount, and a `quoteReference`. This rate is guaranteed for 30 seconds.
 3. **Create the conversion**, Pass the `quoteReference` to the conversion endpoint within the 30-second window. The conversion executes at the guaranteed rate.

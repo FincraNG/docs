@@ -10,10 +10,6 @@ Fincra's Currency Conversion helps marketplace platforms monitor live exchange r
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing: Marketplace collects USD from buyers → Monitors rates via Rates API → Settlement window arrives → Generates quotes for each seller currency → Executes conversions → Funds settle in local currency wallets → Disburses to sellers via Payouts API.
-</Note>
-
 1. **Marketplace collects payments**, The platform collects payments from buyers in a single currency (e.g., USD) and holds funds in their Fincra USD wallet.
 2. **Rates displayed for estimation**, Throughout the day, the platform calls the [Rates API](/fx-and-conversion/rates) to show sellers estimated payout amounts in their local currency on the seller dashboard.
 3. **Settlement window arrives**, At the scheduled payout time (e.g., daily or weekly), the platform aggregates the total amount owed per currency.

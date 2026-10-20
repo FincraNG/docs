@@ -8,10 +8,6 @@ Lending businesses need a reliable way to collect repayments from borrowers with
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing: Loan disbursed → Mandate created with repayment amount and loan term → Borrower activates with ₦50 → Lender's system triggers monthly debits → Funds settle to wallet → Loan closes when term ends.
-</Note>
-
 1. **Disburse the loan**, Issue the loan to the borrower through your existing process.
 2. **Create a mandate**, Call the [Create Mandate API](/direct-debit/create-a-mandate) with the borrower's bank details. Set the `amount` to the monthly repayment amount, `startDate` to the first repayment date, and `endDate` to the final repayment date.
 3. **Borrower activates**, The borrower makes the one-time ₦50 token payment to authorize the mandate.

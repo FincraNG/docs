@@ -20,10 +20,6 @@ There is no frequency or scheduling built into the mandate. You decide when and 
 
 ## Mandate lifecycle
 
-<Note>
-  **Design team:** State diagram needed here, visual showing: `initiated` → (customer pays ₦50) → `approved`, and `initiated` → (customer declines or auth fails) → `declined`. Keep it simple, only 3 states.
-</Note>
-
 Direct debit mandates have three statuses:
 
 | Status | Description |
@@ -39,10 +35,6 @@ Direct debit mandates have three statuses:
 - **Transitions are one-way**, A mandate moves from `initiated` to either `approved` or `declined`. There are no other transitions.
 
 ## The ₦50 activation flow
-
-<Note>
-  **Design team:** Flow diagram needed here, visual showing the customer-facing activation experience: API response contains bank details → Customer opens banking app → Transfers ₦50 to the specified account → NIBSS authenticates → Mandate moves to `approved`.
-</Note>
 
 When you create a mandate, the API response includes a `responseDescription` field containing instructions from NIBSS. This message tells the customer exactly what to do:
 

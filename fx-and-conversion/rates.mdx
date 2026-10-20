@@ -10,10 +10,6 @@ Rates are informational only, you cannot use a rate to create a conversion direc
 
 ## How Rates work
 
-<Note>
-  **Design team:** Flow diagram needed here, simple visual showing: Request rate for currency pair → Receive buy and sell prices → Use information to decide when to convert.
-</Note>
-
 1. **Request a rate**, Call `GET /quotes/treasury-orders/rates` with either a `currencyPair` (e.g., `USD-NGN`) or a single `currency` (e.g., `USD`) to get rates for all pairs involving that currency.
 2. **Receive buy and sell prices**, Fincra returns the current buy and sell prices for the currency pair.
 

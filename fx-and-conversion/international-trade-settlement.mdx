@@ -10,10 +10,6 @@ Fincra's Currency Conversion helps trade businesses monitor exchange rates to fi
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing: Importer receives invoice in EUR → Monitors NGN-EUR rate via Rates API → Rate reaches favorable level → Generates quote to lock the rate → Executes conversion → EUR settles in wallet → Pays supplier.
-</Note>
-
 1. **Invoice received in foreign currency**, The importer receives an invoice from a supplier denominated in a foreign currency (e.g., EUR).
 2. **Business monitors rates**, The importer uses the [Rates API](/fx-and-conversion/rates) to track the NGN-EUR exchange rate, watching for a favorable conversion window.
 3. **Favorable rate identified**, When the rate reaches an acceptable level, the importer is ready to convert.

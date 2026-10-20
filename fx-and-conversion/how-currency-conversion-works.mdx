@@ -9,10 +9,6 @@ Fincra Currency Conversion is a wallet-to-wallet FX product. You convert funds f
 
 Every conversion follows the same core flow, whether you use the dashboard or the API.
 
-<Note>
-  **Design team:** Flow diagram needed here, visual showing the conversion flow: Fund wallet → Get quote → Create conversion → Funds settle. Show both dashboard and API paths if possible.
-</Note>
-
 ### Via dashboard
 
 1. Log in to your Fincra dashboard and navigate to the **Conversion** tab.
@@ -42,7 +38,6 @@ Fincra provides real-time exchange rates that update continuously. When you're r
 |---|---|
 | **Rate** | The current exchange rate for a currency pair. Rates are real-time and change continuously. Use the Rates endpoint to check the current rate before committing. |
 | **Quote** | A locked exchange rate with a guaranteed price. Valid for **30 seconds** by default. Use the `quoteReference` from the quote to create a conversion within the validity window. |
-
 
 ### How the exchange rate works
 
