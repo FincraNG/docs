@@ -253,12 +253,22 @@
       },
       {
         "tab": "Virtual Accounts",
-        "pages": [
-          "virtual-accounts/overview",
-          "virtual-accounts/permanent-accounts",
-          "virtual-accounts/temporary-accounts",
-          "virtual-accounts/supported-countries-and-currencies",
-          "virtual-accounts/faqs"
+        "groups": [
+          {
+            "group": "Virtual Accounts",
+            "pages": [
+              "virtual-accounts/overview",
+              "virtual-accounts/permanent-accounts",
+              "virtual-accounts/temporary-accounts",
+              "virtual-accounts/supported-countries-and-currencies"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "virtual-accounts/faqs"
+            ]
+          }
         ]
       },
       {
@@ -500,8 +510,13 @@
       },
       {
         "tab": "Issuing",
-        "pages": [
-          "issuing/overview"
+        "groups": [
+          {
+            "group": "Issuing",
+            "pages": [
+              "issuing/overview"
+            ]
+          }
         ]
       },
       {

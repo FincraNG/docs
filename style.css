@@ -182,3 +182,19 @@ html.dark #content.mdx-content tr {
 #navigation-items a[target="_blank"][href^="/"] .h-\[1lh\] {
   display: none;
 }
+
+/* Section sidebars: back link to the main docs and the section name as the sidebar title */
+#navigation-items .fincra-back {
+  display: block;
+  padding-left: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  color: rgb(107 114 128);
+}
+#navigation-items .fincra-back:hover {
+  color: rgb(var(--primary-light));
+}
+#navigation-items .fincra-section-title {
+  color: rgb(var(--primary-light));
+  font-size: 0.875rem;
+}
