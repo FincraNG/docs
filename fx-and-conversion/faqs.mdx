@@ -1,0 +1,36 @@
+---
+title: "FAQs"
+description: "Common questions about converting currencies with Fincra."
+keywords: ["conversion FAQ", "FX", "quote", "rate", "fees", "settlement"]
+---
+
+## Rates and quotes
+
+<AccordionGroup>
+  <Accordion title="Do I need a quote to convert?">
+    Yes. Every conversion needs a `quoteReference`. Create a quote, then create the conversion with it.
+  </Accordion>
+  <Accordion title="How long is a quote valid?">
+    30 seconds. If it expires, create a new one. In the dashboard, a new quote is created for you automatically.
+  </Accordion>
+  <Accordion title="Can I use one quote twice?">
+    No. Each quote can be used for one conversion.
+  </Accordion>
+  <Accordion title="What's the difference between a rate and a quote?">
+    A rate is the current price for a currency pair, and it changes all the time. A quote locks that price for 30 seconds so you know exactly what you'll get.
+  </Accordion>
+</AccordionGroup>
+
+## Fees and settlement
+
+<AccordionGroup>
+  <Accordion title="Are there conversion fees?">
+    No separate fee. The rate in the quote is the all-in rate, and the quote's `fee` is always `0`.
+  </Accordion>
+  <Accordion title="How long does a conversion take?">
+    Your source wallet is debited straight away, and the destination wallet is credited within 5 to 10 minutes. Fincra sends a `conversion.successful` webhook when it's done.
+  </Accordion>
+  <Accordion title="Which currencies can I convert between?">
+    See [Supported currency pairs](/fx-and-conversion/supported-currency-pairs). Most pairs work in both directions. CAD only converts to USD.
+  </Accordion>
+</AccordionGroup>

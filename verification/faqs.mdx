@@ -1,0 +1,41 @@
+---
+title: "FAQs"
+description: "Common questions about verifying accounts and identities with Fincra."
+keywords: ["verification FAQ", "resolve account", "BVN", "account name"]
+---
+
+## Resolve Account
+
+<AccordionGroup>
+  <Accordion title="Which accounts can I resolve?">
+    Bank accounts in Nigeria, Ghana, Kenya and South Africa (PayShap), mobile money wallets in Ghana and Kenya, IBANs, and Interac emails in Canada. See [Resolve Account](/api/verification/resolve-account).
+  </Accordion>
+  <Accordion title="What do I get back?">
+    The name on the account, so you can compare it with the name your customer gave you. For an Interac email, you also learn whether Autodeposit is on.
+  </Accordion>
+  <Accordion title="Why did my request fail with ACCOUNT_RESOLVE_FAILED?">
+    Fincra couldn't match the account. Check the account number and the bank or operator code together: the error doesn't say which one is wrong.
+  </Accordion>
+  <Accordion title="Does a payout check the account for me?">
+    No. Resolve the account first, then send the payout.
+  </Accordion>
+</AccordionGroup>
+
+## BVN
+
+<AccordionGroup>
+  <Accordion title="What does BVN verification confirm?">
+    That a Nigerian Bank Verification Number is real and belongs to the person who gave it. See [Verify a BVN](/api/verification/verify-a-bvn).
+  </Accordion>
+  <Accordion title="Is there a fee?">
+    Yes. Fincra charges it to your NGN balance, in sandbox too.
+  </Accordion>
+</AccordionGroup>
+
+## Testing
+
+<AccordionGroup>
+  <Accordion title="How do I test verification in sandbox?">
+    Use the test BVN and test accounts on the [Sandbox](/developer-tools/sandbox#test-values) page. Any other account fails in sandbox.
+  </Accordion>
+</AccordionGroup>

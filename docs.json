@@ -257,7 +257,8 @@
           "virtual-accounts/overview",
           "virtual-accounts/permanent-accounts",
           "virtual-accounts/temporary-accounts",
-          "virtual-accounts/supported-countries-and-currencies"
+          "virtual-accounts/supported-countries-and-currencies",
+          "virtual-accounts/faqs"
         ]
       },
       {
@@ -319,6 +320,12 @@
             "pages": [
               "payments/integration-checklist",
               "payments/error-codes"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "payments/faqs"
             ]
           }
         ]
@@ -394,6 +401,12 @@
               "payouts/integration-checklist",
               "payouts/error-codes"
             ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "payouts/faqs"
+            ]
           }
         ]
       },
@@ -432,6 +445,12 @@
             "pages": [
               "fx-and-conversion/integration-checklist",
               "fx-and-conversion/error-codes"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "fx-and-conversion/faqs"
             ]
           }
         ]
@@ -507,6 +526,12 @@
             "group": "Cards",
             "pages": [
               "verification/resolve-a-card-bin"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "verification/faqs"
             ]
           }
         ]
