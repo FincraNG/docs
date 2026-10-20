@@ -556,14 +556,6 @@
             ]
           },
           {
-            "group": "SDKs",
-            "pages": [
-              "developer-tools/sdks",
-              "developer-tools/server-side-sdks",
-              "developer-tools/mobile-sdks"
-            ]
-          },
-          {
             "group": "Webhooks",
             "pages": [
               "developer-tools/webhooks/overview",
