@@ -1,7 +1,7 @@
 ---
 title: "Sandbox"
 description: "Build and test your integration without moving real money."
-keywords: ["sandbox", "test", "test data", "test BVN", "simulate", "fund wallet"]
+keywords: ["sandbox", "test", "test cards", "test data", "test BVN", "mobile money", "simulate", "payout"]
 ---
 
 Sandbox is a separate environment for building and testing. Nothing you do in sandbox moves real money, and sandbox has its own secret key and Business ID. When your integration works end to end in sandbox, switch to your production key and base URL.
@@ -12,26 +12,87 @@ Sandbox is a separate environment for building and testing. Nothing you do in sa
 | Money | Test money only | Real money |
 | Keys and Business ID | Your sandbox ones | Your production ones |
 
-## Make things happen
+Every test value on this page only works with sandbox keys and `https://sandboxapi.fincra.com`. Production rejects them.
 
-In production, some events only happen when your customer acts. In sandbox, you trigger them yourself:
+## Cards
 
-| To test | Use | Outcomes |
+Use these with Checkout or [Create a direct charge](/api/payments/direct-charges/create-a-direct-charge). Each card triggers a different authorisation step. Use the exact CVV and expiry shown: any other card fails with "Please use one of the test cards".
+
+| Scenario | Card number | CVV | Expiry | What to enter | Result |
+|---|---|---|---|---|---|
+| No authorisation | `5319317801366660` | `000` | `12/33` | Nothing | Succeeds straight away |
+| PIN | `5366139833864633` | `123` | `12/33` | PIN `1234` | Succeeds |
+| PIN and OTP | `5333018248439266` | `123` | `12/33` | PIN `1234`, then OTP `123456` | Succeeds |
+| Address check (AVS) | `4960215093757593` | `123` | `12/33` | Country `Nigeria` | Succeeds |
+| Phone and OTP | `4960095193590452` | `123` | `12/33` | Phone `08034627201`, then OTP `123456` | Succeeds |
+| Date of birth | `6500539739337524` | `000` | `12/33` | PIN `1234`, then date of birth `1998-01-01` | Succeeds |
+| 3D Secure | `4084080000000409` | `231` | `12/33` | PIN `1234`, then OTP `123456` | Succeeds |
+| 3D Secure (redirect) | `5433070000000009` | `231` | `12/33` | OTP `123456` on the bank page | Succeeds |
+| Insufficient funds | `4084080000005408` | `000` | `12/33` | PIN `1234` | Fails: insufficient funds |
+
+A wrong PIN, OTP, phone number, address or date of birth makes the charge fail with a message that says which one was wrong.
+
+## Mobile money
+
+Charge these numbers to succeed. Any other number fails with "Use the allowed test phone numbers for a successful charge". GHS charges ask for an OTP first.
+
+| Currency | Country | Test number |
 |---|---|---|
-| A customer paying into a virtual account | [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection) | Any amount succeeds. `999` fails. 10,000 or more in EUR or CAD is held for review |
+| GHS | Ghana | `+233240000000` |
+| KES | Kenya | `+254700000000` |
+| UGX | Uganda | `+256770000000` |
+| TZS | Tanzania | `+255780000000` |
+| ZMW | Zambia | `+260970000000` |
+| EGP | Egypt | `+201200000000` |
+| XAF | Cameroon | `+237690000000` |
+| XOF | Senegal | `+221770000000` |
+| XOF | Côte d'Ivoire | `+2250700000000` |
 
-Each simulation sends the same webhooks you get in production.
+## Digital wallets and EFT
 
-## Test values
+| Method | How to pick the result |
+|---|---|
+| OPay (NGN) | Set the kobo part of the amount. `.99` fails with insufficient balance. `.01` stays pending. Any other amount succeeds |
+| EFT (ZAR) | Log in with `sandbox@bank.com` and password `pass@1234` |
 
-### BVN
+## Virtual accounts
+
+In production, a collection only happens when your customer sends a transfer. In sandbox, you trigger it yourself with [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection). It sends the same webhooks you get in production.
+
+| Amount | Result |
+|---|---|
+| Any amount | Succeeds |
+| `999` | Fails |
+| 10,000 or more in EUR or CAD | Held for review |
+
+To open an NGN virtual account, use BVN `22222222222`.
+
+## Payouts
+
+Payouts to any account succeed in sandbox, except the accounts below, which always fail. Use them to test how you handle a `failed` payout.
+
+| Currency | Destination | Account or number | Bank or operator code |
+|---|---|---|---|
+| NGN | Bank account | `0123456789` | `044` |
+| GHS | Mobile money | `233201234567` | `MTN` |
+| KES | Mobile money | `254712345678` | `SAFARICOM` |
+| UGX | Mobile money | `256772123456` | `MTN` |
+| UGX | Bank account | `1002003014` | `STAN` |
+| TZS | Mobile money | `255671234567` | `TIGO` |
+| ZMW | Mobile money | `260971234567` | `AIRTEL` |
+| XAF | Mobile money | `237671234567` | `MTN` |
+| XAF | Bank account | `5001002004` | `97957771` |
+| XOF | Mobile money | `2250701234567` | `ORANGE` |
+
+
+## BVN
 
 | To test | Use |
 |---|---|
 | Verify a BVN | BVN `22222222222` |
 | Open an NGN virtual account | BVN `22222222222` |
 
-### Resolve Account
+## Resolve Account
 
 Use these with [Resolve Account](/api/verification/resolve-account). The code must match the account, or the request fails.
 
