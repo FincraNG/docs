@@ -24,14 +24,35 @@ Each simulation sends the same webhooks you get in production.
 
 ## Test values
 
+### BVN
+
 | To test | Use |
 |---|---|
 | Verify a BVN | BVN `22222222222` |
 | Open an NGN virtual account | BVN `22222222222` |
-| Verify an NGN bank account | Account `0987654321`, bank code `305` |
-| Verify a GHS bank account | Account `4005006007`, SWIFT code `ECOCGHAC` |
-| Verify a KES bank account | Account `1000012345`, bank code `76` |
-| Verify a KES Airtel Money wallet | Number `254731234567`, operator `AIRTEL` |
-| Verify an IBAN | `GB29NWBK60161331926819` |
 
-Other account numbers return `ACCOUNT_RESOLVE_FAILED` in sandbox.
+### Resolve Account
+
+Use these with [Resolve Account](/api/verification/resolve-account). The code must match the account, or the request fails.
+
+| Account | Account number | Code | Result |
+|---|---|---|---|
+| NGN bank | `0987654321` | `bankCode` `305` | Resolves to Grace Okoro |
+| NGN bank | `2345678901` | `bankCode` `058` | Resolves to Chinwe Eze |
+| NGN bank | `0123456789` | `bankCode` `044` | Fails |
+| GHS bank | `4005006007` | `bankSwiftCode` `ECOCGHAC` | Resolves to Ecobank Ghana Test |
+| GHS bank | `5006007008` | `bankSwiftCode` `STBGGHAC` | Fails |
+| GHS mobile money | `233541234567` | `mobileMoneyCode` `AIRTEL` | Resolves to Ama Boateng |
+| GHS mobile money | `233201234567` | `mobileMoneyCode` `MTN` | Fails |
+| KES bank | `1000012345` | `bankCode` `76` | Resolves to UBA Kenya Test Account |
+| KES bank | `2000012345` | `bankCode` `03` | Fails |
+| KES mobile money | `254722345678` | `mobileMoneyCode` `MPESA` | Resolves to James Kariuki |
+| KES mobile money | `254731234567` | `mobileMoneyCode` `AIRTEL` | Resolves to Mary Atieno |
+| KES mobile money | `254712345678` | `mobileMoneyCode` `MPESA` | Fails |
+| IBAN | `GB29NWBK60161331926819` | None | Resolves to John Doe |
+| IBAN | `DE89370400440532013000` | None | Resolves to Jane Smith |
+| IBAN | `DE44500105175407324931` | None | Fails |
+| Interac email | Any email | None | Resolves to John Barret with Autodeposit on |
+| Interac email | Any email containing `noautodeposit` | None | Resolves with Autodeposit off |
+
+Any other account returns `ACCOUNT_RESOLVE_FAILED`. You can't test ZAR PayShap in sandbox.

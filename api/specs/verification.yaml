@@ -21,16 +21,9 @@ paths:
       operationId: verifyBeneficiaryAccount
       summary: Resolve Account
       description: |
-        Checks that a beneficiary's account exists before you send a payout to it. Create a payout doesn't run this check or compare the beneficiary's name, so verify the account first to catch a wrong account before any money moves.
+        Check that an account exists and get the account holder's name before you send a payout. Set `type`, then send the fields for that account type.
 
-        | Account type | Currency | Identify the account with |
-        | --- | --- | --- |
-        | Bank account | NGN | `accountNumber` and `bankCode` |
-        | Bank account | GHS | `accountNumber` and `bankSwiftCode` |
-        | Bank account | KES | `accountNumber` and `bankCode` |
-        | Mobile money | GHS, KES | `accountNumber` and `mobileMoneyCode` |
-        | IBAN | Not sent | `iban` |
-        | Interac email | CAD | `interacEmail` |
+        Create a payout doesn't run this check, so resolve the account first and compare the name with the one your customer gave you.
       tags: [Verification]
       requestBody:
         required: true
@@ -42,6 +35,7 @@ paths:
                 - $ref: "#/components/schemas/GhsBankAccountCheck"
                 - $ref: "#/components/schemas/KesBankAccountCheck"
                 - $ref: "#/components/schemas/MobileMoneyCheck"
+                - $ref: "#/components/schemas/ZarPayshapCheck"
                 - $ref: "#/components/schemas/IbanCheck"
                 - $ref: "#/components/schemas/InteracEmailCheck"
             examples:
@@ -79,7 +73,14 @@ paths:
                   type: mobile_money
                   currency: KES
                   accountNumber: "254722345678"
-                  mobileMoneyCode: SAFARICOM
+                  mobileMoneyCode: MPESA
+              "ZAR PayShap":
+                summary: ZAR PayShap
+                value:
+                  type: bank_account
+                  currency: ZAR
+                  accountNumber: thabo@payshap
+                  bankCode: PAYSHAP_ID
               "IBAN":
                 summary: IBAN
                 value:
@@ -120,42 +121,6 @@ paths:
                       accountName: Grace Okoro
                       accountNumber: "0987654321"
                       bankCode: "305"
-                "GHS bank account":
-                  summary: GHS bank account
-                  value:
-                    success: true
-                    message: Account resolve successful
-                    data:
-                      accountName: Ecobank Ghana Test
-                      accountNumber: "4005006007"
-                      bankCode: ECOCGHAC
-                "KES bank account":
-                  summary: KES bank account
-                  value:
-                    success: true
-                    message: Account resolve successful
-                    data:
-                      accountName: UBA Kenya Test Account
-                      accountNumber: "1000012345"
-                      bankCode: "76"
-                "GHS mobile money":
-                  summary: GHS mobile money
-                  value:
-                    success: true
-                    message: Account resolve successful
-                    data:
-                      accountName: Ama Boateng
-                      accountNumber: "233541234567"
-                      bankCode: AIRTEL
-                "KES mobile money":
-                  summary: KES mobile money
-                  value:
-                    success: true
-                    message: Account resolve successful
-                    data:
-                      accountName: James Kariuki
-                      accountNumber: "254722345678"
-                      bankCode: SAFARICOM
                 "IBAN":
                   summary: IBAN
                   value:
@@ -175,8 +140,8 @@ paths:
                       city: London
                       state: England
                       zip: E14 5AB
-                "Interac email, Autodeposit on":
-                  summary: Interac email, Autodeposit on
+                "Interac email":
+                  summary: Interac email
                   value:
                     success: true
                     message: Account resolve successful
@@ -184,44 +149,18 @@ paths:
                       email: john.barret@example.com
                       accountName: John Barret
                       autoDepositEnabled: true
-                "Interac email, Autodeposit off":
-                  summary: Interac email, Autodeposit off
-                  value:
-                    success: true
-                    message: Account resolve successful
-                    data:
-                      email: john.barret+noautodeposit@example.com
-                      accountName: null
-                      autoDepositEnabled: false
         "401":
           $ref: "#/components/responses/Unauthorized"
         "422":
-          description: >
-            Fincra couldn't verify the account, or a field is missing or in the
-            wrong format. When `errorType` is `ACCOUNT_RESOLVE_FAILED`, the error
-            doesn't say which detail was wrong, so check the account number and
-            the bank or operator code together. In sandbox, only Fincra's test
-            accounts can be verified, and any other account returns
-            `ACCOUNT_RESOLVE_FAILED`. The examples on this page use test accounts.
+          description: Fincra couldn't resolve the account, or a field is missing or in the wrong format. Check the account number and the bank or operator code together.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/CoreError"
-              examples:
-                "Account not verified":
-                  summary: Account not verified
-                  value:
-                    success: false
-                    error: Account could not be resolved. Please check your selection and try again or contact support for assistance
-                    errorType: ACCOUNT_RESOLVE_FAILED
-                "Invalid field":
-                  summary: Invalid field
-                  value:
-                    success: false
-                    error: Error occurred during payload validation. NGN account number must be exactly 10 digits
-                    errorType: VALIDATION_FAILED
-                    errors:
-                      - Error occurred during payload validation. NGN account number must be exactly 10 digits
+              example:
+                success: false
+                error: Account could not be resolved. Please check your selection and try again or contact support for assistance
+                errorType: ACCOUNT_RESOLVE_FAILED
 
   /core/bvn-verification:
     post:
@@ -543,8 +482,30 @@ components:
         mobileMoneyCode:
           type: string
           pattern: "^[A-Za-z]{2,20}$"
-          description: The beneficiary's mobile money operator, as the `code` from List banks, such as `SAFARICOM` for M-Pesa or `AIRTEL`.
+          description: The beneficiary's mobile money operator, as the `code` from List banks, such as `MPESA` or `AIRTEL`.
           example: AIRTEL
+    ZarPayshapCheck:
+      title: ZAR PayShap
+      description: A South African account identified by its PayShap ID. Fincra only resolves ZAR accounts through PayShap.
+      type: object
+      required: [type, currency, accountNumber, bankCode]
+      properties:
+        type:
+          type: string
+          enum: [bank_account]
+          description: The account type.
+        currency:
+          type: string
+          enum: [ZAR]
+          description: The account's currency.
+        accountNumber:
+          type: string
+          description: The beneficiary's PayShap ID.
+          example: thabo@payshap
+        bankCode:
+          type: string
+          enum: [PAYSHAP_ID]
+          description: Always `PAYSHAP_ID`.
     IbanCheck:
       title: IBAN
       description: >
@@ -566,9 +527,7 @@ components:
       title: Interac
       description: >
         A Canadian beneficiary identified by the email they registered with
-        Interac. In sandbox, every email returns the name John Barret. An
-        email that contains `noautodeposit` returns `autoDepositEnabled` as
-        `false`, and any other email returns `true`.
+        Interac. The response tells you whether Autodeposit is on.
       type: object
       required: [type, interacEmail]
       properties:
