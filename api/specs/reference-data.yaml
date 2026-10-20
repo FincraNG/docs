@@ -1,0 +1,311 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Reference data"
+  version: "1.0"
+  description: >
+    Look up the banks and mobile money operators Fincra supports, and the
+    codes you send for them in other requests. Captured from fincra-core.
+    During the code freeze this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Reference data
+    description: Codes and lists you use across Fincra's products.
+paths:
+  /core/banks:
+    get:
+      operationId: listBanks
+      summary: List banks
+      description: |
+        Returns the banks and mobile money operators in a country, with the codes you send to identify them when you verify an account or create a payout. Send `country` or `currency`. If you send neither, Fincra returns a `422`.
+
+        | You're sending to | Use this field from the list | As |
+        | --- | --- | --- |
+        | NGN bank account | `code` | `bankCode` |
+        | KES bank account | `code` | `bankCode` |
+        | GHS bank account | `swiftCode` | `bankSwiftCode` |
+        | Mobile money wallet | `code` | `mobileMoneyCode` |
+      tags: [Reference data]
+      x-codeSamples:
+        - lang: bash
+          label: cURL
+          source: |
+            curl --request GET \
+              --url 'https://sandboxapi.fincra.com/core/banks?country=NG' \
+              --header 'api-key: YOUR_SECRET_KEY'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const response = await fetch(
+              "https://sandboxapi.fincra.com/core/banks?country=NG",
+              { headers: { "api-key": process.env.FINCRA_SECRET_KEY } }
+            );
+            const { data } = await response.json();
+        - lang: python
+          label: Python
+          source: |
+            import os
+            import requests
+
+            response = requests.get(
+                "https://sandboxapi.fincra.com/core/banks",
+                params={"country": "NG"},
+                headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+            )
+            data = response.json()["data"]
+      parameters:
+        - name: country
+          in: query
+          required: false
+          description: >
+            The country, as a two-letter ISO 3166-1 code such as `NG`. If you
+            send `country` and `currency`, Fincra uses `country`.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            example: NG
+        - name: currency
+          in: query
+          required: false
+          description: >
+            The currency, such as `NGN`. Fincra looks up one country for the
+            currency, so send `country` instead for a currency used in several
+            countries, such as `XOF`. A currency Fincra doesn't support returns
+            an empty list.
+          schema:
+            type: string
+            example: NGN
+        - name: paymentDestination
+          in: query
+          required: false
+          description: >
+            Return only banks (`bank_account`), only mobile money operators
+            (`mobile_money_wallet`) or only banks that support cash pickup
+            (`cash_pick_up`). If you leave it out, Fincra returns banks and
+            mobile money operators together.
+          schema:
+            type: string
+            enum: [bank_account, mobile_money_wallet, cash_pick_up]
+      responses:
+        "200":
+          description: The banks and operators for that country. The list isn't paginated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: Always `true` when the request was successful.
+                  message:
+                    type: string
+                    description: Always `Banks fetched successfully`.
+                  data:
+                    type: array
+                    description: The banks and operators. Empty when Fincra has none for that country or currency.
+                    items:
+                      $ref: "#/components/schemas/Bank"
+              examples:
+                "NGN banks":
+                  summary: NGN banks
+                  value:
+                    success: true
+                    message: Banks fetched successfully
+                    data:
+                      - id: "58"
+                        code: "044"
+                        name: ACCESS BANK PLC
+                        nibssCode: "000014"
+                        isMobileVerified: null
+                        isCashPickUp: true
+                        branches: []
+                      - id: "11"
+                        code: "305"
+                        name: OPAY(PAYCOM)
+                        nibssCode: "100004"
+                        isMobileVerified: null
+                        isCashPickUp: false
+                        branches: []
+                "GHS banks":
+                  summary: GHS banks
+                  value:
+                    success: true
+                    message: Banks fetched successfully
+                    data:
+                      - id: "711"
+                        code: GH280100
+                        name: ACCESS BANK GH LTD
+                        swiftCode: ABNGGHAC
+                        bic: ABNGGHACXXX
+                        isMobileVerified: null
+                        isCashPickUp: false
+                        branches:
+                          - id: 1266
+                            bankId: "711"
+                            branchName: ACCESS BANK - KASOA BRANCH
+                            branchCode: GH280123
+                            swiftCode: ABNGGHAC
+                            bic: ABNGGHACXXX
+                          - id: 1254
+                            bankId: "711"
+                            branchName: ACCESS BANK GH LTD  KANESHIE
+                            branchCode: GH280107
+                            swiftCode: ABNGGHAC
+                            bic: ABNGGHACXXX
+                "KES mobile money operators":
+                  summary: KES mobile money operators
+                  value:
+                    success: true
+                    message: Banks fetched successfully
+                    data:
+                      - id: "781"
+                        code: AIRTEL
+                        name: Airtel
+                        isMobileVerified: true
+                        isCashPickUp: false
+                        branches: []
+                      - id: "780"
+                        code: EQUITEL
+                        name: Equitel Money
+                        isMobileVerified: true
+                        isCashPickUp: false
+                        branches: []
+                      - id: "782"
+                        code: SAFARICOM
+                        name: Safaricom(MPESA)
+                        isMobileVerified: true
+                        isCashPickUp: false
+                        branches: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: You sent neither `country` nor `currency`, or a parameter is in the wrong format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoreError"
+              examples:
+                "No country or currency":
+                  summary: No country or currency
+                  value:
+                    success: false
+                    error: Either country or currency is required
+                    errorType: UNPROCESSABLE_ENTITY
+                "Invalid country":
+                  summary: Invalid country
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. country length must be 2 characters long
+                    errorType: VALIDATION_FAILED
+                    errors:
+                      - Error occurred during payload validation. country length must be 2 characters long
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: No API key found in request
+            request_id: 617fb61f321b343b58578106d6536c5f
+  schemas:
+    Bank:
+      type: object
+      required: [id, code, name, isMobileVerified, isCashPickUp, branches]
+      properties:
+        id:
+          type: string
+          description: Fincra's ID for the bank or operator.
+        code:
+          type: string
+          description: >
+            The code that identifies the bank or operator. Send it as
+            `bankCode` for an NGN or KES bank account, or as `mobileMoneyCode`
+            for a mobile money wallet.
+        name:
+          type: string
+          description: The bank or operator's name.
+        swiftCode:
+          type: string
+          description: >
+            The bank's SWIFT code, when Fincra has it. Send it as
+            `bankSwiftCode` for a GHS bank account.
+        bic:
+          type: string
+          description: The bank's full 11-character BIC, when Fincra has it.
+        nibssCode:
+          type: string
+          description: >
+            The bank's NIBSS institution code. Only Nigerian banks have it.
+            Send `code` as `bankCode`, not this value.
+        isMobileVerified:
+          type: [boolean, "null"]
+          description: "`true` for a mobile money operator. `null` for a bank."
+        isCashPickUp:
+          type: boolean
+          description: "`true` when the bank supports cash pickup payouts."
+        branches:
+          type: array
+          description: The bank's branches. Empty when Fincra doesn't list branches for the bank.
+          items:
+            $ref: "#/components/schemas/Branch"
+    Branch:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Fincra's ID for the branch.
+        bankId:
+          type: string
+          description: The `id` of the bank the branch belongs to.
+        branchName:
+          type: string
+          description: The branch's name.
+        branchCode:
+          type: string
+          description: The branch's code.
+        swiftCode:
+          type: string
+          description: The branch's SWIFT code, when Fincra has it.
+        bic:
+          type: string
+          description: The branch's BIC, when Fincra has it.
+    CoreError:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        error:
+          type: string
+          description: A clear description of what failed.
+        errorType:
+          type: [string, "null"]
+          description: A stable code for handling the failure in your integration.
+        errors:
+          type: array
+          items:
+            type: string
+          description: One message for each invalid field. Only present when `errorType` is `VALIDATION_FAILED`.

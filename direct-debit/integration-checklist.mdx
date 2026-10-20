@@ -14,16 +14,16 @@ Direct Debit does not have a sandbox environment. Use this checklist to test and
 
 ### Account setup
 
-- [ ] Your Fincra account is verified (KYC complete). See [Complete Verification](/get-started/complete-verification).
+- [ ] Your Fincra account is verified (KYC complete). See [Complete Verification](/quickstart/create-a-sandbox-account).
 - [ ] Direct Debit is activated for your business (confirm with your account manager).
-- [ ] You have your production API key. See [Manage API Keys](/developer-resources/manage-api-keys).
+- [ ] You have your production API key. See [Manage API Keys](/developer-tools/manage-api-keys).
 - [ ] You have your Fincra business ID from the dashboard.
 
 ### Webhook setup
 
-- [ ] Configure your webhook URL in the [production dashboard](https://dashboard.fincra.com). See [Configure Webhooks](/webhooks/configure).
+- [ ] Configure your webhook URL in the [production dashboard](https://dashboard.fincra.com). See [Configure Webhooks](/developer-tools/webhooks/configure).
 - [ ] Your webhook endpoint is publicly accessible and returns a `200` status code.
-- [ ] Your webhook handler validates the signature. See [Verify Webhooks](/webhooks/verify).
+- [ ] Your webhook handler validates the signature. See [Verify Webhooks](/developer-tools/webhooks/verify).
 
 ## Test the full flow
 
@@ -54,7 +54,7 @@ Direct Debit does not have a sandbox environment. Use this checklist to test and
 
 ### Error handling
 
-- [ ] Attempt a debit on a mandate that is still `initiated` (not yet activated) — confirm it fails gracefully.
+- [ ] Attempt a debit on a mandate that is still `initiated` (not yet activated), confirm it fails gracefully.
 - [ ] Test your webhook handler for both `direct_debit.success` and `direct_debit.failed` events.
 - [ ] Confirm your system handles duplicate webhook deliveries idempotently.
 
@@ -70,7 +70,7 @@ Once you've validated the full flow with your own account:
 
 ## Production testing tips
 
-- **Use your own account** — Test with your personal bank account at one of the [supported banks](/direct-debit/supported-banks).
-- **Keep amounts small** — Use ₦100 or ₦200 for test mandates to minimize exposure.
-- **Test the full cycle** — Don't skip the ₦50 activation or the debit step. The integration isn't validated until funds actually move.
-- **Test failure scenarios** — Understand how your system handles failed debits by testing with accounts that may have restrictions or low balances.
+- **Use your own account**, Test with your personal bank account at one of the [supported banks](/direct-debit/supported-banks).
+- **Keep amounts small**, Use ₦100 or ₦200 for test mandates to minimize exposure.
+- **Test the full cycle**, Don't skip the ₦50 activation or the debit step. The integration isn't validated until funds actually move.
+- **Test failure scenarios**, Understand how your system handles failed debits by testing with accounts that may have restrictions or low balances.

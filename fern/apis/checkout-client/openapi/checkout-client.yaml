@@ -1,0 +1,222 @@
+# GENERATED from api/specs/checkout.yaml by fern/scripts/build_checkout_client_spec.py. Do not edit.
+openapi: 3.1.0
+info:
+  title: Fincra Checkout (client)
+  version: '1.0'
+  description: Client-side Checkout endpoints. Uses your public key only, never your
+    secret key.
+servers:
+- url: https://sandboxapi.fincra.com
+  description: Sandbox
+- url: https://api.fincra.com
+  description: Production
+security: []
+paths:
+  /checkout/payments:
+    post:
+      operationId: createCheckoutPayment
+      summary: Create a Checkout payment
+      tags:
+      - Checkout payments
+      security:
+      - publicKey: []
+      description: 'Creates one hosted payment session and returns its /pay link.
+        The same payment resource underpins the embedded modal and redirect integration.
+        Payment links also call this route after the customer enters details. The
+        currency must be enabled for the business and each requested method must be
+        available for that currency.
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePayment'
+            example:
+              amount: 5000
+              currency: NGN
+              customer:
+                name: Tumaini Moyo
+                email: tumaini@example.com
+              reference: tumaini-order-1001
+              paymentMethods:
+              - card
+              - bank_transfer
+              - opay
+              redirectUrl: https://example.com/payment-complete
+      responses:
+        '201':
+          description: Checkout payment created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePaymentResponse'
+              example:
+                status: true
+                message: Hosted link generated
+                data:
+                  link: https://checkout.fincra.com/pay/fcr-p-example
+                  reference: tumaini-order-1001
+                  payCode: fcr-p-example
+  /checkout/payments/available-methods:
+    get:
+      operationId: getCheckoutPaymentMethods
+      summary: Get available Checkout methods
+      tags:
+      - Checkout payments
+      security: []
+      description: 'Returns the methods configured in Checkout for the currency. A
+        method still depends on business access and channel configuration at payment
+        time. Supply currency; without it, the route returns the full historical ChargeType
+        enum, including methods unavailable for new payments.
+
+        '
+      parameters:
+      - $ref: '#/components/parameters/CurrencyQuery'
+      responses:
+        '200':
+          description: Available payment method names.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+              example:
+                status: true
+                message: Available payment methods fetched
+                data:
+                - card
+                - bank_transfer
+                - palmpay
+                - opay
+  /checkout/payments/supported-conversion-currencies:
+    get:
+      operationId: getCheckoutConversionCurrencies
+      summary: Get Checkout conversion currencies
+      tags:
+      - Checkout payments
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/CurrencyQuery'
+      responses:
+        '200':
+          description: Supported checkout conversion currencies.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+components:
+  securitySchemes:
+    publicKey:
+      type: apiKey
+      in: header
+      name: x-pub-key
+      description: The public key for the business creating a Checkout payment.
+  parameters:
+    CurrencyQuery:
+      name: currency
+      in: query
+      description: ISO currency code, such as NGN or GHS. Recommended for a currency-specific
+        result.
+      schema:
+        type: string
+  responses: {}
+  schemas:
+    CreatePaymentResponse:
+      type: object
+      required:
+      - status
+      - message
+      - data
+      properties:
+        status:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          required:
+          - link
+          - payCode
+          properties:
+            link:
+              type: string
+              format: uri
+              description: Hosted checkout URL.
+            reference:
+              type: string
+              description: Your reference
+              when supplied.: null
+            payCode:
+              type: string
+              description: Fincra payment reference.
+    CheckoutResponse:
+      type: object
+      required:
+      - status
+      - message
+      - data
+      properties:
+        status:
+          type: boolean
+        message:
+          type: string
+        data:
+          description: Operation-specific payment, charge, link or list data.
+    Customer:
+      type: object
+      required:
+      - name
+      - email
+      properties:
+        name:
+          type: string
+          description: Customer's full name, with a first and last name.
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+    CreatePayment:
+      type: object
+      required:
+      - amount
+      - currency
+      - customer
+      properties:
+        amount:
+          type: number
+          minimum: 1
+        currency:
+          type: string
+        customer:
+          $ref: '#/components/schemas/Customer'
+        reference:
+          type: string
+          description: Your unique reference for this payment.
+        redirectUrl:
+          type: string
+          format: uri
+        paymentMethods:
+          type: array
+          items:
+            type: string
+          description: Every method must be available for the currency.
+        defaultPaymentMethod:
+          type: string
+        feeBearer:
+          type: string
+          enum:
+          - business
+          - customer
+        settlementDestination:
+          type: string
+        settlementTime:
+          type: string
+        paymentLinkId:
+          type: integer
+          description: Set by the payment-link flow when the customer submits its
+            form.
+        metadata:
+          type: object
+          additionalProperties: true

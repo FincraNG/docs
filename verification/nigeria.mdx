@@ -10,7 +10,7 @@ Nigerian bank accounts are verified using the NUBAN (Nigeria Uniform Bank Accoun
 |---|---|
 | Account type | `nuban` |
 | Currency | `NGN` |
-| Name matching | Yes — returns account holder's full name |
+| Name matching | Yes, returns account holder's full name |
 
 ## Required fields
 
@@ -61,7 +61,7 @@ When the account is valid, Fincra returns the account holder's name.
 
 ### Failed verification (422)
 
-When the account cannot be resolved — either the account number is invalid or the bank code is incorrect.
+When the account cannot be resolved, either the account number is invalid or the bank code is incorrect.
 
 ```json
 {

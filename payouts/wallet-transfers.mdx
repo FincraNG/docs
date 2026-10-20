@@ -3,7 +3,7 @@ title: "Wallet Transfers"
 description: "Send instant, fee-free payouts between Fincra wallets."
 ---
 
-Wallet Transfers let you move funds from your Fincra wallet directly to another Fincra wallet — instantly, with no fees. Unlike bank account or mobile money payouts, wallet transfers settle immediately and don't require bank details or mobile money codes.
+Wallet Transfers let you move funds from your Fincra wallet directly to another Fincra wallet, instantly, with no fees. Unlike bank account or mobile money payouts, wallet transfers settle immediately and don't require bank details or mobile money codes.
 
 **Endpoint:** `POST /disbursements/payouts/wallets`
 
@@ -11,13 +11,13 @@ Wallet Transfers let you move funds from your Fincra wallet directly to another 
 
 <Steps>
   <Step title="Get the recipient's wallet number">
-    The recipient shares their Fincra wallet number with you. This is a Fincra-internal identifier — different from a bank account number.
+    The recipient shares their Fincra wallet number with you. This is a Fincra-internal identifier, different from a bank account number.
   </Step>
   <Step title="Initiate the wallet transfer">
-    Call the Wallet Transfer endpoint with the recipient's wallet number, amount, and your reference. No quote needed — wallet transfers are same-currency only.
+    Call the Wallet Transfer endpoint with the recipient's wallet number, amount, and your reference. No quote needed, wallet transfers are same-currency only.
   </Step>
   <Step title="Funds arrive instantly">
-    The transfer settles into the recipient's Fincra wallet immediately. The response returns `status: successful` — no `processing` state.
+    The transfer settles into the recipient's Fincra wallet immediately. The response returns `status: successful`, no `processing` state.
   </Step>
 </Steps>
 
@@ -43,7 +43,7 @@ curl --request POST \
 | `business` | string | Yes | Your Fincra business ID |
 | `beneficiaryWalletNumber` | string | Yes | The recipient's Fincra wallet number |
 | `amount` | number | Yes | Amount to transfer |
-| `customerReference` | string | Yes | Your unique reference for this transfer — used for idempotency |
+| `customerReference` | string | Yes | Your unique reference for this transfer, used for idempotency |
 
 ### Response
 
@@ -65,14 +65,14 @@ curl --request POST \
 | `id` | Fincra's internal transfer ID |
 | `reference` | Fincra's transfer reference |
 | `customerReference` | Your reference echoed back |
-| `status` | `successful` — wallet transfers settle instantly, no `processing` state |
+| `status` | `successful`, wallet transfers settle instantly, no `processing` state |
 
 ## Wallet transfers vs regular payouts
 
 | | Wallet Transfer | Bank / Mobile Money Payout |
 |---|---|---|
 | **Destination** | Fincra wallet | External bank account or mobile money wallet |
-| **Settlement** | Instant | Instant (African) or 1–5 days (international) |
+| **Settlement** | Instant | Instant (African) or 1 to 5 days (international) |
 | **Fees** | None | Standard payout fees apply |
 | **Cross-currency** | Not supported | Supported via FX quote |
 | **Details required** | Wallet number only | Account number, bank code, etc. |
@@ -82,7 +82,7 @@ curl --request POST \
 
 <CardGroup cols={2}>
   <Card title="Partner settlements" icon="handshake">
-    Settle funds with a partner or distributor who also uses Fincra — faster than a bank transfer, zero fees.
+    Settle funds with a partner or distributor who also uses Fincra, faster than a bank transfer, zero fees.
   </Card>
   <Card title="Internal fund movement" icon="arrows-rotate">
     Move funds between your own Fincra wallets for treasury management or balance top-ups.
@@ -91,12 +91,12 @@ curl --request POST \
     If your recipients are on Fincra, disburse directly to their wallets rather than initiating a bank payout.
   </Card>
   <Card title="Instant reconciliation" icon="bolt">
-    Wallet transfers confirm immediately — no waiting on bank rails or scheme processing windows.
+    Wallet transfers confirm immediately, no waiting on bank rails or scheme processing windows.
   </Card>
 </CardGroup>
 
 ## Constraints
 
-- **Same currency only** — wallet transfers do not support FX. If you need cross-currency movement, use [Currency Conversion](/conversion/overview) first, then transfer.
-- **Both parties must be on Fincra** — the recipient must have an active Fincra wallet.
-- **Wallet number required** — you cannot initiate a wallet transfer using a bank account number.
+- **Same currency only**, wallet transfers do not support FX. If you need cross-currency movement, use [Currency Conversion](/fx-and-conversion/overview) first, then transfer.
+- **Both parties must be on Fincra**, the recipient must have an active Fincra wallet.
+- **Wallet number required**, you cannot initiate a wallet transfer using a bank account number.

@@ -85,7 +85,7 @@ curl --location 'https://api.fincra.com/v2/mandate-mgt/mandates' \
 
 ### After `endDate` passes
 
-When a mandate's `endDate` passes, the status remains `approved` — it does not change to "expired." However, any debit attempts after the `endDate` will fail date validation. If you need to continue collecting from the same customer, create a new mandate with an updated date range.
+When a mandate's `endDate` passes, the status remains `approved`, it does not change to "expired." However, any debit attempts after the `endDate` will fail date validation. If you need to continue collecting from the same customer, create a new mandate with an updated date range.
 
 ### No cancel or suspend
 

@@ -1,0 +1,1081 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Wallets and Balances"
+  version: "1.0"
+  description: >
+    Read your wallets and balances, list every movement of money, get a
+    statement for reconciliation. Captured from
+    fincra-wallets. During the code freeze this file lives in the docs
+    repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Wallets and Balances
+    description: Your wallets, their balances and every movement of money.
+paths:
+  /wallets:
+    get:
+      operationId: listWallets
+      summary: List wallets
+      description: |
+        Returns your enabled wallets, one for each currency, with their balances. Send `currency` to get a single wallet instead of a list.
+
+        Send `dateFrom` and `dateTo` to also get each wallet's balances at the start and end of that period, for reconciliation.
+      tags: [Wallets and Balances]
+      x-codeSamples:
+        - lang: bash
+          label: cURL
+          source: |
+            curl --request GET \
+              --url 'https://sandboxapi.fincra.com/wallets?businessID=YOUR_BUSINESS_ID' \
+              --header 'api-key: YOUR_SECRET_KEY'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const { FINCRA_SECRET_KEY, FINCRA_BUSINESS_ID } = process.env;
+
+            const response = await fetch(
+              `https://sandboxapi.fincra.com/wallets?businessID=${FINCRA_BUSINESS_ID}`,
+              { headers: { "api-key": FINCRA_SECRET_KEY } }
+            );
+            const { data: wallets } = await response.json();
+        - lang: python
+          label: Python
+          source: |
+            import os
+            import requests
+
+            response = requests.get(
+                "https://sandboxapi.fincra.com/wallets",
+                params={"businessID": os.environ["FINCRA_BUSINESS_ID"]},
+                headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+            )
+            wallets = response.json()["data"]
+      parameters:
+        - name: businessID
+          in: query
+          required: true
+          description: Your Business ID.
+          example: YOUR_BUSINESS_ID
+          schema:
+            type: string
+        - name: currency
+          in: query
+          required: false
+          description: >
+            Return only the wallet in this currency, such as `NGN`. The
+            response's `data` is then a single wallet, not a list.
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          required: false
+          description: >
+            The start of the period for opening and closing balances, in
+            YYYY-MM-DD format. Send it with `dateTo`. It must be before `dateTo`.
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          required: false
+          description: The end of the period for opening and closing balances, in YYYY-MM-DD format. Send it with `dateFrom`.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Your wallets, or one wallet when you send `currency`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result. In sandbox it also says that stablecoin balances are sandbox-only.
+                  data:
+                    oneOf:
+                      - type: array
+                        title: Wallets
+                        items:
+                          $ref: "#/components/schemas/WalletWithPeriod"
+                      - $ref: "#/components/schemas/Wallet"
+              examples:
+                "All wallets":
+                  summary: All wallets
+                  value:
+                    success: true
+                    message: Wallets fetched successfully
+                    data:
+                      - id: 207151
+                        _id: "207151"
+                        business: YOUR_BUSINESS_ID
+                        businessId: 14424
+                        ledgerBalance: 1648700.25
+                        availableBalance: 1100595.95
+                        lockedBalance: 548104.3
+                        rollingReserveBalance: 0
+                        walletNumber: 1000001144240001
+                        currency: NGN
+                        status: enabled
+                        overdraftEnabled: 0
+                        overdraftLimit: null
+                        createdAt: "2025-03-17T14:47:35.000Z"
+                        updatedAt: "2026-10-09T19:10:53.000Z"
+                      - id: 207156
+                        _id: "207156"
+                        business: YOUR_BUSINESS_ID
+                        businessId: 14424
+                        ledgerBalance: 12985001.35
+                        availableBalance: 12985001.35
+                        lockedBalance: 0
+                        rollingReserveBalance: 0
+                        walletNumber: 1000001144240006
+                        currency: KES
+                        status: enabled
+                        overdraftEnabled: 0
+                        overdraftLimit: null
+                        createdAt: "2025-03-17T14:47:35.000Z"
+                        updatedAt: "2026-08-24T07:14:25.000Z"
+                "One currency":
+                  summary: One currency
+                  value:
+                    success: true
+                    message: NGN Wallet fetched successfully
+                    data:
+                      id: 207151
+                      _id: "207151"
+                      business: YOUR_BUSINESS_ID
+                      businessId: 14424
+                      ledgerBalance: 1648700.25
+                      availableBalance: 1100595.95
+                      lockedBalance: 548104.3
+                      rollingReserveBalance: 0
+                      walletNumber: 1000001144240001
+                      currency: NGN
+                      status: enabled
+                      overdraftEnabled: 0
+                      overdraftLimit: null
+                      createdAt: "2025-03-17T14:47:35.000Z"
+                      updatedAt: "2026-10-09T19:10:53.000Z"
+                "With opening and closing balances":
+                  summary: With opening and closing balances
+                  value:
+                    success: true
+                    message: Wallets fetched successfully
+                    data:
+                      - id: 207151
+                        _id: "207151"
+                        business: YOUR_BUSINESS_ID
+                        businessId: 14424
+                        ledgerBalance: 1648700.25
+                        availableBalance: 1100595.95
+                        lockedBalance: 548104.3
+                        rollingReserveBalance: 0
+                        walletNumber: 1000001144240001
+                        currency: NGN
+                        status: enabled
+                        overdraftEnabled: 0
+                        overdraftLimit: null
+                        createdAt: "2025-03-17T14:47:35.000Z"
+                        updatedAt: "2026-10-09T19:10:53.000Z"
+                        openingAvailableBalance: 1098659.95
+                        openingLedgerBalance: 1646764.25
+                        openingLockedBalance: 548104.3
+                        openingRollingReserveBalance: 0
+                        closingAvailableBalance: 1100595.95
+                        closingLedgerBalance: 1648700.25
+                        closingLockedBalance: 548104.3
+                        closingRollingReserveBalance: 0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: You don't have a wallet in the `currency` you sent, or the Business ID doesn't exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                "No wallet in that currency":
+                  summary: No wallet in that currency
+                  value:
+                    success: false
+                    error: JPY Wallet not found.
+                    errorType: RESOURCE_NOT_FOUND
+                "Business not found":
+                  summary: Business not found
+                  value:
+                    success: false
+                    error: Cannot fetch wallets. Business not found
+                    errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: A parameter is missing or in the wrong format, or `dateFrom` isn't before `dateTo`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: "Error occurred during payload validation. businessID is required"
+                errorType: VALIDATION_FAILED
+  /wallets/{walletID}:
+    get:
+      operationId: getWallet
+      summary: Get a wallet
+      description: Returns one wallet and its balances, by the wallet's `id` from List wallets.
+      tags: [Wallets and Balances]
+      parameters:
+        - name: walletID
+          in: path
+          required: true
+          description: The wallet's `id`.
+          example: "207151"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The wallet.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Wallet fetched successfully`.
+                  data:
+                    $ref: "#/components/schemas/Wallet"
+              example:
+                success: true
+                message: Wallet fetched successfully
+                data:
+                  id: 207151
+                  _id: "207151"
+                  business: YOUR_BUSINESS_ID
+                  businessId: 14424
+                  ledgerBalance: 1648700.25
+                  availableBalance: 1100595.95
+                  lockedBalance: 548104.3
+                  rollingReserveBalance: 0
+                  walletNumber: 1000001144240001
+                  currency: NGN
+                  status: enabled
+                  overdraftEnabled: 0
+                  overdraftLimit: null
+                  createdAt: "2025-03-17T14:47:35.000Z"
+                  updatedAt: "2026-10-09T19:10:53.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No wallet has that ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Wallet not found
+                errorType: RESOURCE_NOT_FOUND
+  /wallets/logs:
+    get:
+      operationId: listWalletTransactions
+      summary: List wallet transactions
+      description: |
+        Returns every change to your balances, newest first. Each entry shows the amount and every balance before and after it, so you can trace exactly how a balance reached its current value.
+
+        Some operations create more than one entry. A payout or BVN check first moves the amount from available to locked when it starts, then removes it from ledger and locked when it succeeds, or returns it to available when it fails. To list each completed movement once, use Get a wallet statement.
+      tags: [Wallets and Balances]
+      parameters:
+        - name: business
+          in: query
+          required: false
+          description: Your Business ID. Send it to limit the list to that business.
+          example: YOUR_BUSINESS_ID
+          schema:
+            type: string
+        - name: currency
+          in: query
+          required: false
+          description: Return only entries in this currency, such as `NGN`.
+          schema:
+            type: string
+        - name: action
+          in: query
+          required: false
+          description: Return only credits or only debits.
+          schema:
+            type: string
+            enum: [credit, debit]
+        - name: reference
+          in: query
+          required: false
+          description: >
+            Return only entries for this Fincra `reference`, such as a payout's
+            reference. Use it to see every balance change one payout made.
+          schema:
+            type: string
+        - name: amount
+          in: query
+          required: false
+          description: Return only entries for exactly this amount.
+          schema:
+            type: number
+        - name: dateFrom
+          in: query
+          required: false
+          description: >
+            Return entries from this time. A date such as `2026-10-01` starts
+            at 00:00 UTC that day. A date and time such as
+            `2026-10-01T09:00:00Z` starts at that exact time.
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          required: false
+          description: >
+            Return entries up to this time. A date such as `2026-10-09`
+            includes the whole day, to 23:59:59 UTC. A date and time is used as
+            the exact end.
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: The page to return, starting at 1.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: perPage
+          in: query
+          required: false
+          description: How many entries to return on each page, up to 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: A page of balance changes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Wallet logs fetched successfully`.
+                  data:
+                    type: object
+                    required: [results, total]
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/WalletTransaction"
+                      total:
+                        type: integer
+                        description: How many entries match, across all pages.
+              example:
+                success: true
+                message: Wallet logs fetched successfully
+                data:
+                  results:
+                    - id: 13794225
+                      reference: bvnvrfy_1a1d5fc8ab144cf7af1c
+                      createdAt: "2026-10-09T19:05:38.000Z"
+                      description: bvn_verification failed
+                      action: debit
+                      amount: 50
+                      currency: NGN
+                      method: wallet
+                      reason: bvn verification successful
+                      merchantDescription: null
+                      merchantReference: null
+                      availableBalanceBefore: 1099595.95
+                      availableBalanceAfter: 1099595.95
+                      ledgerBalanceBefore: 1647750.25
+                      ledgerBalanceAfter: 1647700.25
+                      lockedBalanceBefore: 548154.3
+                      lockedBalanceAfter: 548104.3
+                      rollingReserveBalanceBefore: 0
+                      rollingReserveBalanceAfter: 0
+                    - id: 13794224
+                      reference: bvnvrfy_1a1d5fc8ab144cf7af1c
+                      createdAt: "2026-10-09T19:05:38.000Z"
+                      description: bvn_verification failed
+                      action: debit
+                      amount: 50
+                      currency: NGN
+                      method: wallet
+                      reason: bvn verification initiated
+                      merchantDescription: null
+                      merchantReference: null
+                      availableBalanceBefore: 1099645.95
+                      availableBalanceAfter: 1099595.95
+                      ledgerBalanceBefore: 1647750.25
+                      ledgerBalanceAfter: 1647750.25
+                      lockedBalanceBefore: 548104.3
+                      lockedBalanceAfter: 548154.3
+                      rollingReserveBalanceBefore: 0
+                      rollingReserveBalanceAfter: 0
+                  total: 2
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: A parameter is in the wrong format, or `perPage` is more than 100.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Error occurred during payload validation. perPage must be less than or equal to 100
+                errorType: VALIDATION_FAILED
+  /wallets/logs/{id}:
+    get:
+      operationId: getWalletTransaction
+      summary: Get a wallet transaction
+      description: Returns one balance change, by its `id` from List wallet transactions.
+      tags: [Wallets and Balances]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The entry's `id`.
+          example: 13794225
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The balance change.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Wallet log fetched successfully`.
+                  data:
+                    $ref: "#/components/schemas/WalletTransaction"
+              example:
+                success: true
+                message: Wallet log fetched successfully
+                data:
+                  id: 13794226
+                  reference: 7e49781f-f837-4dd8-ad88-fe91c5e09f98
+                  createdAt: "2026-10-09T19:10:53.000Z"
+                  description: collection successful
+                  action: credit
+                  amount: 1000
+                  currency: NGN
+                  method: Manual Top up
+                  reason: collections
+                  merchantDescription: null
+                  merchantReference: null
+                  availableBalanceBefore: 1099595.95
+                  availableBalanceAfter: 1100595.95
+                  ledgerBalanceBefore: 1647700.25
+                  ledgerBalanceAfter: 1648700.25
+                  lockedBalanceBefore: 548104.3
+                  lockedBalanceAfter: 548104.3
+                  rollingReserveBalanceBefore: 0
+                  rollingReserveBalanceAfter: 0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: None of your wallets has an entry with that ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Wallet log not found
+                errorType: RESOURCE_NOT_FOUND
+  /wallets/logs/statement:
+    get:
+      operationId: getWalletStatement
+      summary: Get a wallet statement
+      description: |
+        Returns a statement for one currency over a period: the opening and closing balances, and each completed movement of money, oldest first. Unlike List wallet transactions, a payout or BVN check appears once, not once for each balance change. Each movement also shows its fee, the amounts in both currencies and the sender or recipient.
+
+        Use it to reconcile a wallet. The opening balance plus every credit, minus every debit, equals the closing balance.
+      tags: [Wallets and Balances]
+      x-codeSamples:
+        - lang: bash
+          label: cURL
+          source: |
+            curl --request GET \
+              --url 'https://sandboxapi.fincra.com/wallets/logs/statement?currency=NGN&dateFrom=2026-10-01&dateTo=2026-10-09' \
+              --header 'api-key: YOUR_SECRET_KEY'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const params = new URLSearchParams({
+              currency: "NGN",
+              dateFrom: "2026-10-01",
+              dateTo: "2026-10-09",
+            });
+
+            const response = await fetch(
+              `https://sandboxapi.fincra.com/wallets/logs/statement?${params}`,
+              { headers: { "api-key": process.env.FINCRA_SECRET_KEY } }
+            );
+            const { data: statement } = await response.json();
+        - lang: python
+          label: Python
+          source: |
+            import os
+            import requests
+
+            response = requests.get(
+                "https://sandboxapi.fincra.com/wallets/logs/statement",
+                params={"currency": "NGN", "dateFrom": "2026-10-01", "dateTo": "2026-10-09"},
+                headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+            )
+            statement = response.json()["data"]
+      parameters:
+        - name: currency
+          in: query
+          required: true
+          description: The wallet's currency, such as `NGN`.
+          example: NGN
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          required: true
+          description: The first day of the statement, in YYYY-MM-DD format.
+          example: "2026-10-01"
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          required: true
+          description: The last day of the statement, in YYYY-MM-DD format. It can be the same day as `dateFrom`.
+          example: "2026-10-09"
+          schema:
+            type: string
+            format: date
+        - name: business
+          in: query
+          required: false
+          description: Your Business ID.
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: The page to return, starting at 1.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: perPage
+          in: query
+          required: false
+          description: How many movements to return on each page, up to 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: The statement.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    $ref: "#/components/schemas/WalletStatement"
+              example:
+                success: true
+                message: Wallet Log Statement from view fetched successfully
+                data:
+                  pagination:
+                    current_page: 1
+                    page_size: 20
+                    count: 3
+                    total_count: 3
+                    total_pages: 1
+                    next_page: null
+                    previous_page: null
+                  openingAvailableBalance: 1098659.95
+                  openingLedgerBalance: 1646764.25
+                  closingAvailableBalance: 1100595.95
+                  closingLedgerBalance: 1648700.25
+                  dateFrom: "2026-10-01"
+                  dateTo: "2026-10-09"
+                  business: Tumaini Moyo
+                  businessAddress: null
+                  businessEmail: tumaini@example.com
+                  results:
+                    - createdAt: "2026-10-01T17:19:10.000Z"
+                      initiatedAt: null
+                      description: NGN collection simulation
+                      reference: 4e61b282-a8c2-4794-82c4-42476e4d8f18
+                      merchantDescription: null
+                      merchantReference: null
+                      reason: virtual account collection successful
+                      action: credit
+                      transactionType: collection
+                      availableBalanceBefore: 1098659.95
+                      availableBalanceAfter: 1099645.95
+                      ledgerBalanceBefore: 1646764.25
+                      ledgerBalanceAfter: 1647750.25
+                      lockedBalanceBefore: 548104.3
+                      lockedBalanceAfter: 548104.3
+                      rollingReserveBalanceBefore: 0
+                      rollingReserveBalanceAfter: 0
+                      sourceCurrency: NGN
+                      destinationCurrency: NGN
+                      sourceAmount: 1000
+                      destinationAmount: 1000
+                      fee: 14
+                      recipientDetails:
+                        bankAccountName: Tumaini Enterprises
+                        bankCode: null
+                        bankName: GLOBUS BANK
+                        bankAccountNumber: "3242131619514450"
+                      senderDetails:
+                        bankAccountName: Tumaini Moyo
+                        bankCode: "058"
+                        bankName: Guaranty Trust Bank
+                        bankAccountNumber: "0123456789"
+                      metadata:
+                        customerId: fcr-ngn-1790875148
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: >
+            A required parameter is missing, `dateTo` is before `dateFrom`, or
+            you don't have a wallet in that currency.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                "Missing date":
+                  summary: Missing date
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. dateFrom is required
+                    errorType: VALIDATION_FAILED
+                "No wallet in that currency":
+                  summary: No wallet in that currency
+                  value:
+                    success: false
+                    error: "Wallet not found for currency: JPY"
+                    errorType: UNPROCESSABLE_ENTITY
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+  schemas:
+    Wallet:
+      type: object
+      title: Wallet
+      description: >
+        A wallet holds one currency. Its ledger balance is the total, and it
+        always equals available + locked + rolling reserve.
+      properties:
+        id:
+          type: integer
+          description: Fincra's ID for the wallet. Use it with Get a wallet.
+        _id:
+          type: string
+          description: The same ID, as a string.
+        business:
+          type: string
+          description: Your Business ID.
+        businessId:
+          type: integer
+          description: Fincra's numeric ID for your business.
+        currency:
+          type: string
+          description: The wallet's currency, such as `NGN`.
+        availableBalance:
+          type: number
+          description: >
+            The money you can use now, for payouts, conversions and fees. A
+            payout fails if it costs more than this.
+        ledgerBalance:
+          type: number
+          description: >
+            The total money in the wallet: available, locked and rolling
+            reserve together.
+        lockedBalance:
+          type: number
+          description: >
+            Money you can't use yet. It holds the amount of payouts and other
+            debits that are still in progress, and incoming money Fincra has
+            recorded but not yet released to your available balance.
+        rollingReserveBalance:
+          type: number
+          description: >
+            Part of your card payments that Fincra holds as a reserve and
+            releases to your available balance later. Zero unless a reserve
+            applies to your business.
+        walletNumber:
+          type: integer
+          description: The wallet's 16-digit number.
+        status:
+          type: string
+          enum: [enabled, disabled]
+          description: List wallets only returns `enabled` wallets.
+        overdraftEnabled:
+          type: integer
+          enum: [0, 1]
+          description: "`1` when Fincra allows this wallet to go below zero, up to `overdraftLimit`. Fincra sets this."
+        overdraftLimit:
+          type: [number, "null"]
+          description: How far below zero the wallet can go, when an overdraft is on.
+        createdAt:
+          type: string
+          format: date-time
+          description: When Fincra created the wallet, in UTC.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When a balance last changed, in UTC.
+    WalletWithPeriod:
+      title: Wallet with opening and closing balances
+      allOf:
+        - $ref: "#/components/schemas/Wallet"
+        - type: object
+          description: The opening and closing fields are only present when you send `dateFrom` and `dateTo`.
+          properties:
+            openingAvailableBalance:
+              type: number
+              description: The available balance at the start of `dateFrom`.
+            openingLedgerBalance:
+              type: number
+              description: The ledger balance at the start of `dateFrom`.
+            openingLockedBalance:
+              type: number
+              description: The locked balance at the start of `dateFrom`.
+            openingRollingReserveBalance:
+              type: number
+              description: The rolling reserve balance at the start of `dateFrom`.
+            closingAvailableBalance:
+              type: number
+              description: The available balance at the end of `dateTo`.
+            closingLedgerBalance:
+              type: number
+              description: The ledger balance at the end of `dateTo`.
+            closingLockedBalance:
+              type: number
+              description: The locked balance at the end of `dateTo`.
+            closingRollingReserveBalance:
+              type: number
+              description: The rolling reserve balance at the end of `dateTo`.
+    WalletTransaction:
+      type: object
+      description: One change to a wallet's balances.
+      properties:
+        id:
+          type: integer
+          description: Fincra's ID for the entry.
+        reference:
+          type: string
+          description: >
+            The `reference` of the payout, collection, conversion or other
+            transaction that caused the change. Several entries can share one
+            reference.
+        createdAt:
+          type: string
+          format: date-time
+          description: When the balance changed, in UTC.
+        action:
+          type: string
+          enum: [credit, debit]
+          description: Whether money was added to or taken from a balance.
+        amount:
+          type: number
+          description: The amount of the change, in the wallet's currency.
+        currency:
+          type: string
+          description: The wallet's currency.
+        reason:
+          type: string
+          description: >
+            What happened, such as `virtual account collection successful` or
+            `bvn verification initiated`. Use it with `action` and the balance
+            fields to see which step of a transaction this entry is.
+        description:
+          type: string
+          description: A short label for the transaction. Read `reason` for the step.
+        method:
+          type: string
+          description: How the money moved, such as `Manual Top up` or `wallet`.
+        merchantDescription:
+          type: [string, "null"]
+          description: The description you sent with the transaction, when there is one.
+        merchantReference:
+          type: [string, "null"]
+          description: Your own reference for the transaction, such as a payout's `customerReference`, when there is one.
+        availableBalanceBefore:
+          type: number
+          description: The available balance before this change.
+        availableBalanceAfter:
+          type: number
+          description: The available balance after this change.
+        ledgerBalanceBefore:
+          type: number
+          description: The ledger balance before this change.
+        ledgerBalanceAfter:
+          type: number
+          description: The ledger balance after this change.
+        lockedBalanceBefore:
+          type: number
+          description: The locked balance before this change.
+        lockedBalanceAfter:
+          type: number
+          description: The locked balance after this change.
+        rollingReserveBalanceBefore:
+          type: number
+          description: The rolling reserve balance before this change.
+        rollingReserveBalanceAfter:
+          type: number
+          description: The rolling reserve balance after this change.
+    WalletStatement:
+      type: object
+      properties:
+        pagination:
+          type: object
+          properties:
+            current_page:
+              type: integer
+              description: The page returned.
+            page_size:
+              type: integer
+              description: The `perPage` used.
+            count:
+              type: integer
+              description: How many movements are on this page.
+            total_count:
+              type: integer
+              description: How many movements are in the statement.
+            total_pages:
+              type: integer
+              description: How many pages there are.
+            next_page:
+              type: [string, "null"]
+              description: Query string for the next page, or `null` on the last page. Request the next page with `page` instead of reusing this value.
+            previous_page:
+              type: [string, "null"]
+              description: Query string for the previous page, or `null` on the first page.
+        openingAvailableBalance:
+          type: number
+          description: The available balance at the start of `dateFrom`.
+        openingLedgerBalance:
+          type: number
+          description: The ledger balance at the start of `dateFrom`.
+        closingAvailableBalance:
+          type: number
+          description: The available balance at the end of `dateTo`.
+        closingLedgerBalance:
+          type: number
+          description: The ledger balance at the end of `dateTo`.
+        dateFrom:
+          type: string
+          format: date
+          description: The first day of the statement.
+        dateTo:
+          type: string
+          format: date
+          description: The last day of the statement.
+        business:
+          type: string
+          description: The name on the account the key belongs to.
+        businessAddress:
+          type: [string, "null"]
+          description: Always `null`.
+        businessEmail:
+          type: string
+          description: The email on the account the key belongs to.
+        results:
+          type: array
+          description: The completed movements, oldest first.
+          items:
+            $ref: "#/components/schemas/StatementEntry"
+    StatementEntry:
+      type: object
+      description: One completed movement of money.
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+          description: When the movement completed, in UTC.
+        initiatedAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the transaction started, for transactions that take time to complete.
+        reference:
+          type: string
+          description: Fincra's reference for the transaction.
+        merchantReference:
+          type: [string, "null"]
+          description: Your own reference for the transaction, when there is one.
+        description:
+          type: string
+          description: A short label for the transaction.
+        merchantDescription:
+          type: [string, "null"]
+          description: The description you sent with the transaction, when there is one.
+        reason:
+          type: string
+          description: What happened, such as `virtual account collection successful`.
+        action:
+          type: string
+          enum: [credit, debit]
+          description: Whether the movement added money to or took money from the wallet.
+        transactionType:
+          type: string
+          description: The kind of transaction, such as `collection`, `disbursement` (a payout), `conversion`, `settlement`, `reversal` or `bvn_verification`.
+        sourceCurrency:
+          type: string
+          description: The currency the transaction was paid in.
+        destinationCurrency:
+          type: string
+          description: The currency the transaction was received in.
+        sourceAmount:
+          type: number
+          description: The amount in `sourceCurrency`.
+        destinationAmount:
+          type: number
+          description: The amount in `destinationCurrency`.
+        fee:
+          type: number
+          description: >
+            Fincra's fee for the transaction. For collections, Fincra credits
+            the amount minus the fee, so the balance changes by
+            `destinationAmount` minus `fee`.
+        senderDetails:
+          type: object
+          description: Who sent the money, for money coming in.
+          properties:
+            bankAccountName:
+              type: [string, "null"]
+              description: The sender's account name.
+            bankAccountNumber:
+              type: [string, "null"]
+              description: The sender's account number.
+            bankName:
+              type: [string, "null"]
+              description: The sender's bank.
+            bankCode:
+              type: [string, "null"]
+              description: The sender's bank code.
+        recipientDetails:
+          type: object
+          description: Who received the money. For money coming in, this is your account.
+          properties:
+            bankAccountName:
+              type: [string, "null"]
+              description: The recipient's account name.
+            bankAccountNumber:
+              type: [string, "null"]
+              description: The recipient's account number.
+            bankName:
+              type: [string, "null"]
+              description: The recipient's bank.
+            bankCode:
+              type: [string, "null"]
+              description: The recipient's bank code.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Extra details for the transaction, when there are any.
+        availableBalanceBefore:
+          type: number
+          description: The available balance before the movement.
+        availableBalanceAfter:
+          type: number
+          description: The available balance after the movement.
+        ledgerBalanceBefore:
+          type: number
+          description: The ledger balance before the movement.
+        ledgerBalanceAfter:
+          type: number
+          description: The ledger balance after the movement.
+        lockedBalanceBefore:
+          type: number
+          description: The locked balance before the movement.
+        lockedBalanceAfter:
+          type: number
+          description: The locked balance after the movement.
+        rollingReserveBalanceBefore:
+          type: number
+          description: The rolling reserve balance before the movement.
+        rollingReserveBalanceAfter:
+          type: number
+          description: The rolling reserve balance after the movement.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.
+        errors:
+          description: More detail about the error, when there is any.

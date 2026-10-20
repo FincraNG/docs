@@ -8,9 +8,9 @@ Use this guide to create a direct debit mandate and walk your customer through t
 
 ## Prerequisites
 
-- **API key** — A valid production API key. See [Manage API Keys](/developer-resources/manage-api-keys).
-- **Customer bank details** — Account number, bank code, and account name. See [Supported Banks](/direct-debit/supported-banks) for valid bank codes.
-- **Mandate parameters** — Amount, start date, end date, and description.
+- **API key**, A valid production API key. See [Manage API Keys](/developer-tools/manage-api-keys).
+- **Customer bank details**, Account number, bank code, and account name. See [Supported Banks](/direct-debit/supported-banks) for valid bank codes.
+- **Mandate parameters**, Amount, start date, end date, and description.
 
 ## Step 1: Create the mandate
 
@@ -82,31 +82,27 @@ curl --location 'https://api.fincra.com/v2/mandate-mgt/mandates/' \
 | `startDate` | string | Mandate start date in ISO 8601 format. |
 | `endDate` | string | Mandate end date in ISO 8601 format. |
 | `status` | string | The mandate status. Will be `initiated` on creation. |
-| `reference` | string | The unique mandate reference. Format: `mr_` followed by a UUID. Save this — you'll use it to collect payments and check status. |
+| `reference` | string | The unique mandate reference. Format: `mr_` followed by a UUID. Save this, you'll use it to collect payments and check status. |
 | `createdAt` | string | Timestamp of when the mandate was created. |
 
 ## Step 2: Guide the customer through activation
 
-<Note>
-  **Design team:** Flow diagram needed here — visual showing the customer activation UX: Your app displays the NIBSS message → Customer opens banking app → Enters account number and ₦50 → Transfer completes → Mandate activated.
-</Note>
-
 The `responseDescription` field contains a NIBSS message with instructions for your customer. To activate the mandate:
 
-1. **Display the message** — Show the `responseDescription` to your customer in your application. The message contains a specific bank account number and bank name.
-2. **Customer pays ₦50** — The customer transfers exactly ₦50 to the account specified in the message, using their banking app, USSD, or bank branch.
-3. **NIBSS authenticates** — The payment triggers NIBSS to verify and approve the mandate.
-4. **Mandate moves to `approved`** — Once authenticated, the mandate status changes from `initiated` to `approved`.
+1. **Display the message**, Show the `responseDescription` to your customer in your application. The message contains a specific bank account number and bank name.
+2. **Customer pays ₦50**, The customer transfers exactly ₦50 to the account specified in the message, using their banking app, USSD, or bank branch.
+3. **NIBSS authenticates**, The payment triggers NIBSS to verify and approve the mandate.
+4. **Mandate moves to `approved`**, Once authenticated, the mandate status changes from `initiated` to `approved`.
 
 <Warning>
-  Display the `responseDescription` exactly as received. Each mandate gets a unique activation account — do not hardcode the account number or bank name.
+  Display the `responseDescription` exactly as received. Each mandate gets a unique activation account, do not hardcode the account number or bank name.
 </Warning>
 
 ### Activation tips
 
-- **In-app display** — Parse the account number and bank name from the message and present them prominently in your UI, along with the ₦50 amount.
-- **Notify the customer** — Send an SMS or email with the activation instructions in case the customer doesn't complete it immediately.
-- **Poll for status** — After the customer reports completing the payment, check the mandate status using the [Manage Mandates](/direct-debit/manage-mandates) endpoint.
+- **In-app display**, Parse the account number and bank name from the message and present them prominently in your UI, along with the ₦50 amount.
+- **Notify the customer**, Send an SMS or email with the activation instructions in case the customer doesn't complete it immediately.
+- **Poll for status**, After the customer reports completing the payment, check the mandate status using the [Manage Mandates](/direct-debit/manage-mandates) endpoint.
 
 ## Step 3: Verify the mandate is approved
 

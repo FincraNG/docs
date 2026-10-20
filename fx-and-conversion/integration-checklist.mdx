@@ -1,0 +1,79 @@
+---
+title: "Integration Checklist"
+sidebarTitle: "Integration Checklist"
+description: "Steps to test and go live with currency conversion."
+---
+
+Use this checklist to verify your Currency Conversion integration in sandbox before going live in production.
+
+## Test in sandbox
+
+### API keys
+
+- [ ] Log in to the [Fincra sandbox dashboard](https://sandbox.fincra.com) and generate your sandbox API key. See [Manage API Keys](/developer-tools/manage-api-keys).
+- [ ] Note your sandbox business ID, you'll need it for quote and conversion requests.
+
+### Integration
+
+Use the sandbox base URL for all API calls during testing:
+
+```
+https://sandbox.fincra.com
+```
+
+Work through the full conversion flow:
+
+- [ ] **Fetch a rate**, Call `GET /quotes/treasury-orders/rates` with a supported currency pair and confirm you receive `buy` and `sell` prices.
+- [ ] **Generate a quote**, Call `POST /quotes/generate` with `sourceCurrency`, `destinationCurrency`, `amount`, `action`, `transactionType`, and `business`. Confirm you receive a `reference` and `expireAt` timestamp.
+- [ ] **Create a conversion**, Pass the `quoteReference` to `POST /conversions/initiate` within 30 seconds. Confirm the conversion is initiated and you receive a conversion `reference`.
+- [ ] **Verify a conversion**, Call `GET /conversions/reference/{reference}` and confirm the conversion status and amounts are correct.
+- [ ] **List conversions**, Call `GET /conversions?business={businessId}` and confirm your test conversions appear in the results.
+
+<Note>
+  Sandbox uses mock exchange rates, not live market rates. Conversion flows and response structures are identical to production, but the rates and amounts are for testing only.
+</Note>
+
+### Error handling
+
+- [ ] Test with an expired or invalid `quoteReference` and confirm your integration handles the `QUOTE_EXPIRED` error.
+- [ ] Test with a missing required field and confirm your integration handles `VALIDATION_FAILED` errors.
+- [ ] Test with an unsupported currency pair and confirm your integration handles the `INVALID_CURRENCY_PAIR` error.
+
+See [Error Codes](/fx-and-conversion/error-codes) for the full list of error types and recommended next steps.
+
+### Webhooks
+
+- [ ] Configure a webhook URL in the [sandbox dashboard](https://sandbox.fincra.com). See [Configure Webhooks](/developer-tools/webhooks/configure).
+- [ ] Create a test conversion and confirm you receive the `conversion.successful` webhook event.
+- [ ] Validate the webhook signature to verify the payload is from Fincra. See [Verify Webhooks](/developer-tools/webhooks/verify).
+
+## Go live in production
+
+Currency Conversion is available to all verified Fincra accounts, no separate activation is required.
+
+### API keys
+
+- [ ] Log in to the [Fincra production dashboard](https://dashboard.fincra.com) and generate your production API key.
+- [ ] Note your production business ID.
+
+### Switch endpoints
+
+Update your base URL from sandbox to production:
+
+```
+https://api.fincra.com
+```
+
+- [ ] Update the base URL in your integration.
+- [ ] Update your API key to the production key.
+
+### Webhooks
+
+- [ ] Configure your production webhook URL in the [production dashboard](https://dashboard.fincra.com). See [Configure Webhooks](/developer-tools/webhooks/configure).
+- [ ] Verify that `conversion.successful` events are received and handled correctly.
+
+### Verify
+
+- [ ] Run a live conversion for a small amount to confirm the full flow works end-to-end in production.
+- [ ] Confirm funds settle in the destination currency wallet.
+- [ ] Confirm the webhook fires and your system processes it correctly.

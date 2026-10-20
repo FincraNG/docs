@@ -1,0 +1,35 @@
+---
+title: "Digital Marketplaces"
+sidebarTitle: "Digital Marketplaces"
+description: "How multi-seller platforms use currency conversion to settle with sellers in their local currency."
+---
+
+Digital marketplaces connect buyers and sellers across borders. A marketplace may collect payments from buyers in USD but need to settle with sellers in NGN, GHS, or KES. The platform needs to estimate seller payouts throughout the day using current rates, then convert and settle at a locked rate when the payout window arrives.
+
+Fincra's Currency Conversion helps marketplace platforms monitor live exchange rates for payout estimation, then lock in guaranteed rates at settlement time, so sellers always receive the correct amount.
+
+## How it works
+
+1. **Marketplace collects payments**, The platform collects payments from buyers in a single currency (e.g., USD) and holds funds in their Fincra USD wallet.
+2. **Rates displayed for estimation**, Throughout the day, the platform calls the [Rates API](/fx-and-conversion/rates) to show sellers estimated payout amounts in their local currency on the seller dashboard.
+3. **Settlement window arrives**, At the scheduled payout time (e.g., daily or weekly), the platform aggregates the total amount owed per currency.
+4. **Quotes generated per currency**, The platform calls the [Quotes API](/fx-and-conversion/quotes) for each currency pair (e.g., USD-NGN, USD-GHS, USD-KES), locking in the rate for each settlement batch.
+5. **Conversions executed**, The platform passes each `quoteReference` to the [conversion endpoint](/fx-and-conversion/create-a-conversion) to convert at the guaranteed rates.
+6. **Funds settle and disburse**, Converted amounts settle in the respective currency wallets within 5 to 10 minutes. The platform then uses the [Payouts API](/payouts/overview) to disburse to individual sellers.
+
+## Which FX solution to use
+
+| Stage | Solution | Why |
+|---|---|---|
+| Seller dashboards & estimates | [Rates](/fx-and-conversion/rates) | Show sellers indicative payout amounts throughout the day. Rates update in real-time so estimates stay current. |
+| Settlement & payout | [Quotes](/fx-and-conversion/quotes) | Lock the rate at settlement time so the exact payout amount is guaranteed before disbursing to sellers. |
+
+## Why this matters
+
+- **Transparent seller experience**, Sellers see estimated payouts in their local currency in real-time, and the final settlement amount matches what was quoted.
+- **Batch efficiency**, Convert once per currency at settlement time rather than per-transaction, reducing operational complexity.
+- **Predictable margins**, Locking rates at settlement protects the platform from rate movement between the time a sale happens and the time the seller is paid.
+
+<Card title="Create a Conversion" icon="arrow-right-arrow-left" href="/fx-and-conversion/create-a-conversion">
+  Follow the step-by-step guide to implement this flow.
+</Card>

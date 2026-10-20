@@ -1,0 +1,53 @@
+---
+title: "Errors"
+description: "How Fincra reports errors, and what to do about each kind."
+keywords: ["errors", "status codes", "errorType", "request_id", "401", "422"]
+---
+
+Fincra uses standard HTTP status codes. A `2xx` code means the request was successful. A `4xx` code means something in your request needs fixing. A `5xx` code means something went wrong at Fincra.
+
+<Panel>
+  ```json Error from an API endpoint
+  {
+    "success": false,
+    "error": "Cannot continue, Duplicate Customer Reference Passed",
+    "errorType": "DUPLICATE_CUSTOMER_REFERENCE"
+  }
+  ```
+
+  ```json Error from the gateway
+  {
+    "message": "Unauthorized",
+    "request_id": "5519f326100b3e2529a55b7e32bf0a64"
+  }
+  ```
+</Panel>
+
+## Error formats
+
+Errors come in two formats, depending on where the request stopped.
+
+| Where it stopped | Format | Example |
+|---|---|---|
+| At the gateway, before reaching the API | `message` and `request_id` | A missing or wrong key |
+| In the API | `success: false`, `error` and `errorType` | A duplicate reference or an invalid field |
+
+Use `errorType` to handle API errors in your code. It stays the same when the wording of `error` changes.
+
+## Status codes
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `200`, `201` | The request was successful | Nothing |
+| `400` | The request is invalid | Check the request against the endpoint page |
+| `401` | The key is missing, wrong or from the other environment | Check your key and base URL. See [Authentication](/api/authentication) |
+| `403` | Access is denied, for example because your IP address isn't whitelisted in production | See [IP whitelisting](/api/authentication#ip-whitelisting) |
+| `404` | The resource doesn't exist | Check the ID or reference |
+| `409` | The request conflicts with an existing one, such as a reused payment reference | Use a new reference, or fetch the existing one |
+| `422` | The request is valid but Fincra can't process it, such as a failed validation rule | Read `error` and `errorType`, fix the request and send it again |
+| `500` | Something went wrong at Fincra | Retry later. If it keeps happening, contact support |
+| `503` | A Fincra service is briefly unavailable | Retry after a short wait |
+
+## Getting help
+
+When you contact support, include the `request_id` if the error has one, the endpoint you called and the time of the request.

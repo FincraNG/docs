@@ -30,16 +30,16 @@ When a Payments API request fails, Fincra returns an error response with a `succ
 | `TRANSACTION_NOT_FOUND` | No transaction was found for the provided reference or ID. | Confirm the reference is correct. |
 | `PAYMENT_METHOD_NOT_ENABLED` | The requested payment method is not enabled for your account. | Contact your account manager or email compliance@fincra.com. |
 | `UNAUTHORIZED` | The API key provided is invalid or missing. | Check your API key in the dashboard. |
-| `RATE_LIMIT_EXCEEDED` | You have exceeded the API rate limit. | Implement exponential backoff and retry. See [Rate Limits](/developer-resources/rate-limits). |
+| `RATE_LIMIT_EXCEEDED` | You have exceeded the API rate limit. | Implement exponential backoff and retry. See [Rate Limits](/developer-tools/rate-limits). |
 
 <Info>
-  Full error code reference for Payments — additional codes and per-method errors to be confirmed. This list will be updated as more error codes are verified.
+  Full error code reference for Payments, additional codes and per-method errors to be confirmed. This list will be updated as more error codes are verified.
 </Info>
 
 ## Handling errors in your integration
 
 - Always check the `success` field before processing a response.
 - Log the full error response including the `error` code for debugging.
-- For `VALIDATION_FAILED`, inspect the `message` field — it typically describes which field caused the failure.
+- For `VALIDATION_FAILED`, inspect the `message` field, it typically describes which field caused the failure.
 - For transient errors (network issues, rate limits), implement retry logic with exponential backoff.
 - For permanent errors (declined cards, invalid references), surface an appropriate message to the customer and do not retry automatically.

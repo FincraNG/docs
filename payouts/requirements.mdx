@@ -1,0 +1,51 @@
+---
+title: "Requirements"
+description: "Where you can send payouts from and to, and what each destination currency needs."
+keywords: ["payout requirements", "corridors", "beneficiary", "mobile money", "bank account", "quote"]
+mode: "wide"
+---
+
+Every payout needs the same basic fields: `business`, `sourceCurrency`, `destinationCurrency`, `amount`, `customerReference`, `paymentDestination` and `beneficiary`. This page shows which balances can send where, and what each destination currency needs on top of those basic fields.
+
+## Where you can send from
+
+You can send payouts from NGN, GHS, KES, UGX, TZS, ZMW, XAF, XOF, ZAR, EGP, EUR, GBP, USD, CAD, CNY and CNH balances. Each of them can pay out in NGN, GHS, KES, UGX, TZS, ZMW, XAF, XOF, ZAR, EUR, GBP, USD, CAD, CNY and CNH.
+
+## By destination currency
+
+<div className="boxed-table">
+| To | Destinations | Payment scheme | Beneficiary type | Also send |
+|---|---|---|---|---|
+| NGN | Bank account | | Individual or corporate | 10-digit `accountNumber`, `bankCode` and `accountHolderName` |
+| GHS | Bank account, mobile money | | Individual or corporate | Bank: `bankCode` and `country`. Mobile money: see [Mobile money](#mobile-money) |
+| KES, UGX, TZS, ZMW, XAF, XOF | Bank account, mobile money | | Individual or corporate | Bank: `bankCode` or `bankSwiftCode`, `bankName` and `country`. Mobile money: see [Mobile money](#mobile-money) |
+| ZAR | Bank account, mobile money | | Individual or corporate | Bank: `bankCode` and `country` |
+| EUR | Bank account | `sepa` or `sepa_instant` | Individual or corporate | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
+| GBP | Bank account | `fps` or `chaps` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName` and `country` |
+| USD | Bank account | `ach`, `fed_wire` or `swift` | Corporate only | `bankSwiftCode` or `bankCode`, `bankName`, a full `address`, `customerName` and `files` |
+| CAD | Bank account | `eft` or `interac` | Individual or corporate | For Interac, `interacEmail` |
+| CNY, CNH | Bank account | `cnaps` | Individual or corporate | `bankName`, `bankSwiftCode` and a full `address` |
+</div>
+
+## Quotes
+
+A payout in the same currency as your balance, such as GHS to GHS, needs no quote. When the currencies differ, such as GHS to NGN, [create a quote](/api/quotes/create-a-quote) first and send its reference as `quoteReference`. Without it, Fincra rejects the payout with `Quote Reference not specified, Kindly generate a quote first to continue.`
+
+## Mobile money
+
+<div className="boxed-table">
+| Beneficiary type | Send |
+|---|---|
+| Individual | `firstName`, `lastName`, `country`, `accountNumber` (the phone number) and `mobileMoneyCode` |
+| Corporate | `accountHolderName`, `country`, `accountNumber` (the phone number) and `mobileMoneyCode` |
+</div>
+
+Fincra checks that the phone number matches the beneficiary's country. When the source and destination currencies are the same, most mobile money payouts must be whole numbers.
+
+## Amounts
+
+Send RWF, UGX, XAF and XOF amounts as whole numbers. Other currencies accept up to 2 decimal places.
+
+## Senders for USD, EUR, GBP and CNY
+
+Payouts in these currencies can include a `senderId`, the ID of a sender you registered with Fincra. The sender must belong to your business and be approved. USD, EUR and GBP payouts need a corporate sender. CNY payouts accept individual senders.

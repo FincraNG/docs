@@ -1,0 +1,412 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Chargebacks"
+  version: "1.0"
+  description: >
+    See and respond to chargebacks, when a cardholder disputes a card payment
+    with their bank. Captured from fincra-collections. During the code freeze
+    this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Chargebacks
+    description: Card payments a cardholder disputed.
+paths:
+  /collections/chargebacks:
+    get:
+      operationId: listChargebacks
+      summary: List chargebacks
+      description: |
+        Returns your chargebacks, newest first, each with the collection it disputes.
+
+        A chargeback starts when a cardholder disputes a card payment and Fincra opens it against the collection. Its `business_status` is `pending` until you accept or reject it. If you don't respond in time, Fincra accepts it for you and sets `business_status` to `auto-accepted`.
+      tags: [Chargebacks]
+      x-codeSamples:
+        - lang: bash
+          label: cURL
+          source: |
+            curl --request GET \
+              --url 'https://sandboxapi.fincra.com/collections/chargebacks?business=YOUR_BUSINESS_ID' \
+              --header 'api-key: YOUR_SECRET_KEY'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const params = new URLSearchParams({ business: process.env.FINCRA_BUSINESS_ID });
+            const response = await fetch(
+              `https://sandboxapi.fincra.com/collections/chargebacks?${params}`,
+              { headers: { "api-key": process.env.FINCRA_SECRET_KEY } }
+            );
+            const { data: chargebacks } = await response.json();
+        - lang: python
+          label: Python
+          source: |
+            import os
+            import requests
+
+            response = requests.get(
+                "https://sandboxapi.fincra.com/collections/chargebacks",
+                params={"business": os.environ["FINCRA_BUSINESS_ID"]},
+                headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+            )
+            chargebacks = response.json()["data"]
+      parameters:
+        - $ref: "#/components/parameters/Business"
+        - name: collectionId
+          in: query
+          description: Return only chargebacks on this collection, by its `id`.
+          schema:
+            type: string
+        - name: dateCreatedFrom
+          in: query
+          description: Return chargebacks opened on or after this date, in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - name: dateCreatedTo
+          in: query
+          description: Return chargebacks opened on or before this date, in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - name: searchQuery
+          in: query
+          description: Return chargebacks whose amount or metadata contains this text.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: All your matching chargebacks. The list isn't paginated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Chargebacks fetched successfully`.
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Chargeback"
+              example:
+                success: true
+                message: Chargebacks fetched successfully
+                data: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/MissingBusiness"
+  /collections/chargebacks/{id}:
+    get:
+      operationId: getChargeback
+      summary: Get a chargeback
+      description: Returns one chargeback by its `id`, with the collection it disputes.
+      tags: [Chargebacks]
+      parameters:
+        - $ref: "#/components/parameters/ChargebackID"
+        - $ref: "#/components/parameters/Business"
+      responses:
+        "200":
+          description: The chargeback.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Chargeback fetched successfully`.
+                  data:
+                    $ref: "#/components/schemas/Chargeback"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ChargebackNotFound"
+  /collections/chargebacks/{id}/accept:
+    patch:
+      operationId: acceptChargeback
+      summary: Accept a chargeback
+      description: |
+        Accepts a chargeback, agreeing that the cardholder gets their money back. Fincra takes the collection's amount plus the `chargeback_fee` from your wallet's ledger balance in the collection's currency, and returns the money to the cardholder.
+
+        You can't undo an acceptance.
+      tags: [Chargebacks]
+      parameters:
+        - $ref: "#/components/parameters/ChargebackID"
+      responses:
+        "200":
+          description: Fincra accepted the chargeback. Get the chargeback to see its new status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Chargeback approved successfully`.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ChargebackNotFound"
+        "422":
+          description: You already accepted this chargeback.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: This chargeback has already been accepted
+                errorType: UNPROCESSABLE_ENTITY
+  /collections/chargebacks/{id}/reject:
+    patch:
+      operationId: rejectChargeback
+      summary: Reject a chargeback
+      description: |
+        Disputes a chargeback, saying the payment was valid. Send your reason and proof, such as a delivery receipt or signed order. Fincra reviews them and sets `admin_status` to `approved` or `declined`.
+      tags: [Chargebacks]
+      parameters:
+        - $ref: "#/components/parameters/ChargebackID"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [business_reject_reason]
+              properties:
+                business_reject_reason:
+                  type: string
+                  description: Why the payment was valid.
+                  example: The customer received the order on 2 October and signed for it.
+                files:
+                  type: string
+                  format: binary
+                  description: Proof of the transaction. Send the field once for each file.
+      responses:
+        "200":
+          description: Fincra received your rejection and will review it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Chargeback rejected successfully`.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ChargebackNotFound"
+        "422":
+          description: You already rejected this chargeback.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: This chargeback has already been rejected
+                errorType: UNPROCESSABLE_ENTITY
+  /collections/chargebacks/export:
+    post:
+      operationId: exportChargebacks
+      summary: Export chargebacks
+      description: Creates a CSV file of your chargebacks and returns a link to download it. Send the same filters as List chargebacks.
+      tags: [Chargebacks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business]
+              properties:
+                business:
+                  type: string
+                  description: Your Business ID.
+                  example: YOUR_BUSINESS_ID
+                collectionId:
+                  type: string
+                  description: Include only chargebacks on this collection.
+                dateCreatedFrom:
+                  type: string
+                  format: date
+                  description: Include chargebacks opened on or after this date.
+                dateCreatedTo:
+                  type: string
+                  format: date
+                  description: Include chargebacks opened on or before this date.
+      responses:
+        "200":
+          description: Fincra created the file. `data` holds the link to download it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Chargebacks exported successfully`.
+                  data:
+                    type: object
+                    description: The file's details, including its download link.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: You have no chargebacks that match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: No data available to export
+                errorType: RESOURCE_NOT_FOUND
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  parameters:
+    Business:
+      name: business
+      in: query
+      required: true
+      description: Your Business ID.
+      example: YOUR_BUSINESS_ID
+      schema:
+        type: string
+    ChargebackID:
+      name: id
+      in: path
+      required: true
+      description: The chargeback's `id`.
+      example: 12
+      schema:
+        type: integer
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+    MissingBusiness:
+      description: "`business` is missing."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Error occurred during payload validation. business is required
+            errorType: VALIDATION_FAILED
+    ChargebackNotFound:
+      description: None of your chargebacks has that ID.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Chargeback not found
+            errorType: RESOURCE_NOT_FOUND
+  schemas:
+    Chargeback:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Fincra's ID for the chargeback.
+        collection_id:
+          type: integer
+          description: The `id` of the disputed collection.
+        collection:
+          type: object
+          description: The disputed collection. See Get a collection for its fields.
+        reason:
+          type: string
+          description: Why the cardholder disputed the payment.
+        chargeback_fee:
+          type: [number, "null"]
+          description: The fee Fincra charges, on top of the collection's amount, if you accept.
+        business_status:
+          type: string
+          enum: [pending, accepted, rejected, auto-accepted]
+          description: >
+            Your response. `pending` until you accept or reject.
+            `auto-accepted` means you didn't respond in time and Fincra
+            accepted it for you.
+        business_reject_reason:
+          type: [string, "null"]
+          description: The reason you gave when you rejected it.
+        proof_of_transaction:
+          type: [array, "null"]
+          items:
+            type: string
+          description: Links to the proof you sent when you rejected it.
+        admin_status:
+          type: string
+          enum: [pending, approved, declined]
+          description: Fincra's decision after reviewing a rejection.
+        admin_reject_reason:
+          type: [string, "null"]
+          description: Why Fincra declined your rejection, when it did.
+        payout_status:
+          type: [string, "null"]
+          description: The status of the transfer that returns the money to the cardholder.
+        metadata:
+          description: Extra details about the dispute.
+        created_at:
+          type: string
+          format: date-time
+          description: When Fincra opened the chargeback.
+        updated_at:
+          type: string
+          format: date-time
+          description: When it last changed.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.
+        errors:
+          description: More detail about the error, when there is any.

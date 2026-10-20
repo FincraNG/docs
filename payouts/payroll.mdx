@@ -3,7 +3,7 @@ title: "Payroll"
 description: "Pay employees and contractors across Africa and internationally."
 ---
 
-Use Fincra Payouts to run payroll for distributed teams — whether you're paying full-time employees or contractors spread across multiple countries and currencies.
+Use Fincra Payouts to run payroll for distributed teams, whether you're paying full-time employees or contractors spread across multiple countries and currencies.
 
 <Note>
   Fincra processes each payout individually. For a payroll run covering multiple employees, initiate one payout per recipient. We recommend building a queue on your end to dispatch payouts in sequence and track each one separately.
@@ -16,10 +16,10 @@ Use Fincra Payouts to run payroll for distributed teams — whether you're payin
     Compile your list of employees or contractors: name, bank account or mobile money details, currency, and net pay amount.
   </Step>
   <Step title="Save employees as beneficiaries">
-    Create a [beneficiary record](/payouts/create-beneficiaries) for each employee during onboarding — not at pay run time. This keeps their details on file and speeds up each payroll cycle.
+    Create a [beneficiary record](/payouts/create-beneficiaries) for each employee during onboarding, not at pay run time. This keeps their details on file and speeds up each payroll cycle.
   </Step>
   <Step title="Handle cross-currency employees">
-    If you pay employees in a currency different from your wallet, [generate a quote](/payouts/how-payouts-work#payment-flow) for each before initiating their payout. Generate the quote immediately before initiating — quotes expire in 30 seconds.
+    If you pay employees in a currency different from your wallet, [generate a quote](/payouts/how-payouts-work#payment-flow) for each before initiating their payout. Generate the quote immediately before initiating, quotes expire in 30 seconds.
   </Step>
   <Step title="Initiate payouts">
     Loop through your payroll list and call the [Initiate Transfer](/payouts/initiate-transfer) endpoint for each employee. Use a consistent `customerReference` format to track each payout (see below).
@@ -28,10 +28,6 @@ Use Fincra Payouts to run payroll for distributed teams — whether you're payin
     Listen for `payout.successful` and `payout.failed` webhooks per employee. Log the outcome against your payroll records and investigate any failures before retrying.
   </Step>
 </Steps>
-
-<Note>
-  **Diagram needed:** Payroll cycle flow — payroll list compiled → loop per employee → cross-currency branch (generate quote) → initiate payout → webhook received → reconciliation log updated.
-</Note>
 
 ## customerReference format for payroll
 
@@ -59,7 +55,7 @@ If a payout fails, Fincra fires a `payout.failed` webhook with a reason. Common 
 
 <CardGroup cols={2}>
   <Card title="Onboard early" icon="users">
-    Create beneficiary records when employees join — not at pay run time. This removes a blocker from your payroll cycle.
+    Create beneficiary records when employees join, not at pay run time. This removes a blocker from your payroll cycle.
   </Card>
   <Card title="Verify new accounts" icon="circle-check">
     Always verify a new employee's account before saving them as a beneficiary. See [Verify a Beneficiary Account](/verification/verify-a-beneficiary-account).

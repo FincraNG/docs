@@ -10,15 +10,13 @@ Fincra Payments lets you accept payments from your customers through multiple pa
 
 {" "}
 
-<Note>A flow diagram will go here showing the full payment journey.</Note>
-
 #### 1. Create a payment
 
 Your application initiates a payment using one of Fincra's payment options: Checkout, Payment Links, Direct Charge API, or Virtual Accounts. You pass the payment details (amount, currency, customer information) and Fincra returns a payment session.
 
 #### 2. Customer pays
 
-Your customer is presented with the available payment methods for their currency: cards, bank transfer, mobile money, or PayAttitude. They select their preferred method and complete the payment.
+Your customer is presented with the available payment methods for their currency: cards, bank transfer, mobile money or digital wallets. They select their preferred method and complete the payment.
 
 #### 3. Fincra processes the payment
 
@@ -60,7 +58,6 @@ Settlement timelines depend on the payment method:
 | Bank Transfer      | Instant             |
 | Mobile Money       | Instant             |
 | PalmPay            | Instant             |
-| PayAttitude (USSD) | Instant             |
 | Cards              | T+1                 |
 | EFT                | T+1                 |
 
@@ -76,14 +73,14 @@ To receive webhooks, you need to:
 3. Validate the webhook signature using your webhook secret key
 4. Process the event and respond with a `200` status
 
-For full details, see [Webhooks](/webhooks/overview).
+For full details, see [Webhooks](/developer-tools/webhooks/overview).
 
 ## Fees
 
 Every transaction processed through Fincra incurs a fee. You control who
 bears the fee using the `feeBearer` parameter:
 
-- `business` — your business absorbs the fee (default)
-- `customer` — the fee is added to the customer's payment amount
+- `business`, your business absorbs the fee (default)
+- `customer`, the fee is added to the customer's payment amount
 
 For detailed pricing, contact our [Sales Team](https://fincra.com).

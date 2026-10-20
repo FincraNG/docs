@@ -1,0 +1,93 @@
+---
+title: "How conversion works"
+description: "Understand the conversion flow, rates, quotes, and settlement process."
+---
+
+Fincra Currency Conversion is a wallet-to-wallet FX product. You convert funds from one currency to another within your Fincra wallets, no external transfers involved. This page explains the conversion flow, how rates and quotes work, and what happens after you execute a conversion.
+
+## Conversion flow
+
+Every conversion follows the same core flow, whether you use the dashboard or the API.
+
+### Via dashboard
+
+1. Log in to your Fincra dashboard and navigate to the **Conversion** tab.
+2. Click the **Convert** button.
+3. Select your source currency and destination currency.
+4. A quote is generated automatically with the current exchange rate and amount.
+5. Click **Convert** to execute the conversion.
+
+If the quote expires (after 30 seconds), a new quote is generated automatically, you don't need to do anything.
+
+### Via API
+
+1. **Generate a quote**, Call the Quotes endpoint with your source currency, destination currency, and amount. You'll receive a `quoteReference` and a locked exchange rate.
+2. **Create a conversion**, Pass the `quoteReference` to the Create Conversion endpoint to execute the conversion.
+
+If the quote expires before you create the conversion, the API will return a quote expired error. You'll need to generate a new quote and try again.
+
+<Warning>
+  A `quoteReference` is always required to create a conversion. There is no way to convert without first generating a quote.
+</Warning>
+
+## Rates and quotes
+
+Fincra provides real-time exchange rates that update continuously. When you're ready to convert, you lock in a rate by generating a quote.
+
+| Concept | Description |
+|---|---|
+| **Rate** | The current exchange rate for a currency pair. Rates are real-time and change continuously. Use the Rates endpoint to check the current rate before committing. |
+| **Quote** | A locked exchange rate with a guaranteed price. Valid for **30 seconds** by default. Use the `quoteReference` from the quote to create a conversion within the validity window. |
+
+### How the exchange rate works
+
+Fincra's exchange rates are competitive and updated in real-time. There are no separate conversion fees, the rate you see in your quote is the all-in rate you pay.
+
+## Settlement
+
+Once you execute a conversion, the funds settle in your destination currency wallet within **5 to 10 minutes**. There is no manual step required after creating the conversion, settlement is automatic.
+
+| Step | What happens |
+|---|---|
+| Conversion created | Source currency is debited from your wallet immediately. |
+| Processing | Fincra processes the conversion. |
+| Settled | Destination currency is credited to your wallet. Total time: 5 to 10 minutes. |
+
+## Webhooks
+
+Fincra sends a webhook notification when your conversion completes. Use this to update your records, trigger downstream actions, or confirm the conversion in your system.
+
+| Event | Description |
+|---|---|
+| `conversion.successful` | Fired when a conversion has been processed and funds have settled in your destination currency wallet. |
+
+For full details on setting up and validating webhooks, see [Webhooks](/developer-tools/webhooks/overview).
+
+## Limits
+
+<Warning>
+  **Pending confirmation**, Conversion limits (per-transaction, daily, or per-account) are being confirmed. This section will be updated once details are finalized.
+</Warning>
+
+## Availability
+
+<Warning>
+  **Pending confirmation**, Whether Currency Conversion requires activation or is available to all merchants by default is being confirmed with the compliance team.
+</Warning>
+
+## Key things to know
+
+- **Pre-funding is the default**, For a standard conversion you must have sufficient funds in your source currency wallet before converting. Post-funding (deferred settlement) is supported in the platform for eligible merchants (`settlementType: DEFERRED`, settled via the amend endpoint), subject to a configured limit.
+{/* HUMAN: confirm the post-funding business policy before publishing.
+    File: conversion/how-currency-conversion-works.mdx
+    The fx-conversions code implements post-funding: settlementType DEFERRED,
+    POST /conversions/{id}/amend to settle, GET /conversions/post-funding-configs,
+    and error POST_FUNDING_LIMIT_EXCEEDED. The previous wording ("Fincra does not
+    offer credit or post-funding") was a categorical denial that contradicts the code.
+    Decide the correct merchant-facing statement: (a) post-funding is generally
+    available, (b) it is available only to approved/eligible merchants (current
+    wording), or (c) it is internal-only and not a merchant surface. Then keep or edit
+    this line accordingly and remove this note. Do not restore the categorical denial. */}
+- **No same-currency conversions**, Source and destination currencies must be different.
+- **Amendments are limited**, A deferred conversion can be settled via `POST /conversions/{id}/amend`; a completed standard conversion cannot be reversed or modified.
+- **Supported currency pairs**, Not all currency combinations are available. See [Supported Currency Pairs](/fx-and-conversion/supported-currency-pairs) for the full list.

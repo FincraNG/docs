@@ -19,9 +19,9 @@ When a payout request fails, Fincra returns a consistent error response with a m
 |---|---|---|
 | `success` | boolean | Always `false` for errors |
 | `error` | string | Human-readable description of what went wrong |
-| `errorType` | string | Machine-readable error code — use this in your error handling logic |
+| `errorType` | string | Machine-readable error code, use this in your error handling logic |
 
-Always branch on `errorType` in your code, not on the `error` string — the message text may change, the code won't.
+Always branch on `errorType` in your code, not on the `error` string, the message text may change, the code won't.
 
 ---
 
@@ -36,7 +36,7 @@ Always branch on `errorType` in your code, not on the `error` string — the mes
 ## Quote errors
 
 <Note>
-  The following error codes are pending final confirmation — they follow the established Fincra error pattern and will be verified against Postman testing.
+  The following error codes are pending final confirmation, they follow the established Fincra error pattern and will be verified against Postman testing.
 </Note>
 
 | Error code | Message | Cause | What to do |
@@ -58,7 +58,7 @@ Always branch on `errorType` in your code, not on the `error` string — the mes
 
 | Error code | Message | Cause | What to do |
 |---|---|---|---|
-| `DUPLICATE_CUSTOMER_REFERENCE` | Customer reference already exists | A payout with this `customerReference` was already submitted | This is intentional — Fincra's idempotency check prevented a duplicate. If this was a retry, retrieve the original payout by `customerReference` to check its status. Never reuse a `customerReference` |
+| `DUPLICATE_CUSTOMER_REFERENCE` | Customer reference already exists | A payout with this `customerReference` was already submitted | This is intentional, Fincra's idempotency check prevented a duplicate. If this was a retry, retrieve the original payout by `customerReference` to check its status. Never reuse a `customerReference` |
 
 ---
 
@@ -73,9 +73,9 @@ Do not retry a payout by resubmitting the same request. Instead:
 
 **Handling errors in production**
 
-- Never surface raw `error` messages to your end users — map error codes to user-friendly copy in your application
+- Never surface raw `error` messages to your end users, map error codes to user-friendly copy in your application
 - Log both `errorType` and `error` on every failure for debugging
-- Set up alerting on repeated `NO_ENOUGH_MONEY_IN_WALLET` errors — it likely means your wallet needs a top-up process
+- Set up alerting on repeated `NO_ENOUGH_MONEY_IN_WALLET` errors, it likely means your wallet needs a top-up process
 
 **Webhook failure events**
 
@@ -83,4 +83,4 @@ Some errors only surface after a payout has been accepted (e.g. bank rejections 
 - Synchronous API errors → `success: false` in the response
 - Asynchronous failures → `payout.failed` webhook event
 
-See [Webhooks — Events](/webhooks/events) for the full `payout.failed` payload.
+See [Webhooks, Events](/developer-tools/webhooks/events) for the full `payout.failed` payload.

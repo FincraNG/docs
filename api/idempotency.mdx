@@ -1,0 +1,28 @@
+---
+title: "Idempotency"
+description: "Retry requests safely without creating duplicate payouts, payments or conversions."
+keywords: ["idempotency", "duplicate", "reference", "customerReference", "retry"]
+mode: "wide"
+---
+
+Requests that move money take a reference that you choose. Fincra accepts each reference only once for your business. If you send the same reference again, Fincra rejects the request instead of moving the money twice.
+
+This means you can safely retry a request after a timeout or a network error.
+
+<div className="boxed-table">
+| Product | Reference field | Status code | Error |
+|---|---|---|---|
+| Payouts | `customerReference` | `422` | `DUPLICATE_CUSTOMER_REFERENCE` |
+| FX and Conversion | `customerReference` | `422` | `DUPLICATE_CUSTOMER_REFERENCE` |
+| Payments | `reference` | `409` | `Duplicate payment reference` |
+</div>
+
+## How to retry safely
+
+1. Create a unique reference for each payout, payment or conversion, and store it before you send the request.
+2. If the request times out or fails with a network error, send it again with the same reference.
+3. If Fincra rejects it as a duplicate, the first request was received. Fetch the original by its reference to see its status.
+
+<Warning>
+  Never create a new reference to retry a request that might have succeeded. A new reference is a new transaction.
+</Warning>

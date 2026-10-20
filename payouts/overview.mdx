@@ -1,83 +1,29 @@
 ---
 title: "Payouts"
 sidebarTitle: "Overview"
-description: "Send funds to recipients across Africa and beyond."
+description: "Send payouts to bank accounts and mobile money wallets."
 ---
 
-Fincra Payouts lets you send money to bank accounts and mobile money wallets across Africa and internationally — programmatically via the API or manually from the dashboard. Whether you're disbursing payroll, settling vendors, paying out marketplace sellers, or sending remittances, Fincra handles the routing, currency conversion, and settlement so you can focus on your product.
-
-<Note>
-  You can also send payouts manually from the [Fincra dashboard](https://dashboard.fincra.com) without writing any code.
-</Note>
-
-## Key benefits
-
-- **Deep African coverage** — Pay out to 10 African countries via local rails, reaching bank accounts and mobile money wallets where your recipients actually receive money.
-- **International reach** — Send USD, GBP, and EUR payouts globally via SWIFT, or use local schemes like ACH, Fedwire, FPS, CHAPS, SEPA, and SEPA Instant for faster delivery.
-- **One unified flow** — Same-currency and cross-currency payouts use the same API. Cross-currency payouts simply add a quote step with a 30-second rate lock.
-- **Fast settlement** — Funds settle to recipients quickly. Local African payouts arrive same-day or next-day. International scheme speeds vary — FPS and SEPA Instant deliver within minutes.
+Send money from your Fincra wallet to bank accounts and mobile money wallets, in the same currency or across currencies.
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here — visual showing the unified payout flow: Fund wallet → Choose destination (bank account / mobile money / Fincra account) → Generate quote (if cross-currency) → Submit payout → Funds arrive + webhook notification. Show the quote step as a conditional branch.
-</Note>
+1. Fund the wallet you're paying from.
+2. For a payout in another currency, get a quote to lock the rate.
+3. Create the payout with the recipient's details and your own `customerReference`.
+4. Fincra sends the money and tells you the result by webhook.
 
-1. **Fund your wallet** — Ensure your source currency wallet has sufficient funds. You can fund via collections, conversions, or manual top-up.
-2. **Choose your destination** — Decide whether you're paying to a bank account, mobile money wallet, or another Fincra account.
-3. **Get a quote** *(cross-currency only)* — If the source and destination currencies differ, generate a quote to lock in the exchange rate for 30 seconds.
-4. **Submit the payout** — Call the Payout API with the recipient's details, amount, and (if cross-currency) the quote reference.
-5. **Funds arrive** — Fincra routes the payout through the appropriate rails. You receive a webhook notification when the payout succeeds or fails.
+## Good to know
 
-## Payout methods
-
-<CardGroup cols={3}>
-  <Card title="Bank Account" icon="building-columns" href="/payouts/bank-account">
-    Send funds directly to a recipient's bank account. Supports local transfers across Africa and international transfers via SWIFT, ACH, SEPA, and more.
-  </Card>
-  <Card title="Mobile Money" icon="mobile-screen-button" href="/payouts/mobile-money">
-    Pay out to mobile money wallets in supported African markets — GHS, KES, UGX, ZMW, TZS, XAF, XOF, and EGP.
-  </Card>
-  <Card title="Payout to Fincra Wallets" icon="wallet" href="/payouts/payout-to-fincra-wallets">
-    Send funds instantly to another Fincra merchant's wallet using their wallet ID. Same-currency only, no fees — funds arrive immediately.
-  </Card>
-</CardGroup>
-
-## Payout coverage
+- **Beneficiaries**: save the people and businesses you pay often, so you don't collect their details every time.
+- **Safe retries**: Fincra accepts each `customerReference` once, so you can retry a request without paying twice.
+- **Verify first**: check an account number and name before you send money.
 
 <CardGroup cols={2}>
-  <Card title="African Payouts" icon="globe-africa" href="/payouts/payout-coverage">
-    Send to 10 African countries via local rails — Nigeria, Ghana, Kenya, Uganda, Zambia, Tanzania, Cameroon, Senegal, South Africa, and Egypt. Bank account and/or mobile money per country.
+  <Card title="Create a payout" icon="paper-plane" href="/api/payouts/create-a-payout">
+    Request fields and examples for each currency.
   </Card>
-  <Card title="International Payouts" icon="globe" href="/payouts/payout-coverage">
-    Send USD, GBP, and EUR to the United States, United Kingdom, and Eurozone. Choose your payment scheme — SWIFT, ACH, Fedwire, FPS, CHAPS, SEPA, or SEPA Instant.
-  </Card>
-</CardGroup>
-
-## Use cases
-
-<CardGroup cols={2}>
-  <Card title="Remittances" icon="paper-plane" href="/payouts/remittances">
-    Power cross-border money transfers for your customers, with competitive FX rates and fast delivery to African bank accounts and mobile wallets.
-  </Card>
-  <Card title="Payroll" icon="users" href="/payouts/payroll">
-    Pay employees and contractors across multiple African countries from a single wallet, with local delivery to their bank accounts or mobile money.
-  </Card>
-  <Card title="Vendor Payments" icon="file-invoice-dollar" href="/payouts/vendor-payments">
-    Settle suppliers and service providers across Africa and internationally, on your schedule.
-  </Card>
-  <Card title="Marketplace Payouts" icon="store" href="/payouts/marketplace-payouts">
-    Disburse earnings to sellers and service providers on your platform, with per-country delivery to bank accounts or mobile money.
-  </Card>
-</CardGroup>
-
-## Explore related products
-
-<CardGroup cols={2}>
-  <Card title="Payments" icon="credit-card" href="/payments/introduction">
-    Accept payments from customers via cards, bank transfers, mobile money, and more.
-  </Card>
-  <Card title="Currency Conversion" icon="arrows-rotate" href="/conversion/overview">
-    Convert between currencies in your wallet before disbursing payouts.
+  <Card title="Verification" icon="circle-check" href="/verification/overview">
+    Confirm account details before you pay.
   </Card>
 </CardGroup>

@@ -1,0 +1,33 @@
+---
+title: "Virtual Accounts"
+sidebarTitle: "Overview"
+description: "Receive bank transfers into permanent or temporary virtual accounts."
+keywords: ["virtual account", "permanent account", "temporary account", "dynamic account", "NGN", "USD", "collections", "BVN"]
+---
+
+A virtual account is a real account number you give to someone who pays you. When they send a bank transfer to it, Fincra credits your wallet in that currency and tells you by webhook.
+
+## How it works
+
+1. **Request an account.** Call the API with the account holder's details. Fincra issues the account number straight away for NGN, and after a review for other currencies.
+2. **Share the details.** Give the account number and bank name to your customer, on your app, an invoice or a checkout page.
+3. **Your customer pays.** They send a normal bank transfer from any bank in that country.
+4. **Fincra credits your wallet.** The money lands in your wallet in the same currency, minus Fincra's fee.
+5. **You get a webhook.** Fincra sends a collection webhook with the amount, the payer and your reference, so you can update the order or customer balance.
+
+## Choose an account type
+
+<CardGroup cols={2}>
+  <Card title="Permanent accounts" icon="building-columns" href="/virtual-accounts/permanent-accounts">
+    One account per customer that never expires. Best for wallets, savings and repeat payments.
+  </Card>
+  <Card title="Temporary accounts" icon="clock" href="/virtual-accounts/temporary-accounts">
+    A single-use account for one payment, such as an order or invoice. Expires after the time you set.
+  </Card>
+</CardGroup>
+
+## Before you start
+
+- Check where you can open accounts on [Supported countries and currencies](/virtual-accounts/supported-countries-and-currencies).
+- Set up a webhook URL so you know when money arrives. See [Webhooks](/developer-tools/webhooks/overview).
+- Test the full flow in sandbox first. See [Sandbox](/developer-tools/sandbox).

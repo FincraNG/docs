@@ -1,7 +1,7 @@
 ---
 title: "Uganda"
 sidebarTitle: "Uganda"
-description: "Payout coverage for Uganda — bank account and mobile money payouts in UGX."
+description: "Payout coverage for Uganda, bank account and mobile money payouts in UGX."
 ---
 
 ## Overview
@@ -19,14 +19,14 @@ Uganda supports payouts to both bank accounts and mobile money wallets in UGX.
 Send UGX to Ugandan bank accounts via local clearing rails.
 
 - **Payment destination:** `bank_account`
-- **No payment scheme required** — Fincra routes automatically.
-- **`customerName` field required** — Uganda payout requests use `customerName` alongside standard beneficiary fields.
+- **No payment scheme required**, Fincra routes automatically.
+- **`customerName` field required**, Uganda payout requests use `customerName` alongside standard beneficiary fields.
 
 ## Mobile money payouts
 
 Send UGX to mobile money wallets in Uganda.
 
 - **Payment destination:** `mobile_money_wallet`
-- **Mobile money code required** — Pass the `mobileMoneyCode` for the recipient's provider. Retrieve available providers from the List Banks endpoint.
-- **Phone number format** — Use country code + number without the `+` symbol (e.g., `256772345678`).
-- **Whole numbers only** — UGX amounts must be whole numbers with no decimal places when the provider is Airtel.
+- **Mobile money code required**, Pass the `mobileMoneyCode` for the recipient's provider. Retrieve available providers from the List Banks endpoint.
+- **Phone number format**, Use country code + number without the `+` symbol (e.g., `256772345678`).
+- **Whole numbers only**, UGX amounts must be whole numbers with no decimal places when the provider is Airtel.

@@ -1,0 +1,738 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Beneficiaries"
+  version: "1.0"
+  description: >
+    Save the people and businesses you pay, so you don't have to collect
+    their details again for every payout. Captured from fincra-profile.
+    During the code freeze this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Beneficiaries
+    description: Saved payout recipients.
+paths:
+  /profile/beneficiaries/business/{businessID}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessID"
+    post:
+      operationId: createBeneficiary
+      summary: Create a beneficiary
+      description: |
+        Saves a person or business you send payouts to. Fincra stores the details as you send them and doesn't check that the account exists, so [verify the account](/api/verification/verify-a-beneficiary-account) first.
+
+        Create a payout doesn't take a beneficiary's ID. When you pay a saved beneficiary, copy its details into the payout's `beneficiary` object. See [Beneficiaries](/payouts/beneficiaries) for how each field maps.
+
+        You can save each account once per currency. Saving the same account number and bank code, or the same Interac email, again returns `409`.
+      tags: [Beneficiaries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/IndividualBankAccount"
+                - $ref: "#/components/schemas/CorporateBankAccount"
+                - $ref: "#/components/schemas/MobileMoneyWallet"
+                - $ref: "#/components/schemas/InteracEmail"
+            examples:
+              "NGN bank account, individual":
+                summary: NGN bank account, individual
+                value:
+                  type: individual
+                  firstName: Tumaini
+                  lastName: Moyo
+                  accountHolderName: Tumaini Moyo
+                  email: tumaini@example.com
+                  phoneNumber: "+2348012345678"
+                  currency: NGN
+                  paymentDestination: bank_account
+                  destinationAddress: "0987654321"
+                  bank:
+                    name: OPay
+                    code: "305"
+                  address:
+                    country: NG
+                    city: Lagos
+              "GBP bank account, corporate":
+                summary: GBP bank account, corporate
+                value:
+                  type: corporate
+                  accountHolderName: Tumaini Enterprises
+                  email: tumaini@example.com
+                  currency: GBP
+                  paymentDestination: bank_account
+                  paymentScheme: fps
+                  destinationAddress: "31926819"
+                  bank:
+                    name: NatWest
+                    sortCode: "601613"
+                    swiftCode: NWBKGB2L
+                    address:
+                      country: GB
+                      city: London
+                  address:
+                    country: GB
+                    city: London
+                    street: 1 High Street
+                    zip: E1 6AN
+              "KES mobile money":
+                summary: KES mobile money
+                value:
+                  type: individual
+                  firstName: Tumaini
+                  lastName: Moyo
+                  accountHolderName: Tumaini Moyo
+                  currency: KES
+                  paymentDestination: mobile_money_wallet
+                  destinationAddress: "254722345678"
+                  bank:
+                    name: Safaricom
+                    code: SAFARICOM
+                  address:
+                    country: KE
+              "CAD Interac":
+                summary: CAD Interac
+                value:
+                  type: individual
+                  firstName: Tumaini
+                  lastName: Moyo
+                  accountHolderName: Tumaini Moyo
+                  currency: CAD
+                  paymentDestination: bank_account
+                  paymentScheme: interac
+                  interacEmail: tumaini@example.com
+                  address:
+                    country: CA
+      responses:
+        "200":
+          description: Fincra saved the beneficiary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `You have successfully created a beneficiary`.
+                  data:
+                    $ref: "#/components/schemas/Beneficiary"
+              example:
+                success: true
+                message: You have successfully created a beneficiary
+                data:
+                  _id: 6ac949ea314008b234f30c99
+                  business: YOUR_BUSINESS_ID
+                  type: corporate
+                  firstName: Tumaini Enterprises
+                  lastName: null
+                  accountHolderName: Tumaini Enterprises
+                  email: tumaini@example.com
+                  phoneNumber: null
+                  currency: GBP
+                  paymentDestination: bank_account
+                  paymentScheme: fps
+                  destinationAddress: "31926819"
+                  interacEmail: null
+                  bank:
+                    name: NatWest
+                    code: null
+                    swiftCode: NWBKGB2L
+                    sortCode: "601613"
+                    branch: null
+                    address:
+                      country: GB
+                      state: null
+                      zip: null
+                      city: London
+                      street: null
+                    correspondentBank: null
+                  address:
+                    country: GB
+                    state: null
+                    zip: E1 6AN
+                    city: London
+                    street: 1 High Street
+                  uniqueIdentifier: null
+                  isResolved: false
+                  createdAt: "2026-10-09T20:09:14.557Z"
+                  updatedAt: "2026-10-09T20:09:14.557Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/BusinessNotFound"
+        "409":
+          description: You already saved this account in this currency.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: This beneficiary already exists
+                errorType: RESOURCE_EXIST
+        "422":
+          description: A required field is missing or in the wrong format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Error occurred during payload validation. firstName is required
+                errorType: VALIDATION_FAILED
+    get:
+      operationId: listBeneficiaries
+      summary: List beneficiaries
+      description: Returns the beneficiaries you saved, oldest first.
+      tags: [Beneficiaries]
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: The page to return, starting at 1.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: perPage
+          in: query
+          required: false
+          description: How many beneficiaries to return on each page.
+          schema:
+            type: integer
+            minimum: 1
+            default: 10
+      responses:
+        "200":
+          description: A page of beneficiaries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Beneficiaries fetched successfully`.
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Beneficiary"
+                      total:
+                        type: integer
+                        description: How many beneficiaries you have saved, across all pages.
+              example:
+                success: true
+                message: Beneficiaries fetched successfully
+                data:
+                  results:
+                    - _id: 6ac949eb314008b234f30c9d
+                      business: YOUR_BUSINESS_ID
+                      type: individual
+                      firstName: Tumaini
+                      lastName: Moyo
+                      accountHolderName: Tumaini Moyo
+                      email: null
+                      phoneNumber: null
+                      currency: KES
+                      paymentDestination: mobile_money_wallet
+                      paymentScheme: null
+                      destinationAddress: "254722345678"
+                      interacEmail: null
+                      bank:
+                        name: Safaricom
+                        code: SAFARICOM
+                        swiftCode: null
+                        sortCode: null
+                        branch: null
+                        address: null
+                        correspondentBank: null
+                      address:
+                        country: KE
+                        state: null
+                        zip: null
+                        city: null
+                        street: null
+                      uniqueIdentifier: null
+                      isResolved: false
+                      createdAt: "2026-10-09T20:09:15.236Z"
+                      updatedAt: "2026-10-09T20:09:15.236Z"
+                  total: 1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/BusinessNotFound"
+  /profile/beneficiaries/business/{businessID}/{beneficiaryID}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessID"
+      - name: beneficiaryID
+        in: path
+        required: true
+        description: The beneficiary's `_id`.
+        example: 6ac949e9314008b234f30c96
+        schema:
+          type: string
+          minLength: 24
+          maxLength: 24
+    get:
+      operationId: getBeneficiary
+      summary: Get a beneficiary
+      description: Returns one saved beneficiary, by its `_id`.
+      tags: [Beneficiaries]
+      responses:
+        "200":
+          description: The beneficiary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Beneficiary fetched successfully`.
+                  data:
+                    $ref: "#/components/schemas/Beneficiary"
+              example:
+                success: true
+                message: Beneficiary fetched successfully
+                data:
+                  _id: 6ac949e9314008b234f30c96
+                  business: YOUR_BUSINESS_ID
+                  type: individual
+                  firstName: Tumaini
+                  lastName: Moyo
+                  accountHolderName: Tumaini Moyo
+                  email: tumaini@example.com
+                  phoneNumber: "+2348012345678"
+                  currency: NGN
+                  paymentDestination: bank_account
+                  paymentScheme: null
+                  destinationAddress: "0987654321"
+                  interacEmail: null
+                  bank:
+                    name: OPay
+                    code: "305"
+                    swiftCode: null
+                    sortCode: null
+                    branch: null
+                    address: null
+                    correspondentBank: null
+                  address:
+                    country: NG
+                    state: null
+                    zip: null
+                    city: Lagos
+                    street: null
+                  uniqueIdentifier: null
+                  isResolved: false
+                  createdAt: "2026-10-09T20:09:13.704Z"
+                  updatedAt: "2026-10-09T20:09:13.704Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/BeneficiaryNotFound"
+    patch:
+      operationId: updateBeneficiary
+      summary: Update a beneficiary
+      description: |
+        Changes a saved beneficiary. Send every required field each time, even the ones that don't change: `type`, `firstName`, `currency`, `paymentDestination`, `address` and, for a bank account or mobile money wallet, `destinationAddress`. Optional fields you leave out keep their saved values.
+
+        For a corporate beneficiary, send the business name as `firstName`.
+      tags: [Beneficiaries]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BeneficiaryUpdate"
+            example:
+              type: individual
+              firstName: Tumaini
+              lastName: Moyo
+              accountHolderName: Tumaini Moyo
+              phoneNumber: "+2348099999999"
+              currency: NGN
+              paymentDestination: bank_account
+              destinationAddress: "0987654321"
+              bank:
+                name: OPay
+                code: "305"
+              address:
+                country: NG
+                city: Abuja
+      responses:
+        "200":
+          description: Fincra updated the beneficiary. `data` is the beneficiary after the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `You have successfully updated your beneficiary data`.
+                  data:
+                    $ref: "#/components/schemas/Beneficiary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/BeneficiaryNotFound"
+        "422":
+          description: A required field is missing or in the wrong format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Error occurred during payload validation. firstName is required
+                errorType: VALIDATION_FAILED
+    delete:
+      operationId: deleteBeneficiary
+      summary: Delete a beneficiary
+      description: Deletes a saved beneficiary. It doesn't affect payouts you already sent to them.
+      tags: [Beneficiaries]
+      responses:
+        "200":
+          description: Fincra deleted the beneficiary. `data` is the beneficiary as it was.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `You have successfully deleted this beneficiary`.
+                  data:
+                    $ref: "#/components/schemas/Beneficiary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/BeneficiaryNotFound"
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  parameters:
+    BusinessID:
+      name: businessID
+      in: path
+      required: true
+      description: Your Business ID.
+      example: YOUR_BUSINESS_ID
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+    BusinessNotFound:
+      description: The Business ID in the path isn't your business.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Business not found
+            errorType: RESOURCE_NOT_FOUND
+    BeneficiaryNotFound:
+      description: No beneficiary has that ID.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Beneficiary not found
+            errorType: RESOURCE_NOT_FOUND
+  schemas:
+    BeneficiaryAddress:
+      type: object
+      required: [country]
+      properties:
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
+          description: Two-letter ISO 3166-1 country code, such as `NG`.
+        state:
+          type: string
+          description: The state or region.
+        city:
+          type: string
+          description: The city.
+        street:
+          type: string
+          description: The street address.
+        zip:
+          type: string
+          description: The postal code.
+    BeneficiaryBank:
+      type: object
+      description: >
+        The beneficiary's bank, or their mobile money operator for a mobile
+        money wallet. Take codes from [List banks](/api/reference-data/list-banks).
+      properties:
+        name:
+          type: string
+          description: The bank or operator's name.
+        code:
+          type: string
+          description: The bank code, such as `305`, or the mobile money operator code, such as `SAFARICOM`.
+        swiftCode:
+          type: string
+          description: The bank's SWIFT code.
+        sortCode:
+          type: string
+          description: The UK sort code, for GBP accounts.
+        address:
+          $ref: "#/components/schemas/BeneficiaryAddress"
+    BeneficiaryInput:
+      type: object
+      required: [type, accountHolderName, currency, paymentDestination]
+      properties:
+        type:
+          type: string
+          enum: [individual, corporate]
+          description: Whether the beneficiary is a person or a business.
+        firstName:
+          type: string
+          description: The person's first name. Required when `type` is `individual`. For a corporate beneficiary, Fincra uses `accountHolderName`.
+        lastName:
+          type: string
+          description: The person's last name.
+        accountHolderName:
+          type: string
+          description: The name on the account.
+        email:
+          type: string
+          format: email
+          description: The beneficiary's email address.
+        phoneNumber:
+          type: string
+          description: The beneficiary's phone number.
+        currency:
+          type: string
+          description: The currency you'll pay them in, such as `NGN`.
+        paymentDestination:
+          type: string
+          enum: [bank_account, mobile_money_wallet]
+          description: Where the money goes.
+        paymentScheme:
+          type: string
+          description: >
+            The payment rail, for currencies that have more than one, such as
+            `fps` for GBP or `interac` for a CAD Interac email.
+        destinationAddress:
+          type: string
+          description: >
+            The account number, IBAN or mobile money number. Required unless
+            `paymentScheme` is `interac`.
+        interacEmail:
+          type: string
+          format: email
+          description: The beneficiary's Interac email. Required when `paymentScheme` is `interac`.
+        bank:
+          $ref: "#/components/schemas/BeneficiaryBank"
+        address:
+          $ref: "#/components/schemas/BeneficiaryAddress"
+        uniqueIdentifier:
+          type: string
+          description: Your own ID for the beneficiary, if you want to store one.
+    IndividualBankAccount:
+      title: Bank account, individual
+      allOf:
+        - $ref: "#/components/schemas/BeneficiaryInput"
+        - type: object
+          required: [type, firstName, accountHolderName, currency, paymentDestination, destinationAddress, bank]
+          properties:
+            type:
+              enum: [individual]
+            paymentDestination:
+              enum: [bank_account]
+          example:
+            type: individual
+            firstName: Tumaini
+            lastName: Moyo
+            accountHolderName: Tumaini Moyo
+            currency: NGN
+            paymentDestination: bank_account
+            destinationAddress: "0987654321"
+            bank:
+              name: OPay
+              code: "305"
+            address:
+              country: NG
+    CorporateBankAccount:
+      title: Bank account, corporate
+      allOf:
+        - $ref: "#/components/schemas/BeneficiaryInput"
+        - type: object
+          required: [type, accountHolderName, currency, paymentDestination, destinationAddress, bank, address]
+          properties:
+            type:
+              enum: [corporate]
+            paymentDestination:
+              enum: [bank_account]
+    MobileMoneyWallet:
+      title: Mobile money
+      allOf:
+        - $ref: "#/components/schemas/BeneficiaryInput"
+        - type: object
+          required: [type, accountHolderName, currency, paymentDestination, destinationAddress, bank]
+          properties:
+            paymentDestination:
+              enum: [mobile_money_wallet]
+    InteracEmail:
+      title: CAD Interac
+      allOf:
+        - $ref: "#/components/schemas/BeneficiaryInput"
+        - type: object
+          required: [type, accountHolderName, currency, paymentDestination, paymentScheme, interacEmail]
+          properties:
+            currency:
+              enum: [CAD]
+            paymentDestination:
+              enum: [bank_account]
+            paymentScheme:
+              enum: [interac]
+    BeneficiaryUpdate:
+      allOf:
+        - $ref: "#/components/schemas/BeneficiaryInput"
+        - type: object
+          required: [type, firstName, currency, paymentDestination, address, destinationAddress]
+    Beneficiary:
+      type: object
+      properties:
+        _id:
+          type: string
+          description: Fincra's ID for the beneficiary.
+        business:
+          type: string
+          description: Your Business ID.
+        type:
+          type: string
+          enum: [individual, corporate]
+          description: Whether the beneficiary is a person or a business.
+        firstName:
+          type: string
+          description: The first name, or the business name for a corporate beneficiary.
+        lastName:
+          type: [string, "null"]
+          description: The last name.
+        accountHolderName:
+          type: string
+          description: The name on the account.
+        email:
+          type: [string, "null"]
+          description: The email address.
+        phoneNumber:
+          type: [string, "null"]
+          description: The phone number.
+        currency:
+          type: string
+          description: The currency you pay them in.
+        paymentDestination:
+          type: string
+          description: Where the money goes.
+        paymentScheme:
+          type: [string, "null"]
+          description: The payment rail, when you saved one.
+        destinationAddress:
+          type: [string, "null"]
+          description: The account number, IBAN or mobile money number.
+        interacEmail:
+          type: [string, "null"]
+          description: The Interac email.
+        bank:
+          type: [object, "null"]
+          description: The bank or mobile money operator.
+          properties:
+            name:
+              type: [string, "null"]
+              description: The bank or operator's name.
+            code:
+              type: [string, "null"]
+              description: The bank or operator code.
+            swiftCode:
+              type: [string, "null"]
+              description: The SWIFT code.
+            sortCode:
+              type: [string, "null"]
+              description: The UK sort code.
+            branch:
+              type: [string, "null"]
+              description: The branch.
+            address:
+              description: The bank's address.
+            correspondentBank:
+              description: The correspondent bank, when there is one.
+        address:
+          type: [object, "null"]
+          description: The beneficiary's address.
+        uniqueIdentifier:
+          type: [string, "null"]
+          description: Your own ID for the beneficiary.
+        isResolved:
+          type: boolean
+          description: Whether Fincra verified the account. Beneficiaries you create through the API are `false`, because Fincra saves them without checking.
+        createdAt:
+          type: string
+          format: date-time
+          description: When you saved the beneficiary, in UTC.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When you last changed it, in UTC.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.
+        errors:
+          description: More detail about the error, when there is any.

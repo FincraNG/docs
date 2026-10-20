@@ -4,7 +4,7 @@ sidebarTitle: "How Fincra Direct Debit Works"
 description: "Understand the mandate lifecycle, activation flow, settlement, and webhooks for direct debit collections."
 ---
 
-This page explains how Fincra's Direct Debit product works end-to-end — from creating a mandate to collecting payments and receiving funds. Read this before you start building.
+This page explains how Fincra's Direct Debit product works end-to-end, from creating a mandate to collecting payments and receiving funds. Read this before you start building.
 
 ## Mandates
 
@@ -13,16 +13,12 @@ A mandate is an authorization from your customer that allows you to pull funds f
 Mandates are:
 - **Created by you** (the merchant) via the API, with the customer's bank account details
 - **Authorized by the customer** through a one-time ₦50 token payment
-- **Scoped to a date range** — defined by `startDate` and `endDate`
-- **Fixed amount** — the `amount` field sets the debit amount for each collection
+- **Scoped to a date range**, defined by `startDate` and `endDate`
+- **Fixed amount**, the `amount` field sets the debit amount for each collection
 
-There is no frequency or scheduling built into the mandate. You decide when and how often to collect — the mandate simply authorizes you to do so within the date range.
+There is no frequency or scheduling built into the mandate. You decide when and how often to collect, the mandate simply authorizes you to do so within the date range.
 
 ## Mandate lifecycle
-
-<Note>
-  **Design team:** State diagram needed here — visual showing: `initiated` → (customer pays ₦50) → `approved`, and `initiated` → (customer declines or auth fails) → `declined`. Keep it simple — only 3 states.
-</Note>
 
 Direct debit mandates have three statuses:
 
@@ -34,26 +30,22 @@ Direct debit mandates have three statuses:
 
 ### Key things to know about mandate status
 
-- **No cancel or suspend** — Once a mandate is approved, it stays approved. There is no API to cancel, suspend, or revoke a mandate.
-- **No expiry transition** — Mandates don't transition to an "expired" status. When the `endDate` passes, the mandate remains `approved` but any debit attempts will fail date validation.
-- **Transitions are one-way** — A mandate moves from `initiated` to either `approved` or `declined`. There are no other transitions.
+- **No cancel or suspend**, Once a mandate is approved, it stays approved. There is no API to cancel, suspend, or revoke a mandate.
+- **No expiry transition**, Mandates don't transition to an "expired" status. When the `endDate` passes, the mandate remains `approved` but any debit attempts will fail date validation.
+- **Transitions are one-way**, A mandate moves from `initiated` to either `approved` or `declined`. There are no other transitions.
 
 ## The ₦50 activation flow
 
-<Note>
-  **Design team:** Flow diagram needed here — visual showing the customer-facing activation experience: API response contains bank details → Customer opens banking app → Transfers ₦50 to the specified account → NIBSS authenticates → Mandate moves to `approved`.
-</Note>
-
 When you create a mandate, the API response includes a `responseDescription` field containing instructions from NIBSS. This message tells the customer exactly what to do:
 
-1. **You create the mandate** — Call `POST /v2/mandate-mgt/mandates/` with the customer's details.
-2. **API returns activation instructions** — The `responseDescription` contains a NIBSS message with a specific bank account number and bank name.
-3. **Customer makes the ₦50 payment** — The customer transfers exactly ₦50 to the account specified in the message using their banking app or USSD.
-4. **NIBSS authenticates** — The ₦50 payment triggers NIBSS to authenticate the mandate.
-5. **Mandate is approved** — The mandate status moves from `initiated` to `approved`.
+1. **You create the mandate**, Call `POST /v2/mandate-mgt/mandates/` with the customer's details.
+2. **API returns activation instructions**, The `responseDescription` contains a NIBSS message with a specific bank account number and bank name.
+3. **Customer makes the ₦50 payment**, The customer transfers exactly ₦50 to the account specified in the message using their banking app or USSD.
+4. **NIBSS authenticates**, The ₦50 payment triggers NIBSS to authenticate the mandate.
+5. **Mandate is approved**, The mandate status moves from `initiated` to `approved`.
 
 <Warning>
-  The `responseDescription` is a NIBSS-generated message. Display it to your customer exactly as received — it contains the specific account number and bank they need to pay. Each mandate gets a unique activation account.
+  The `responseDescription` is a NIBSS-generated message. Display it to your customer exactly as received, it contains the specific account number and bank they need to pay. Each mandate gets a unique activation account.
 </Warning>
 
 ### Example `responseDescription`
@@ -70,11 +62,11 @@ Once a mandate is `approved`, you can initiate debits against it using the [Coll
 - Must fall within the mandate's `startDate` and `endDate`
 - Settles to your Fincra NGN wallet
 
-You control the timing — there's no automatic scheduling. Call the endpoint whenever you need to collect.
+You control the timing, there's no automatic scheduling. Call the endpoint whenever you need to collect.
 
 ## Settlement
 
-Successful debits settle to your Fincra NGN wallet. The default settlement behavior is **instant to wallet** — funds are available as soon as the debit succeeds.
+Successful debits settle to your Fincra NGN wallet. The default settlement behavior is **instant to wallet**, funds are available as soon as the debit succeeds.
 
 Your account may have custom settlement settings configured by your account manager:
 
@@ -95,16 +87,16 @@ Fincra sends webhook events for direct debit transactions:
 | `direct_debit.success` | A debit was successfully collected from the customer's account. |
 | `direct_debit.failed` | A debit attempt failed (insufficient funds, account issues, mandate expired, etc.). |
 
-Listen for these events to update your system in real time rather than polling the API. For setup and validation, see [Webhooks](/webhooks/overview).
+Listen for these events to update your system in real time rather than polling the API. For setup and validation, see [Webhooks](/developer-tools/webhooks/overview).
 
 ## Key things to know
 
-- **Nigeria only** — Direct Debit is powered by NIBSS and only supports Nigerian bank accounts in NGN.
-- **API only** — Mandates and debits are managed entirely through the API. There is no dashboard interface.
-- **No sandbox** — Direct Debit does not have a sandbox environment. Testing happens in production. See [Integration Checklist](/direct-debit/integration-checklist) for production testing guidance.
-- **23 banks supported** — Heritage Bank is excluded. See [Supported Banks](/direct-debit/supported-banks).
-- **No amount limits** — There are no minimum or maximum debit amounts enforced by Fincra. Limits may apply at the customer's bank level.
-- **Fees** — Direct debit fees are agreed between your business and Fincra's sales team. Contact your account manager for pricing details.
+- **Nigeria only**, Direct Debit is powered by NIBSS and only supports Nigerian bank accounts in NGN.
+- **API only**, Mandates and debits are managed entirely through the API. There is no dashboard interface.
+- **No sandbox**, Direct Debit does not have a sandbox environment. Testing happens in production. See [Integration Checklist](/direct-debit/integration-checklist) for production testing guidance.
+- **23 banks supported**, Heritage Bank is excluded. See [Supported Banks](/direct-debit/supported-banks).
+- **No amount limits**, There are no minimum or maximum debit amounts enforced by Fincra. Limits may apply at the customer's bank level.
+- **Fees**, Direct debit fees are agreed between your business and Fincra's sales team. Contact your account manager for pricing details.
 
 ## What's next
 

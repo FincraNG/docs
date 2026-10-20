@@ -1,0 +1,35 @@
+---
+title: "International Trade Settlement"
+sidebarTitle: "International Trade Settlement"
+description: "How importers and exporters use currency conversion to settle cross-border trade transactions."
+---
+
+International trade requires settling invoices in the supplier's currency. An importer in Nigeria receiving goods from Europe needs to pay the supplier in EUR. An exporter in Kenya selling to buyers in West Africa needs to convert incoming XOF payments to KES. In both cases, timing matters, locking in a favorable rate can meaningfully impact the cost of goods and profit margins.
+
+Fincra's Currency Conversion helps trade businesses monitor exchange rates to find the right moment to convert, then lock in a guaranteed rate to settle invoices at a known cost.
+
+## How it works
+
+1. **Invoice received in foreign currency**, The importer receives an invoice from a supplier denominated in a foreign currency (e.g., EUR).
+2. **Business monitors rates**, The importer uses the [Rates API](/fx-and-conversion/rates) to track the NGN-EUR exchange rate, watching for a favorable conversion window.
+3. **Favorable rate identified**, When the rate reaches an acceptable level, the importer is ready to convert.
+4. **Quote locks the rate**, The importer calls the [Quotes API](/fx-and-conversion/quotes) to generate a quote for the invoice amount, locking in the exchange rate for 30 seconds.
+5. **Conversion executes**, The importer passes the `quoteReference` to the [conversion endpoint](/fx-and-conversion/create-a-conversion) to convert NGN to EUR at the locked rate.
+6. **Funds settle and supplier is paid**, The converted EUR settles in the importer's EUR wallet within 5 to 10 minutes, ready to be sent to the supplier via the [Payouts API](/payouts/overview).
+
+## Which FX solution to use
+
+| Stage | Solution | Why |
+|---|---|---|
+| Rate monitoring | [Rates](/fx-and-conversion/rates) | Track exchange rate movements over time to identify the optimal conversion window. |
+| Invoice settlement | [Quotes](/fx-and-conversion/quotes) | Lock the rate at the moment of conversion so the exact cost of the invoice is known before executing. |
+
+## Why this matters
+
+- **Cost control**, Monitoring rates before converting gives the business control over when to lock in, reducing the FX cost of imported goods.
+- **Known settlement cost**, Quotes guarantee the conversion amount, so the importer knows the exact NGN cost of a EUR invoice before executing.
+- **Faster settlement**, Funds settle in the destination wallet within 5 to 10 minutes, enabling quicker supplier payments compared to traditional bank FX.
+
+<Card title="Create a Conversion" icon="arrow-right-arrow-left" href="/fx-and-conversion/create-a-conversion">
+  Follow the step-by-step guide to implement this flow.
+</Card>

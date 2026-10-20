@@ -19,7 +19,7 @@ This page covers common issues you may encounter when working with Direct Debit 
 
 **Resolution:**
 - Confirm with your customer that they've completed the ₦50 payment to the exact account and bank specified in the `responseDescription`.
-- Re-display the activation instructions to the customer — the account number and bank name are in the `responseDescription` from the Create Mandate response.
+- Re-display the activation instructions to the customer, the account number and bank name are in the `responseDescription` from the Create Mandate response.
 - If the customer confirms they've paid and the status hasn't changed, contact Fincra support.
 
 ### Mandate `declined`
@@ -46,25 +46,25 @@ This page covers common issues you may encounter when working with Direct Debit 
 
 ## Debit issues
 
-### Debit failed — insufficient funds
+### Debit failed, insufficient funds
 
 **Symptom:** `direct_debit.failed` webhook received. Customer's account doesn't have enough funds.
 
 **Resolution:**
 - Notify the customer to fund their account.
-- Retry the debit after a reasonable delay (e.g., 24–48 hours).
+- Retry the debit after a reasonable delay (e.g., 24 to 48 hours).
 - Implement exponential backoff if you're retrying automatically.
 
-### Debit failed — mandate date range
+### Debit failed, mandate date range
 
-**Symptom:** Debit attempt fails because the current date is outside the mandate's `startDate`–`endDate` range.
+**Symptom:** Debit attempt fails because the current date is outside the mandate's `startDate` to `endDate` range.
 
 **Resolution:**
 - Check the mandate's date range using [Manage Mandates](/direct-debit/manage-mandates).
 - If the mandate has expired, create a new mandate with an updated date range.
 - Ensure your system checks the date range before attempting debits to avoid unnecessary failures.
 
-### Debit failed — unknown reason
+### Debit failed, unknown reason
 
 **Symptom:** `direct_debit.failed` webhook received but the reason isn't clear.
 
@@ -81,10 +81,10 @@ This page covers common issues you may encounter when working with Direct Debit 
 **Symptom:** Debits are processing but your webhook endpoint isn't receiving events.
 
 **Resolution:**
-- Verify your webhook URL is correctly configured in the [Fincra dashboard](https://dashboard.fincra.com). See [Configure Webhooks](/webhooks/configure).
+- Verify your webhook URL is correctly configured in the [Fincra dashboard](https://dashboard.fincra.com). See [Configure Webhooks](/developer-tools/webhooks/configure).
 - Ensure your endpoint is publicly accessible and returns a `200` status code.
 - Check your server logs for incoming requests that may be failing validation.
-- Verify the webhook signature to ensure you're not accidentally rejecting valid payloads. See [Verify Webhooks](/webhooks/verify).
+- Verify the webhook signature to ensure you're not accidentally rejecting valid payloads. See [Verify Webhooks](/developer-tools/webhooks/verify).
 
 ### Duplicate webhook events
 
@@ -92,7 +92,7 @@ This page covers common issues you may encounter when working with Direct Debit 
 
 **Resolution:**
 - Implement idempotency in your webhook handler using the event reference or debit reference as a key.
-- Always return a `200` response promptly — slow responses may cause Fincra to retry delivery.
+- Always return a `200` response promptly, slow responses may cause Fincra to retry delivery.
 
 ## Integration issues
 

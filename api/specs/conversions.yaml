@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Conversions"
+  version: "1.0"
+  description: >
+    Convert money between your Fincra balances using a rate quote, and check
+    your conversions. Captured from fincra-fx-conversions. During the code
+    freeze this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Conversions
+    description: Convert between your Fincra balances.
+paths:
+  /conversions/initiate:
+    post:
+      operationId: createConversion
+      summary: Create a conversion
+      description: >
+        Converts money between two of your balances at the rate in a quote.
+        Get a quote with `transactionType` set to `conversion` first, then
+        create the conversion before the quote's `expireAt`. Fincra accepts
+        each `customerReference` once for your business.
+      tags: [Conversions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business, quoteReference, customerReference]
+              properties:
+                business:
+                  type: string
+                  minLength: 24
+                  maxLength: 24
+                  description: Your Business ID.
+                quoteReference:
+                  type: string
+                  description: The `reference` of a conversion quote that hasn't expired.
+                customerReference:
+                  type: string
+                  description: Your unique reference for this conversion. Fincra accepts each reference once.
+                settlementType:
+                  type: string
+                  enum: [IMMEDIATE, DEFERRED]
+                  default: IMMEDIATE
+                  description: >
+                    `IMMEDIATE` settles the conversion now. `DEFERRED` agrees
+                    the rate now and settles later, and only works when
+                    deferred settlement is turned on for your business.
+            example:
+              business: 64f1c2a9e4b0a1b2c3d4e5f6
+              quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+              customerReference: conversion-0001
+      responses:
+        "200":
+          description: Fincra accepted the conversion.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Conversion initiated successfully`.
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: Fincra's numeric ID for the conversion.
+                      reference:
+                        type: string
+                        description: Fincra's reference for the conversion.
+                      customerReference:
+                        type: string
+                        description: The reference you sent.
+              example:
+                success: true
+                message: Conversion initiated successfully
+                data:
+                  id: 2048
+                  reference: b7c6d5e4-f3a2-4b1c-9d8e-7f6a5b4c3d2e
+                  customerReference: conversion-0001
+        "400":
+          description: Your source balance doesn't have enough money for this conversion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: You do not have enough money in your wallet to carry out this conversion.
+                errorType: NO_ENOUGH_MONEY_IN_WALLET
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: The request failed validation, or the reference was already used.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Customer reference already exists. Please use a different reference
+                errorType: DUPLICATE_CUSTOMER_REFERENCE
+  /conversions:
+    get:
+      operationId: listConversions
+      summary: List conversions
+      description: Returns your conversions, one page at a time.
+      tags: [Conversions]
+      parameters:
+        - name: business
+          in: query
+          required: true
+          description: Your Business ID.
+          schema:
+            type: string
+            minLength: 24
+            maxLength: 24
+        - name: page
+          in: query
+          description: The page number to return, starting at 1.
+          schema:
+            type: integer
+            default: 1
+        - name: perPage
+          in: query
+          description: How many conversions to return on each page.
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          description: Only return conversions with these statuses.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/ConversionStatus"
+        - name: sourceCurrency
+          in: query
+          description: Only return conversions from this currency.
+          schema:
+            type: string
+        - name: destinationCurrency
+          in: query
+          description: Only return conversions into this currency.
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          description: Only return conversions created on or after this date.
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          description: Only return conversions created on or before this date.
+          schema:
+            type: string
+            format: date
+        - name: merchantReference
+          in: query
+          description: Only return the conversion with this `customerReference`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of conversions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Conversions fetched successfully`.
+                  data:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        description: The conversions on this page.
+                        items:
+                          type: object
+                      total:
+                        type: integer
+                        description: How many conversions match your filters in total.
+              example:
+                success: true
+                message: Conversions fetched successfully
+                data:
+                  results: []
+                  total: 0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /conversions/{id}:
+    get:
+      operationId: getConversion
+      summary: Get a conversion
+      description: Returns a conversion by Fincra's numeric ID.
+      tags: [Conversions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The conversion `id` Fincra returned when you created it.
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/Conversion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ConversionNotFound"
+  /conversions/reference/{reference}:
+    get:
+      operationId: getConversionByReference
+      summary: Get a conversion by reference
+      description: Returns a conversion by the reference Fincra gave it.
+      tags: [Conversions]
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The conversion `reference` Fincra returned when you created it.
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Conversion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ConversionNotFound"
+  /conversions/customer-reference/{customerReference}:
+    get:
+      operationId: getConversionByCustomerReference
+      summary: Get a conversion by your reference
+      description: >
+        Returns a conversion by the `customerReference` you sent. Use it after
+        a timeout or a duplicate reference error to find the original.
+      tags: [Conversions]
+      parameters:
+        - name: customerReference
+          in: path
+          required: true
+          description: The `customerReference` you sent when you created the conversion.
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Conversion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ConversionNotFound"
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Always `Unauthorized`.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+    Conversion:
+      description: The conversion.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                description: "`true` when the request was successful."
+              message:
+                type: string
+                description: A short description of the result.
+              data:
+                type: object
+                description: The conversion.
+    ConversionNotFound:
+      description: No conversion with that ID or reference belongs to your business.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Conversion not found. Please check the ID or reference
+            errorType: RESOURCE_NOT_FOUND
+  schemas:
+    ConversionStatus:
+      type: string
+      enum: [processing, successful, failed]
+      description: "`processing` is in progress. `successful` and `failed` are final."
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.

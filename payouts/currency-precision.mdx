@@ -28,7 +28,7 @@ Fincra follows the ISO 4217 standard for currency representation.
 | Euro | EUR | 2 | `500.25` |
 
 <Warning>
-  **UGX, XAF, XOF, and RWF are zero-decimal currencies** — send `amount` as a whole
+  **UGX, XAF, XOF, and RWF are zero-decimal currencies**, send `amount` as a whole
   number (integer). Sending decimals for these currencies fails validation. All other
   currencies above use 2 decimal places. Always match the `amount` precision to the currency.
 </Warning>

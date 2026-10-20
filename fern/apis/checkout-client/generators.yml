@@ -1,0 +1,21 @@
+auth-schemes:
+  PublicKey:
+    header: x-pub-key
+    name: publicKey
+    type: string
+api:
+  auth: PublicKey
+  specs:
+    - openapi: ./openapi/checkout-client.yaml
+default-group: react-native
+groups:
+  react-native:
+    generators:
+      - name: fernapi/fern-typescript-sdk
+        version: 2.0.0
+        output:
+          location: local-file-system
+          path: /Users/taofiqaiyelabegan/Desktop/fincra-react-native-sdk
+        config:
+          namespaceExport: FincraCheckout
+          outputSourceFiles: true

@@ -4,15 +4,15 @@ sidebarTitle: "Subscription Billing"
 description: "Power recurring subscription charges with reliable bank-to-bank direct debit collections."
 ---
 
-Subscription businesses need reliable recurring billing that doesn't depend on card expiry dates or customer action. Card-based subscriptions fail when cards expire, are replaced, or hit spending limits. Direct debit pulls payments directly from the customer's bank account — the account number doesn't change, so billing continuity is built in.
+Subscription businesses need reliable recurring billing that doesn't depend on card expiry dates or customer action. Card-based subscriptions fail when cards expire, are replaced, or hit spending limits. Direct debit pulls payments directly from the customer's bank account, the account number doesn't change, so billing continuity is built in.
 
 ## How it works
 
-1. **Customer subscribes** — The customer signs up for your service and provides their bank details.
-2. **Create a mandate** — Call the [Create Mandate API](/direct-debit/create-a-mandate) with the subscriber's bank details. Set the `amount` to the subscription fee and the date range to cover the subscription period.
-3. **Subscriber activates** — The customer completes the ₦50 token payment to authorize the mandate.
-4. **Bill on schedule** — Set up your system to call [Initiate Debit](/direct-debit/collect-a-payment) at each billing cycle (monthly, quarterly, etc.).
-5. **Handle results** — Listen for webhooks to confirm payment or trigger dunning flows for failed debits.
+1. **Customer subscribes**, The customer signs up for your service and provides their bank details.
+2. **Create a mandate**, Call the [Create Mandate API](/direct-debit/create-a-mandate) with the subscriber's bank details. Set the `amount` to the subscription fee and the date range to cover the subscription period.
+3. **Subscriber activates**, The customer completes the ₦50 token payment to authorize the mandate.
+4. **Bill on schedule**, Set up your system to call [Initiate Debit](/direct-debit/collect-a-payment) at each billing cycle (monthly, quarterly, etc.).
+5. **Handle results**, Listen for webhooks to confirm payment or trigger dunning flows for failed debits.
 
 ## Example
 
@@ -20,7 +20,7 @@ Subscription businesses need reliable recurring billing that doesn't depend on c
 Subscription details:
 - Service: SaaS platform
 - Monthly fee: ₦5,000
-- Subscription period: 6 months (March – August 2026)
+- Subscription period: 6 months (March  to  August 2026)
 
 Mandate setup:
 - amount: 5000
@@ -35,10 +35,10 @@ Collection schedule:
 
 ## Why this matters
 
-- **No card expiry issues** — Bank accounts don't expire like cards. No involuntary churn from payment method failures.
-- **Higher success rates** — Direct bank debits avoid card network declines, fraud blocks, and spending limits.
-- **Predictable revenue** — Automated collection makes MRR forecasting more reliable.
-- **Works for all customers** — Not all Nigerian customers have credit or debit cards suitable for recurring charges. Bank accounts are universal.
+- **No card expiry issues**, Bank accounts don't expire like cards. No involuntary churn from payment method failures.
+- **Higher success rates**, Direct bank debits avoid card network declines, fraud blocks, and spending limits.
+- **Predictable revenue**, Automated collection makes MRR forecasting more reliable.
+- **Works for all customers**, Not all Nigerian customers have credit or debit cards suitable for recurring charges. Bank accounts are universal.
 
 <Card title="Create a Mandate" icon="file-signature" href="/direct-debit/create-a-mandate">
   Follow the step-by-step guide to set up subscription billing with direct debit.

@@ -33,12 +33,12 @@ The export includes all the fields shown in the dashboard view.
 ## API
 
 <Info>
-  Collection history export via API — endpoint coming soon. Taofiq to confirm.
+  Collection history export via API, endpoint coming soon. Taofiq to confirm.
 </Info>
 
 ## Reconciliation tips
 
 - Use your `merchantReference` (the reference you pass when creating a payment) to match Fincra transaction records with your own internal records.
-- The `amountToSettle` field in the webhook payload is what lands in your wallet — use this for reconciliation, not the `amount` field.
+- The `amountToSettle` field in the webhook payload is what lands in your wallet, use this for reconciliation, not the `amount` field.
 - Filter exports by `status: success` to get only confirmed, settled payments.
 - For virtual account payments, the `virtualAccount.accountNumber` field in the webhook identifies which customer's account received the payment.

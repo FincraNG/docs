@@ -1,51 +1,24 @@
 ---
-title: "Verification"
+title: "Identity Verification"
 sidebarTitle: "Overview"
-description: "Verify accounts, identities, and card details before processing transactions."
+description: "Confirm account details and identities before you pay or onboard."
 ---
 
-Fincra's verification endpoints let you validate account details, resolve customer identities, and look up card metadata — all before you process a transaction. Use them to reduce failed payouts, prevent fraud, and meet compliance requirements.
+Check that an account or identity is real before you send money or onboard someone. It cuts failed payouts and payments to the wrong person.
 
-## Use cases
+## What you can verify
 
-- **Pre-payout validation** — Verify a beneficiary's bank account or mobile money wallet before initiating a payout to avoid failed transfers and misdirected funds.
-- **Customer onboarding** — Resolve a customer's BVN when they request a permanent virtual account to confirm their identity and meet compliance requirements.
-- **Card payment screening** — Look up a card's BIN during checkout to detect the card scheme, issuing country, and card type for fraud prevention and routing decisions.
+- **Beneficiary accounts**: confirm a bank account or mobile money number and get the name on it.
+- **BVN**: confirm a Nigerian Bank Verification Number belongs to the person who gave it.
+- **Card BIN**: look up a card's brand, type and issuing country from its first digits.
 
-## Choose the right verification
+In sandbox, use the test values on the [Sandbox](/developer-tools/sandbox) page.
 
-| I want to... | Use this | Details |
-|---|---|---|
-| Verify a bank account or mobile money wallet before sending a payout | [Account Verification](/verification/verify-a-beneficiary-account) | Supports Nigeria (NUBAN) and Ghana (mobile money) |
-| Confirm a customer's identity for a virtual account request | [BVN Verification](/verification/verify-a-bvn) | Nigeria only. Returns name, date of birth, and phone number |
-| Check a card's scheme and issuing country during checkout | [Card BIN Lookup](/verification/resolve-a-card-bin) | Resolves the first 6-8 digits of any card number |
-
-## Verification products
-
-<CardGroup cols={3}>
-  <Card title="Account Verification" icon="building-columns" href="/verification/verify-a-beneficiary-account">
-    Resolve bank accounts and mobile money wallets to confirm beneficiary details before payouts.
+<CardGroup cols={2}>
+  <Card title="Resolve Account" icon="building-columns" href="/api/verification/resolve-account">
+    Check account details before a payout.
   </Card>
-  <Card title="BVN Verification" icon="user-check" href="/verification/verify-a-bvn">
-    Verify a customer's Bank Verification Number to confirm their identity.
-  </Card>
-  <Card title="Card BIN Lookup" icon="credit-card" href="/verification/resolve-a-card-bin">
-    Look up card scheme, issuing country, card type, and issuing bank from a BIN.
+  <Card title="Verify a BVN" icon="id-card" href="/api/verification/verify-a-bvn">
+    Confirm a customer's identity in Nigeria.
   </Card>
 </CardGroup>
-
-## Pricing
-
-| Verification | Sandbox | Production |
-|---|---|---|
-| Account Verification | Free | Free |
-| BVN Verification | Free | NGN 50 per call |
-| Card BIN Lookup | Free | Free |
-
-## Coverage
-
-| Verification | Countries | Account Types |
-|---|---|---|
-| Account Verification | Nigeria, Ghana | Bank account (NGN), Mobile money (GHS) |
-| BVN Verification | Nigeria | — |
-| Card BIN Lookup | Global | Any card with a valid BIN |

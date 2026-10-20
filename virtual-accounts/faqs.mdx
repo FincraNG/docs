@@ -1,0 +1,53 @@
+---
+title: "FAQs"
+description: "Common questions about Fincra virtual accounts."
+keywords: ["virtual account FAQ", "permanent account", "temporary account", "BVN", "merchant reference"]
+---
+
+## Getting an account
+
+<AccordionGroup>
+  <Accordion title="What's the difference between a permanent and a temporary account?">
+    A permanent account keeps the same details for as long as you use it, so it suits wallets, savings and repeat payments. A temporary account collects one payment and then expires, so it suits a single order or invoice. See [Permanent accounts](/virtual-accounts/permanent-accounts) and [Temporary accounts](/virtual-accounts/temporary-accounts).
+  </Accordion>
+  <Accordion title="Which currencies can I open accounts in?">
+    Local accounts in NGN, GHS, KES and TZS, and foreign currency accounts in USD, GBP, EUR and CAD. See [Supported countries and currencies](/virtual-accounts/supported-countries-and-currencies).
+  </Accordion>
+  <Accordion title="How long does it take to get an account?">
+    Local accounts are created straight away, and the account number comes back in the response. Foreign currency accounts are reviewed first, and Fincra notifies you when the account is ready.
+  </Accordion>
+  <Accordion title="Can I open USD or GBP accounts for individuals?">
+    No. USD and GBP accounts are for businesses only. EUR and CAD accounts are available to individuals and businesses.
+  </Accordion>
+  <Accordion title="Do I need a BVN for an NGN account?">
+    Yes, by default. Send the person's BVN, or a director's BVN for a business account. If you can't, send documents instead: set `bvnValidationOption` to `documents_required` and send the person's email, address and ID document.
+  </Accordion>
+  <Accordion title="Why is my foreign currency request rejected straight away?">
+    Foreign currency accounts must be enabled for your business before you can request them. Contact your account manager to turn them on.
+  </Accordion>
+</AccordionGroup>
+
+## Receiving money
+
+<AccordionGroup>
+  <Accordion title="How do I know when money arrives?">
+    Fincra sends a collection webhook with the amount, the payer and your reference. Set up your webhook URL before you go live. See [Webhooks](/developer-tools/webhooks/overview).
+  </Accordion>
+  <Accordion title="How do I match a payment to my customer?">
+    Send your own `merchantReference` when you request the account, such as your customer's ID. It comes back on every collection into that account. Each reference can be used once.
+  </Accordion>
+  <Accordion title="What happens if someone pays into an expired temporary account?">
+    An expired account no longer accepts payments. Show your customer the expiry time clearly, and create a new account if they miss it.
+  </Accordion>
+  <Accordion title="Where does the money go?">
+    Into your Fincra wallet in the same currency, minus Fincra's fee. From there you can pay out, convert or withdraw it.
+  </Accordion>
+</AccordionGroup>
+
+## Testing
+
+<AccordionGroup>
+  <Accordion title="How do I test virtual accounts in sandbox?">
+    Use BVN `22222222222` to open an NGN account. Then use [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection) to send a test payment into it. See [Sandbox](/developer-tools/sandbox).
+  </Accordion>
+</AccordionGroup>

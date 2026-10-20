@@ -4,7 +4,7 @@ sidebarTitle: "Drop-in Checkout"
 description: "Embed Fincra's payment modal directly into your page using the JavaScript SDK."
 ---
 
-The Drop-in Checkout embeds a Fincra payment modal directly on your page. Your customer never leaves your site — the modal appears as an overlay, they complete their payment, and control returns to your page.
+The Drop-in Checkout embeds a Fincra payment modal directly on your page. Your customer never leaves your site, the modal appears as an overlay, they complete their payment, and control returns to your page.
 
 **Best for:** Businesses that want to keep customers on their site throughout the payment experience without building a custom UI.
 
@@ -15,7 +15,7 @@ The Drop-in Checkout embeds a Fincra payment modal directly on your page. Your c
     Include the Fincra checkout script on your page.
   </Step>
   <Step title="Collect payment details">
-    Gather the amount, currency, and customer details — from a form or your database.
+    Gather the amount, currency, and customer details, from a form or your database.
   </Step>
   <Step title="Open the modal">
     Call `Fincra.initialize()` with the payment details. The modal opens on your page.
@@ -29,7 +29,7 @@ The Drop-in Checkout embeds a Fincra payment modal directly on your page. Your c
 </Steps>
 
 <Note>
-  Always verify the payment server-side after `onSuccess` fires. The callback confirms the customer completed the flow — not that funds have been confirmed.
+  Always verify the payment server-side after `onSuccess` fires. The callback confirms the customer completed the flow, not that funds have been confirmed.
 </Note>
 
 ## 1. Load the SDK
@@ -54,10 +54,10 @@ Fincra.initialize({
     email: "amara@example.com",
     phoneNumber: "08012345678",
   },
-  reference: "order-001",        // optional — auto-generated if not provided
+  reference: "order-001",        // optional, auto-generated if not provided
   feeBearer: "business",         // "business" or "customer"
   onSuccess: function (data) {
-    // Payment flow completed — verify server-side before delivering value
+    // Payment flow completed, verify server-side before delivering value
     console.log("Reference:", data.reference);
   },
   onClose: function () {
@@ -102,7 +102,7 @@ Available values per currency:
 
 | Currency | Available values                                      |
 | -------- | ----------------------------------------------------- |
-| NGN      | `card`, `bank_transfer`, `payattitude`, `palmpay`     |
+| NGN      | `card`, `bank_transfer`, `palmpay`                    |
 | KES      | `mobile_money`                                        |
 | GHS      | `mobile_money`                                        |
 | UGX      | `mobile_money`                                        |
@@ -138,7 +138,7 @@ Only deliver value when `status` is `success`.
 
 ## 4. Handle the webhook
 
-Fincra sends a `charge.successful` webhook when a payment is confirmed. Use this as your primary signal — it fires even if the customer closes their browser before `onSuccess` runs.
+Fincra sends a `charge.successful` webhook when a payment is confirmed. Use this as your primary signal, it fires even if the customer closes their browser before `onSuccess` runs.
 
 ```json
 {
@@ -164,7 +164,7 @@ Fincra sends a `charge.successful` webhook when a payment is confirmed. Use this
 }
 ```
 
-For full webhook setup and signature verification, see [Webhooks](/webhooks/overview).
+For full webhook setup and signature verification, see [Webhooks](/developer-tools/webhooks/overview).
 
 ## Full example
 
@@ -210,7 +210,7 @@ For full webhook setup and signature verification, see [Webhooks](/webhooks/over
 
 ## Sandbox testing
 
-To test in sandbox, use your sandbox public key. The modal will open in test mode and you can use Fincra's [test card and account numbers](/sandbox/testing) to simulate different payment outcomes.
+To test in sandbox, use your sandbox public key. The modal will open in test mode and you can use Fincra's [test card and account numbers](/developer-tools/sandbox) to simulate different payment outcomes.
 
 ## Hosted Payment Page vs Drop-in Checkout
 
@@ -231,10 +231,10 @@ To test in sandbox, use your sandbox public key. The modal will open in test mod
   <Card title="Direct Charge API" icon="code" href="/payments/direct-charge">
     Build a fully custom payment flow with your own UI.
   </Card>
-  <Card title="Webhooks" icon="bell" href="/webhooks/overview">
+  <Card title="Webhooks" icon="bell" href="/developer-tools/webhooks/overview">
     Set up and verify webhook notifications.
   </Card>
-  <Card title="Test Cards & Accounts" icon="flask" href="/sandbox/testing">
+  <Card title="Test Cards & Accounts" icon="flask" href="/developer-tools/sandbox">
     Test your integration with sandbox test values.
   </Card>
 </CardGroup>

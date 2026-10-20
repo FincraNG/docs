@@ -1,48 +1,272 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "palm",
-  "name": "Fincra Docs",
-  "fonts": {
-    "family": "Google Sans"
-  },
+  "theme": "aspen",
+  "name": "Fincra",
   "colors": {
-    "primary": "#7449FF",
-    "light": "#9B7DFF",
-    "dark": "#7449FF"
+    "primary": "#16A34A",
+    "light": "#07C983",
+    "dark": "#15803D"
   },
-  "favicon": "/favicon.png",
+  "logo": {
+    "light": "/logo/finc.svg",
+    "dark": "/logo/finc-dark.svg"
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Home",
+        "tab": "Documentation",
+        "pages": [
+          "index",
+          {
+            "group": "Quickstart",
+            "pages": [
+              "quickstart/create-a-sandbox-account",
+              "quickstart/send-your-first-api-request"
+            ]
+          },
+          {
+            "group": "Products",
+            "pages": [
+              "virtual-accounts",
+              "payments",
+              "payouts",
+              "fx-and-conversion",
+              "verification"
+            ]
+          },
+          "developer-tools",
+          "api-reference",
+          "changelog",
+          "support",
+          "glossary"
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "pages": [
+          "api/introduction",
+          "api/authentication",
+          "api/errors",
+          "api/data-types",
+          "api/pagination",
+          "api/idempotency",
+          "api/rate-limits",
+          "api/webhooks",
+          "api/versioning",
+          {
+            "group": "Business",
+            "openapi": {
+              "source": "api/specs/profile.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "GET /profile/business/me",
+              "GET /profile/merchants/me",
+              "PATCH /profile/business/{businessID}/settings",
+              "GET /profile/business"
+            ]
+          },
+          {
+            "group": "Identity Verification",
+            "openapi": {
+              "source": "api/specs/verification.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /core/accounts/resolve",
+              "POST /core/bvn-verification",
+              "GET /checkout/resolve/bin/{bin}"
+            ]
+          },
+          {
+            "group": "Payouts",
+            "openapi": {
+              "source": "api/specs/disbursements.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              {
+                "group": "Beneficiaries",
+                "openapi": {
+                  "source": "api/specs/beneficiaries.yaml",
+                  "directory": "api/payouts"
+                },
+                "pages": [
+                  "GET /profile/beneficiaries/business/{businessID}",
+                  "POST /profile/beneficiaries/business/{businessID}",
+                  "GET /profile/beneficiaries/business/{businessID}/{beneficiaryID}",
+                  "PATCH /profile/beneficiaries/business/{businessID}/{beneficiaryID}",
+                  "DELETE /profile/beneficiaries/business/{businessID}/{beneficiaryID}"
+                ]
+              },
+              "api/specs/reference-data.yaml GET /core/banks",
+              "POST /disbursements/payouts",
+              "GET /disbursements/payouts/reference/{reference}",
+              "GET /disbursements/payouts/customer-reference/{customerReference}",
+              "GET /disbursements/payouts",
+              "POST /disbursements/payouts/export",
+              "POST /disbursements/payouts/wallets",
+              "POST /disbursements/payouts/documents-upload"
+            ]
+          },
+          {
+            "group": "Quotes",
+            "openapi": {
+              "source": "api/specs/quotes.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /quotes/generate"
+            ]
+          },
+          {
+            "group": "Conversions",
+            "openapi": {
+              "source": "api/specs/conversions.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /conversions/initiate",
+              "GET /conversions/{id}",
+              "GET /conversions/reference/{reference}",
+              "GET /conversions/customer-reference/{customerReference}",
+              "GET /conversions"
+            ]
+          },
+          {
+            "group": "Virtual Accounts",
+            "openapi": {
+              "source": "api/specs/virtual-accounts.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /profile/virtual-accounts/requests",
+              "POST /profile/virtual-accounts/transfer",
+              "GET /profile/virtual-accounts",
+              "GET /profile/virtual-accounts/{id}"
+            ]
+          },
+          {
+            "group": "Wallets and Balances",
+            "openapi": {
+              "source": "api/specs/wallets.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "GET /wallets",
+              "GET /wallets/{walletID}",
+              "GET /wallets/logs",
+              "GET /wallets/logs/{id}",
+              "GET /wallets/logs/statement"
+            ]
+          },
+          {
+            "group": "Checkout payments",
+            "pages": [
+              "api/payments/overview",
+              "POST /checkout/payments",
+              "GET /checkout/payments",
+              "GET /checkout/payments/merchant-reference/{merchantReference}",
+              "GET /checkout/payments/available-methods"
+            ],
+            "openapi": {
+              "source": "api/specs/checkout.yaml",
+              "directory": "api/payments"
+            }
+          },
+          {
+            "group": "Direct charges",
+            "pages": [
+              "POST /checkout/charges",
+              "POST /checkout/charges/{id}/authorize",
+              "POST /checkout/charges/merchant-reference/{merchantReference}/authorize",
+              "POST /checkout/charges/{id}/resend-otp",
+              "GET /checkout/charges/{id}/verify",
+              "GET /checkout/charges/reference/{reference}",
+              "GET /checkout/charges/merchant-reference/{merchantReference}",
+              "POST /checkout/charges/{id}/capture",
+              "GET /checkout/data/mobile-money-operators"
+            ],
+            "openapi": {
+              "source": "api/specs/checkout.yaml",
+              "directory": "api/payments"
+            }
+          },
+          {
+            "group": "Collections",
+            "openapi": {
+              "source": "api/specs/collections.yaml",
+              "directory": "api/payments/transactions"
+            },
+            "pages": [
+              "GET /collections",
+              "GET /collections/get-all-by-date",
+              "POST /collections/export",
+              "GET /collections/{id}",
+              "GET /collections/reference/{reference}",
+              "GET /collections/merchant-reference/{merchantReference}",
+              "GET /collections/{id}/additional-information",
+              "PATCH /collections/{id}/additional-information"
+            ]
+          },
+          {
+            "group": "Refunds",
+            "openapi": {
+              "source": "api/specs/refunds.yaml",
+              "directory": "api/payments"
+            },
+            "pages": [
+              "POST /collections/refund",
+              "GET /collections/refund",
+              "GET /collections/refund/{reference}",
+              "POST /collections/refund/export"
+            ]
+          },
+          {
+            "group": "Chargebacks",
+            "openapi": {
+              "source": "api/specs/chargebacks.yaml",
+              "directory": "api/payments"
+            },
+            "pages": [
+              "GET /collections/chargebacks",
+              "GET /collections/chargebacks/{id}",
+              "PATCH /collections/chargebacks/{id}/accept",
+              "PATCH /collections/chargebacks/{id}/reject",
+              "POST /collections/chargebacks/export"
+            ]
+          },
+          {
+            "group": "Sandbox simulation",
+            "openapi": {
+              "source": "api/specs/sandbox.yaml",
+              "directory": "api"
+            },
+            "pages": [
+              "POST /collections/transfer/simulate"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Virtual Accounts",
         "groups": [
           {
-            "group": "Home",
+            "group": "Virtual Accounts",
             "pages": [
-              "index"
+              "virtual-accounts/overview",
+              "virtual-accounts/permanent-accounts",
+              "virtual-accounts/temporary-accounts",
+              "virtual-accounts/supported-countries-and-currencies"
             ]
           },
           {
-            "group": "Get Started",
+            "group": "Help",
             "pages": [
-              "get-started/create-your-account",
-              "get-started/complete-verification",
-              "get-started/explore-the-dashboard",
-              "get-started/go-live-checklist"
-            ]
-          },
-          {
-            "group": "Use Cases",
-            "pages": [
-              "use-cases/accept-payments",
-              "use-cases/send-payouts",
-              "use-cases/collect-via-virtual-accounts"
-            ]
-          },
-          {
-            "group": "Glossary",
-            "pages": [
-              "glossary"
+              "virtual-accounts/faqs"
             ]
           }
         ]
@@ -67,7 +291,7 @@
             ]
           },
           {
-            "group": "Payment Links",
+            "group": "Payment links",
             "pages": [
               "payments/payment-links",
               "payments/create-a-payment-link",
@@ -75,22 +299,24 @@
             ]
           },
           {
-            "group": "Direct Charge API",
+            "group": "Direct charge",
             "pages": [
               "payments/direct-charge",
               "payments/accept-a-payment"
             ]
           },
           {
-            "group": "Virtual Accounts",
+            "group": "Payment methods",
             "pages": [
-              "payments/virtual-accounts",
-              "payments/ngn-virtual-accounts",
-              "payments/multicurrency-virtual-accounts"
+              "payments/cards",
+              "payments/bank-transfer",
+              "payments/mobile-money",
+              "payments/palmpay",
+              "payments/eft"
             ]
           },
           {
-            "group": "Manage Payments",
+            "group": "Manage payments",
             "pages": [
               "payments/verify-a-payment",
               "payments/refunds",
@@ -100,26 +326,16 @@
             ]
           },
           {
-            "group": "Payment Methods",
+            "group": "Test and go live",
             "pages": [
-              "payments/cards",
-              "payments/bank-transfer",
-              "payments/mobile-money",
-              "payments/payattitude",
-              "payments/palmpay",
-              "payments/eft"
-            ]
-          },
-          {
-            "group": "Test and Go Live",
-            "pages": [
-              "payments/integration-checklist"
-            ]
-          },
-          {
-            "group": "Troubleshooting",
-            "pages": [
+              "payments/integration-checklist",
               "payments/error-codes"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "payments/faqs"
             ]
           }
         ]
@@ -131,36 +347,21 @@
             "group": "Payouts",
             "pages": [
               "payouts/overview",
-              {
-                "group": "How Fincra Payouts Work",
-                "root": "payouts/how-payouts-work",
-                "pages": [
-                  "payouts/currency-precision"
-                ]
-              },
-              {
-                "group": "Payout Coverage",
-                "root": "payouts/payout-coverage",
-                "pages": [
-                  "payouts/nigeria",
-                  "payouts/ghana",
-                  "payouts/kenya",
-                  "payouts/uganda",
-                  "payouts/zambia",
-                  "payouts/tanzania",
-                  "payouts/cameroon",
-                  "payouts/senegal",
-                  "payouts/south-africa",
-                  "payouts/egypt",
-                  "payouts/united-states",
-                  "payouts/united-kingdom",
-                  "payouts/eurozone"
-                ]
-              }
+              "payouts/how-payouts-work",
+              "payouts/requirements",
+              "payouts/currency-precision"
             ]
           },
           {
-            "group": "Transfer",
+            "group": "Payout methods",
+            "pages": [
+              "payouts/payout-coverage",
+              "payouts/bank-account",
+              "payouts/mobile-money"
+            ]
+          },
+          {
+            "group": "Send money",
             "pages": [
               "payouts/initiate-transfer",
               "payouts/wallet-transfers",
@@ -171,13 +372,14 @@
           {
             "group": "Beneficiaries",
             "pages": [
+              "payouts/beneficiaries",
               "payouts/create-beneficiaries",
               "payouts/retrieve-beneficiaries",
               "payouts/manage-beneficiaries"
             ]
           },
           {
-            "group": "Use Cases",
+            "group": "Use cases",
             "pages": [
               "payouts/remittance",
               "payouts/payroll",
@@ -186,79 +388,61 @@
             ]
           },
           {
-            "group": "Test and Go Live",
+            "group": "Test and go live",
             "pages": [
-              "payouts/integration-checklist"
-            ]
-          },
-          {
-            "group": "Troubleshooting",
-            "pages": [
+              "payouts/integration-checklist",
               "payouts/error-codes"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "Wallets",
-        "groups": [
+          },
           {
-            "group": "Wallets",
+            "group": "Help",
             "pages": [
-              "wallets/overview",
-              "wallets/manage-wallets",
-              "wallets/fund-your-wallet",
-              "wallets/balance-history",
-              "wallets/statement-of-account"
+              "payouts/faqs"
             ]
           }
         ]
       },
       {
-        "tab": "Currency Conversion",
+        "tab": "FX and Conversion",
         "groups": [
           {
-            "group": "Currency Conversion",
+            "group": "FX and Conversion",
             "pages": [
-              "conversion/overview",
-              "conversion/how-currency-conversion-works",
-              "conversion/supported-currency-pairs"
+              "fx-and-conversion/overview",
+              "fx-and-conversion/how-currency-conversion-works",
+              "fx-and-conversion/supported-currency-pairs"
             ]
           },
           {
-            "group": "Get Started",
+            "group": "Get started",
             "pages": [
-              "conversion/create-a-conversion",
-              {
-                "group": "Choose Your FX Solution",
-                "root": "conversion/choose-your-fx-solution",
-                "pages": [
-                  "conversion/quotes",
-                  "conversion/rates"
-                ]
-              }
+              "fx-and-conversion/create-a-conversion",
+              "fx-and-conversion/choose-your-fx-solution",
+              "fx-and-conversion/quotes",
+              "fx-and-conversion/rates"
             ]
           },
           {
-            "group": "Use Cases",
+            "group": "Use cases",
             "pages": [
-              "conversion/travel-and-hospitality",
-              "conversion/payroll",
-              "conversion/digital-marketplaces",
-              "conversion/international-trade-settlement",
-              "conversion/education-and-tuition-payments"
+              "fx-and-conversion/travel-and-hospitality",
+              "fx-and-conversion/payroll",
+              "fx-and-conversion/digital-marketplaces",
+              "fx-and-conversion/international-trade-settlement",
+              "fx-and-conversion/education-and-tuition-payments"
             ]
           },
           {
-            "group": "Troubleshooting",
+            "group": "Test and go live",
             "pages": [
-              "conversion/error-codes"
+              "fx-and-conversion/integration-checklist",
+              "fx-and-conversion/error-codes"
             ]
           },
           {
-            "group": "Test and Go Live",
+            "group": "Help",
             "pages": [
-              "conversion/integration-checklist"
+              "fx-and-conversion/faqs"
             ]
           }
         ]
@@ -289,7 +473,7 @@
             ]
           },
           {
-            "group": "Use Cases",
+            "group": "Use cases",
             "pages": [
               "direct-debit/loan-repayment",
               "direct-debit/insurance-premiums",
@@ -298,15 +482,21 @@
             ]
           },
           {
-            "group": "Troubleshooting",
+            "group": "Test and go live",
             "pages": [
+              "direct-debit/integration-checklist",
               "direct-debit/troubleshooting"
             ]
-          },
+          }
+        ]
+      },
+      {
+        "tab": "Issuing",
+        "groups": [
           {
-            "group": "Go Live",
+            "group": "Issuing",
             "pages": [
-              "direct-debit/integration-checklist"
+              "issuing/overview"
             ]
           }
         ]
@@ -315,180 +505,124 @@
         "tab": "Verification",
         "groups": [
           {
-            "group": "Verification",
+            "group": "Identity Verification",
             "pages": [
-              "verification/overview"
+              "verification/overview",
+              "verification/verify-a-beneficiary-account"
             ]
           },
           {
-            "group": "Account Number Verification",
-            "pages": [
-              {
-                "group": "Verify a Beneficiary Account",
-                "root": "verification/verify-a-beneficiary-account",
-                "pages": [
-                  "verification/nigeria",
-                  "verification/ghana"
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Customer Validation",
+            "group": "Identity",
             "pages": [
               "verification/verify-a-bvn"
             ]
           },
           {
-            "group": "Card BIN Lookup",
+            "group": "Cards",
             "pages": [
               "verification/resolve-a-card-bin"
             ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "verification/faqs"
+            ]
           }
         ]
       },
       {
-        "tab": "Developer Resources",
+        "tab": "Developer tools",
         "groups": [
           {
-            "group": "Developer Resources",
+            "group": "Developer tools",
             "pages": [
-              "developer-resources/overview",
-              {
-                "group": "API",
-                "root": "developer-resources/api",
-                "pages": [
-                  "developer-resources/postman-collection",
-                  "developer-resources/manage-api-keys",
-                  "developer-resources/rate-limits",
-                  "developer-resources/ip-whitelisting"
-                ]
-              },
-              {
-                "group": "Fincra SDKs",
-                "root": "developer-resources/sdks",
-                "pages": [
-                  "developer-resources/server-side-sdks",
-                  "developer-resources/mobile-sdks"
-                ]
-              }
+              "developer-tools/overview"
+            ]
+          },
+          {
+            "group": "API",
+            "pages": [
+              "developer-tools/api",
+              "developer-tools/manage-api-keys",
+              "developer-tools/ip-whitelisting",
+              "developer-tools/rate-limits",
+              "developer-tools/postman-collection"
             ]
           },
           {
             "group": "Webhooks",
             "pages": [
-              "webhooks/overview",
-              "webhooks/configure",
-              "webhooks/verify",
-              "webhooks/payload",
-              "webhooks/events",
-              "webhooks/troubleshooting"
+              "developer-tools/webhooks/overview",
+              "developer-tools/webhooks/configure",
+              "developer-tools/webhooks/verify",
+              "developer-tools/webhooks/payload",
+              "developer-tools/webhooks/events",
+              "developer-tools/webhooks/best-practices",
+              "developer-tools/webhooks/troubleshooting"
             ]
           },
           {
-            "group": "Sandbox Environment",
+            "group": "Test",
             "pages": [
-              "sandbox/overview",
-              "sandbox/testing"
+              "developer-tools/sandbox"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "Support",
-        "groups": [
-          {
-            "group": "Support",
-            "pages": [
-              "support"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Changelog",
-        "groups": [
-          {
-            "group": "Changelog",
-            "pages": [
-              "changelog"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "Payouts",
-            "openapi": "/api-reference/openapi/fincra-disbursements.yaml"
-          },
-          {
-            "group": "Payments",
-            "openapi": "/api-reference/openapi/fincra-collections.yaml"
-          },
-          {
-            "group": "Currency Conversion",
-            "openapi": "/api-reference/openapi/fincra-fx-conversions.yaml"
-          },
-          {
-            "group": "Verification & reference",
-            "openapi": "/api-reference/openapi/fincra-core.yaml"
-          },
-          {
-            "group": "Wallets",
-            "openapi": "/api-reference/openapi/fincra-wallets.yaml"
-          },
-          {
-            "group": "Virtual Accounts",
-            "openapi": "/api-reference/openapi/fincra-profile.yaml"
-          },
-          {
-            "group": "Checkout",
-            "openapi": "/api-reference/openapi/checkout-core.yaml"
-          },
-          {
-            "group": "Authentication",
-            "openapi": "/api-reference/openapi/fincra-auth.yaml"
-          },
-          {
-            "group": "Webhooks",
-            "openapi": "/api-reference/openapi/fincra-notifications.yaml"
-          },
-          {
-            "group": "Settlements",
-            "openapi": "/api-reference/openapi/settlements-service.yaml"
-          },
-          {
-            "group": "Cards",
-            "openapi": "/api-reference/openapi/fincra-card-issuing.yaml"
-          },
-          {
-            "group": "Direct Debit",
-            "openapi": "/api-reference/openapi/mandate-management.yaml"
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": []
+    ]
+  },
+  "redirects": [
+    {
+      "source": "/api/collections/list-collections",
+      "destination": "/api/payments/transactions/collections/list-collections",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-a-collection",
+      "destination": "/api/payments/transactions/collections/get-a-collection",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-a-collection-by-reference",
+      "destination": "/api/payments/transactions/collections/get-a-collection-by-reference",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-a-collection-by-your-reference",
+      "destination": "/api/payments/transactions/collections/get-a-collection-by-your-reference",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/get-requested-information",
+      "destination": "/api/payments/transactions/collections/get-requested-information",
+      "permanent": true
+    },
+    {
+      "source": "/api/collections/respond-to-requested-information",
+      "destination": "/api/payments/transactions/collections/respond-to-requested-information",
+      "permanent": true
     }
-  },
-  "logo": {
-    "light": "/logo/finc.svg",
-    "dark": "/logo/finc.svg"
-  },
+  ],
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "https://support.fincra.com"
+        "label": "API Reference",
+        "href": "/api/introduction"
+      },
+      {
+        "label": "Documentation",
+        "href": "/"
+      },
+      {
+        "label": "Log in",
+        "href": "https://app.fincra.com/auth/login"
       }
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.fincra.com"
+      "label": "Get started in sandbox",
+      "href": "https://app.fincra.com/auth/signup"
     }
   },
   "contextual": {
@@ -503,18 +637,14 @@
       "vscode"
     ]
   },
-  "integrations": {
-    "telemetry": {
-      "enabled": true
-    }
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/FincraHQ",
-      "youtube": "https://www.youtube.com/@fincraHQ",
-      "linkedin": "https://www.linkedin.com/company/fincrahq/posts/?feedView=all",
-      "instagram": "https://www.instagram.com/fincrahq/?hl=en",
-      "slack": "https://x.com/FincraHQ"
+  "api": {
+    "examples": {
+      "languages": [
+        "bash",
+        "node",
+        "python"
+      ],
+      "defaults": "required"
     }
   }
 }

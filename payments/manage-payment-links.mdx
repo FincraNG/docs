@@ -21,11 +21,11 @@ curl --request PATCH \
   }'
 ```
 
-Pass only the fields you want to update — all other fields remain unchanged.
+Pass only the fields you want to update, all other fields remain unchanged.
 
 ## Disable a payment link
 
-Disabling a payment link prevents new payments from being made on it. The link is not deleted — you can re-enable it later from your dashboard.
+Disabling a payment link prevents new payments from being made on it. The link is not deleted, you can re-enable it later from your dashboard.
 
 **Endpoint:** `PATCH /checkout-core/payment-links/:id`
 
@@ -61,4 +61,4 @@ Payments received through a payment link appear in your Fincra dashboard under *
 
 You can also listen for the `charge.successful` webhook event to receive real-time notifications when a customer pays through your link. The webhook payload includes the payment link `reference` so you can identify which link triggered the payment.
 
-For full webhook details, see [Webhooks](/webhooks/overview).
+For full webhook details, see [Webhooks](/developer-tools/webhooks/overview).

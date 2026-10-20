@@ -1,0 +1,77 @@
+---
+title: "Create a sandbox account"
+description: "Sign up to get access to the Fincra sandbox."
+keywords: ["sign up", "sandbox", "account", "API keys", "secret key"]
+---
+
+By the end of this page, you will have a Fincra sandbox account and a sandbox secret key. You can use sandbox straight after you sign up. You don't need to complete business onboarding first.
+
+## Sign up
+
+<Steps>
+  <Step title="Open the sign-up page">
+    Go to [app.fincra.com/auth/signup](https://app.fincra.com/auth/signup).
+  </Step>
+  <Step title="Fill in the form">
+    The form asks for these details:
+
+    | Field | Notes |
+    |---|---|
+    | Full Name | |
+    | Registered Business Name | |
+    | Business Email | Any email address you can receive mail at |
+    | Phone Number | With the country code |
+    | Country | |
+    | Password | |
+    | Business Type | |
+    | Monthly Transaction Volume | |
+    | Referral Code | Optional |
+    | How did you hear about Fincra | |
+    | Incorporation Number | |
+
+    Accept the terms, then select **Create Account**.
+  </Step>
+  <Step title="Open the dashboard">
+    Fincra opens your dashboard on the **Onboarding** page. Business onboarding is only needed for production, so you can skip it for now.
+  </Step>
+</Steps>
+
+## Sandbox and production
+
+Your account has two separate environments: sandbox and production. Each one has its own Business ID, secret key, public key and webhook key. Switch between them with the **Test Mode** toggle at the top of the dashboard.
+
+| Environment | Base URL |
+|---|---|
+| Sandbox | `https://sandboxapi.fincra.com` |
+| Production | `https://api.fincra.com` |
+
+Use sandbox values with the sandbox base URL. Use production values with the production base URL.
+
+## Generate your API keys
+
+<Steps>
+  <Step title="Open your account settings">
+    Select the profile menu at the top right, then **My Account**. Fincra opens **Account Settings**.
+  </Step>
+  <Step title="Generate your keys">
+    Select **API Keys & Webhooks**, then **Generate API Keys**. Fincra warns that you can view your keys only once. Select **View Keys**.
+  </Step>
+  <Step title="Confirm with the code from your email">
+    Fincra emails a 6-digit code to the account admin. Enter the code, then select **Verify**.
+  </Step>
+  <Step title="Copy and store your secret key">
+    Select **Copy Secret Key** and store the key in a secure place, such as an environment variable. Then select **I'm Done Viewing Keys**.
+  </Step>
+</Steps>
+
+<Warning>
+  Fincra shows your secret key only once. If you lose it, you must generate a new key. Generating a new key stops the old key immediately, so update every system that uses it first.
+</Warning>
+
+The same page shows your public key and webhook key. You don't need them for this quickstart.
+
+## Next step
+
+<Card title="Send your first API request" href="/quickstart/send-your-first-api-request">
+  Send an authenticated request to confirm your key works.
+</Card>

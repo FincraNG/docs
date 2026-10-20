@@ -4,20 +4,16 @@ sidebarTitle: "Insurance Premiums"
 description: "Collect insurance premium payments automatically to prevent policy lapses and improve retention."
 ---
 
-Insurance companies need consistent premium collection to keep policies active. When customers miss payments, policies lapse — leading to coverage gaps for the customer and lost revenue for the insurer. Direct debit automates premium collection so payments happen on time without customer intervention.
+Insurance companies need consistent premium collection to keep policies active. When customers miss payments, policies lapse, leading to coverage gaps for the customer and lost revenue for the insurer. Direct debit automates premium collection so payments happen on time without customer intervention.
 
 ## How it works
 
-<Note>
-  **Design team:** Flow diagram needed here — visual showing: Policy issued → Mandate created for premium amount and policy term → Policyholder activates with ₦50 → Insurer's system triggers periodic debits → Funds settle → Policy stays active.
-</Note>
-
-1. **Issue the policy** — Onboard the customer and issue their insurance policy.
-2. **Create a mandate** — Call the [Create Mandate API](/direct-debit/create-a-mandate) with the policyholder's bank details. Set the `amount` to the premium amount, and the date range to match the policy term.
-3. **Policyholder activates** — The customer completes the ₦50 token payment to authorize the mandate.
-4. **Schedule collections** — Set up your system to call [Initiate Debit](/direct-debit/collect-a-payment) on each premium due date (monthly, quarterly, or as agreed).
-5. **Handle results** — Listen for webhooks to confirm payment or flag failures for follow-up.
-6. **Renew or close** — When the policy term (and mandate `endDate`) expires, create a new mandate if the customer renews.
+1. **Issue the policy**, Onboard the customer and issue their insurance policy.
+2. **Create a mandate**, Call the [Create Mandate API](/direct-debit/create-a-mandate) with the policyholder's bank details. Set the `amount` to the premium amount, and the date range to match the policy term.
+3. **Policyholder activates**, The customer completes the ₦50 token payment to authorize the mandate.
+4. **Schedule collections**, Set up your system to call [Initiate Debit](/direct-debit/collect-a-payment) on each premium due date (monthly, quarterly, or as agreed).
+5. **Handle results**, Listen for webhooks to confirm payment or flag failures for follow-up.
+6. **Renew or close**, When the policy term (and mandate `endDate`) expires, create a new mandate if the customer renews.
 
 ## Example
 
@@ -25,7 +21,7 @@ Insurance companies need consistent premium collection to keep policies active. 
 Policy details:
 - Type: Health insurance
 - Monthly premium: ₦15,000
-- Policy term: 1 year (April 2026 – March 2027)
+- Policy term: 1 year (April 2026  to  March 2027)
 
 Mandate setup:
 - amount: 15000
@@ -40,10 +36,10 @@ Collection schedule:
 
 ## Why this matters
 
-- **Prevent policy lapses** — Automated collection ensures premiums are paid on time, keeping policies active.
-- **Improve retention** — Customers are less likely to churn when payments are automated — no missed deadlines, no manual transfers.
-- **Reduce admin overhead** — No chasing policyholders for overdue premiums.
-- **Scale operations** — Collect from thousands of policyholders with the same API call, regardless of portfolio size.
+- **Prevent policy lapses**, Automated collection ensures premiums are paid on time, keeping policies active.
+- **Improve retention**, Customers are less likely to churn when payments are automated, no missed deadlines, no manual transfers.
+- **Reduce admin overhead**, No chasing policyholders for overdue premiums.
+- **Scale operations**, Collect from thousands of policyholders with the same API call, regardless of portfolio size.
 
 <Card title="Create a Mandate" icon="file-signature" href="/direct-debit/create-a-mandate">
   Follow the step-by-step guide to set up premium collection for your policyholders.

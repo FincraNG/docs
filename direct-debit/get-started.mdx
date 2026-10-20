@@ -10,10 +10,10 @@ This guide walks you through what you need before creating your first direct deb
 
 Before you can use Direct Debit, ensure you have:
 
-- **Fincra account** — [Create an account](https://dashboard.fincra.com) if you don't have one.
-- **KYC verification** — Complete your business verification. See [Complete Verification](/get-started/complete-verification).
-- **API key** — Generate your production API key from the dashboard. See [Manage API Keys](/developer-resources/manage-api-keys).
-- **Webhook URL** — Configure a webhook endpoint to receive `direct_debit.success` and `direct_debit.failed` events. See [Configure Webhooks](/webhooks/configure).
+- **Fincra account**, [Create an account](https://dashboard.fincra.com) if you don't have one.
+- **KYC verification**, Complete your business verification. See [Complete Verification](/quickstart/create-a-sandbox-account).
+- **API key**, Generate your production API key from the dashboard. See [Manage API Keys](/developer-tools/manage-api-keys).
+- **Webhook URL**, Configure a webhook endpoint to receive `direct_debit.success` and `direct_debit.failed` events. See [Configure Webhooks](/developer-tools/webhooks/configure).
 
 <Warning>
   Direct Debit does not have a sandbox environment. All testing and integration happens in production. See the [Integration Checklist](/direct-debit/integration-checklist) for production testing guidance.
@@ -48,18 +48,18 @@ Decide the terms of the mandate:
 |---|---|
 | **Amount** | How much to debit per collection (in NGN) |
 | **Start date** | When the mandate becomes effective |
-| **End date** | When the mandate expires — debits after this date will fail |
+| **End date** | When the mandate expires, debits after this date will fail |
 | **Description** | A human-readable label for the mandate (e.g., "Monthly loan repayment") |
 
 ## Step 4: Build your integration
 
 With your prerequisites in place, you're ready to integrate:
 
-1. **Create a mandate** — Call the Create Mandate API with the customer's details and mandate parameters. See [Create a Mandate](/direct-debit/create-a-mandate).
-2. **Handle activation** — Display the `responseDescription` from the API response to your customer so they can complete the ₦50 token payment.
-3. **Monitor mandate status** — Poll the [Manage Mandates](/direct-debit/manage-mandates) endpoint or wait for the status to change to `approved`.
-4. **Collect payments** — Once approved, initiate debits using the [Collect a Payment](/direct-debit/collect-a-payment) endpoint.
-5. **Handle webhooks** — Process `direct_debit.success` and `direct_debit.failed` events to update your system.
+1. **Create a mandate**, Call the Create Mandate API with the customer's details and mandate parameters. See [Create a Mandate](/direct-debit/create-a-mandate).
+2. **Handle activation**, Display the `responseDescription` from the API response to your customer so they can complete the ₦50 token payment.
+3. **Monitor mandate status**, Poll the [Manage Mandates](/direct-debit/manage-mandates) endpoint or wait for the status to change to `approved`.
+4. **Collect payments**, Once approved, initiate debits using the [Collect a Payment](/direct-debit/collect-a-payment) endpoint.
+5. **Handle webhooks**, Process `direct_debit.success` and `direct_debit.failed` events to update your system.
 
 ## Step 5: Test in production
 

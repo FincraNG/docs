@@ -1,0 +1,41 @@
+---
+title: "Webhooks"
+description: "Get notified when something happens in your Fincra account."
+keywords: ["webhooks", "events", "signature", "retries", "callback"]
+---
+
+Fincra sends a webhook to your server when something happens in your account, such as a payout succeeding. Use webhooks to update your system instead of checking the status of every transaction.
+
+## Turn on webhooks
+
+Webhooks are off by default. Turn them on in each environment:
+
+1. In the dashboard, open **My Account** > **API Keys & Webhooks**.
+2. Enter your webhook URL and turn webhooks on.
+3. Turn on **Auto-retry failed webhooks** so you don't miss events.
+
+## Verify the signature
+
+Every webhook includes a `signature` header. Check it before you trust the webhook, so you know it came from Fincra.
+
+1. Take the `event` and `data` fields from the webhook body.
+2. Create an HMAC SHA-512 hash of them as JSON, using your webhook key.
+3. Compare the hex result with the `signature` header. If they don't match, ignore the webhook.
+
+## Retries
+
+With auto-retry on, Fincra retries a webhook your server didn't accept up to 5 times:
+
+| Retry | Wait after the previous attempt |
+|---|---|
+| 1 | 5 minutes |
+| 2 | 30 minutes |
+| 3 | 2 hours |
+| 4 | 6 hours |
+| 5 | 24 hours |
+
+Fincra waits up to 10 seconds for your server to respond. Respond with a `2xx` code quickly, then do any slow work afterwards.
+
+## Handle duplicates
+
+A retried webhook has the same event ID as the original. Record the IDs you've processed, and skip any you've seen before.

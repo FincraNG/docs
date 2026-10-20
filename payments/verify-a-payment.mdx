@@ -4,15 +4,15 @@ sidebarTitle: "Verify a Payment"
 description: "Confirm the status of a payment before delivering your product or service."
 ---
 
-Always verify a payment server-side before delivering value to your customer. Fincra provides three endpoints for verifying a payment — use whichever fits your flow.
+Always verify a payment server-side before delivering value to your customer. Fincra provides three endpoints for verifying a payment, use whichever fits your flow.
 
-These endpoints work across all payment types: [Hosted Payment Page](/payments/hosted-payment-page), [Drop-in Checkout](/payments/drop-in-checkout), [Direct Charge API](/payments/accept-a-payment), and [Virtual Accounts](/payments/virtual-accounts).
+These endpoints work across all payment types: [Hosted Payment Page](/payments/hosted-payment-page), [Drop-in Checkout](/payments/drop-in-checkout), [Direct Charge API](/payments/accept-a-payment), and [Virtual Accounts](/virtual-accounts/overview).
 
 ## Verify endpoints
 
 <Tabs>
   <Tab title="By Fincra reference">
-    Use this when you have Fincra's internal reference — returned in the checkout response as `reference` or `payCode`.
+    Use this when you have Fincra's internal reference, returned in the checkout response as `reference` or `payCode`.
 
     **Endpoint:** `GET /checkout-core/charges/reference/:reference`
 
@@ -23,7 +23,7 @@ These endpoints work across all payment types: [Hosted Payment Page](/payments/h
     ```
   </Tab>
   <Tab title="By merchant reference">
-    Use this when you have your own reference — the one you passed when creating the payment.
+    Use this when you have your own reference, the one you passed when creating the payment.
 
     **Endpoint:** `GET /checkout-core/charges/merchant-reference/:merchantReference`
 
@@ -45,7 +45,7 @@ These endpoints work across all payment types: [Hosted Payment Page](/payments/h
     ```
 
     <Note>
-      The charge `id` is the numeric ID returned in the payment response or webhook payload — not the reference string.
+      The charge `id` is the numeric ID returned in the payment response or webhook payload, not the reference string.
     </Note>
   </Tab>
 </Tabs>
@@ -72,6 +72,6 @@ These endpoints work across all payment types: [Hosted Payment Page](/payments/h
 
 - **Never rely solely on the redirect or `onSuccess` callback** to confirm payment. Always verify server-side.
 - **Listen for webhooks** as your primary signal. The `charge.successful` event fires even if the customer closes their browser before being redirected back.
-- **Poll with care.** If you're polling a pending charge, use exponential backoff to avoid hitting rate limits. See [Rate Limits](/developer-resources/rate-limits).
+- **Poll with care.** If you're polling a pending charge, use exponential backoff to avoid hitting rate limits. See [Rate Limits](/developer-tools/rate-limits).
 
-For full webhook details, see [Webhooks](/webhooks/overview).
+For full webhook details, see [Webhooks](/developer-tools/webhooks/overview).

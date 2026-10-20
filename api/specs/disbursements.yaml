@@ -1,0 +1,1125 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Payouts"
+  version: "1.0"
+  description: >
+    Send payouts to bank accounts and mobile money wallets, transfer to other
+    Fincra wallets, upload payout documents and check payout status. Captured
+    from fincra-disbursements. During the code freeze this file lives in the
+    docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Payouts
+    description: Send money from your Fincra balance.
+paths:
+  /disbursements/payouts:
+    post:
+      operationId: createPayout
+      summary: Create a payout
+      description: >
+        Sends money from your Fincra balance to a bank account or mobile money
+        wallet. Fincra accepts each `customerReference` once for your business,
+        so you can safely retry this request with the same reference.
+      tags: [Payouts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/BankAccountPayout"
+                - $ref: "#/components/schemas/MobileMoneyPayout"
+              discriminator:
+                propertyName: paymentDestination
+                mapping:
+                  bank_account: "#/components/schemas/BankAccountPayout"
+                  mobile_money_wallet: "#/components/schemas/MobileMoneyPayout"
+            examples:
+              "NGN to NGN, bank account":
+                summary: NGN to NGN, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: NGN
+                  amount: 50000
+                  customerReference: payout-ngn-ngn-bank
+                  paymentDestination: bank_account
+                  beneficiary:
+                    type: individual
+                    firstName: Grace
+                    lastName: Okoro
+                    accountHolderName: Grace Okoro
+                    accountNumber: "0987654321"
+                    bankCode: "305"
+                    country: NG
+              "NGN to GHS, bank account":
+                summary: NGN to GHS, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: GHS
+                  amount: 50000
+                  customerReference: payout-ngn-ghs-bank
+                  paymentDestination: bank_account
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  beneficiary:
+                    type: corporate
+                    accountHolderName: Ecobank Ghana Test
+                    accountNumber: "4005006007"
+                    bankCode: GH130100
+                    country: GH
+              "NGN to GHS, mobile money":
+                summary: NGN to GHS, mobile money
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: GHS
+                  amount: 50000
+                  customerReference: payout-ngn-ghs-mobile-money
+                  paymentDestination: mobile_money_wallet
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  beneficiary:
+                    type: individual
+                    firstName: Ama
+                    lastName: Boateng
+                    accountNumber: "233541234567"
+                    mobileMoneyCode: AIRTEL
+                    country: GH
+              "NGN to KES, bank account":
+                summary: NGN to KES, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: KES
+                  amount: 50000
+                  customerReference: payout-ngn-kes-bank
+                  paymentDestination: bank_account
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  beneficiary:
+                    type: corporate
+                    accountHolderName: KCB Test Account
+                    accountNumber: "1000012345"
+                    bankCode: "01"
+                    bankSwiftCode: KCBLKENX
+                    bankName: Kenya Commercial Bank Limited
+                    country: KE
+              "NGN to KES, mobile money":
+                summary: NGN to KES, mobile money
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: KES
+                  amount: 50000
+                  customerReference: payout-ngn-kes-mobile-money
+                  paymentDestination: mobile_money_wallet
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  beneficiary:
+                    type: individual
+                    firstName: Mary
+                    lastName: Atieno
+                    accountNumber: "254731234567"
+                    mobileMoneyCode: AIRTEL
+                    country: KE
+              "NGN to USD, bank account":
+                summary: NGN to USD, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: USD
+                  amount: 50000
+                  customerReference: payout-ngn-usd-bank
+                  paymentDestination: bank_account
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  paymentScheme: fed_wire
+                  customerName: Tumaini Moyo
+                  files: https://example.com/invoice.pdf
+                  beneficiary:
+                    type: corporate
+                    accountHolderName: John Doe USD Test
+                    accountNumber: "123456789"
+                    bankCode: "021000021"
+                    bankSwiftCode: CHASUS33
+                    bankName: Chase Bank
+                    country: US
+                    address:
+                      country: US
+                      zip: "10017"
+                      city: New York
+                      street: 383 Madison Avenue
+              "NGN to EUR, bank account":
+                summary: NGN to EUR, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: EUR
+                  amount: 50000
+                  customerReference: payout-ngn-eur-bank
+                  paymentDestination: bank_account
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  paymentScheme: sepa
+                  beneficiary:
+                    type: corporate
+                    accountHolderName: Jane Smith EUR Test
+                    accountNumber: DE89370400440532013000
+                    bankSwiftCode: COBADEFF
+                    bankName: Commerzbank
+                    country: DE
+              "NGN to GBP, bank account":
+                summary: NGN to GBP, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: NGN
+                  destinationCurrency: GBP
+                  amount: 50000
+                  customerReference: payout-ngn-gbp-bank
+                  paymentDestination: bank_account
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  paymentScheme: fps
+                  beneficiary:
+                    type: corporate
+                    accountHolderName: John Doe GBP Test
+                    accountNumber: GB29NWBK60161331926819
+                    bankSwiftCode: NWBKGB2L
+                    bankName: NatWest Bank
+                    country: GB
+              "GHS to GHS, mobile money":
+                summary: GHS to GHS, mobile money
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: GHS
+                  destinationCurrency: GHS
+                  amount: 500
+                  customerReference: payout-ghs-ghs-mobile-money
+                  paymentDestination: mobile_money_wallet
+                  beneficiary:
+                    type: individual
+                    firstName: Ama
+                    lastName: Boateng
+                    accountNumber: "233541234567"
+                    mobileMoneyCode: AIRTEL
+                    country: GH
+              "GHS to NGN, bank account":
+                summary: GHS to NGN, bank account
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: GHS
+                  destinationCurrency: NGN
+                  amount: 500
+                  customerReference: payout-ghs-ngn-bank
+                  paymentDestination: bank_account
+                  quoteReference: QUOTE_REFERENCE_FROM_GET_A_QUOTE
+                  beneficiary:
+                    type: individual
+                    firstName: Grace
+                    lastName: Okoro
+                    accountHolderName: Grace Okoro
+                    accountNumber: "0987654321"
+                    bankCode: "305"
+                    country: NG
+              "KES to KES, mobile money":
+                summary: KES to KES, mobile money
+                value:
+                  business: 64f1c2a9e4b0a1b2c3d4e5f6
+                  sourceCurrency: KES
+                  destinationCurrency: KES
+                  amount: 1000
+                  customerReference: payout-kes-kes-mobile-money
+                  paymentDestination: mobile_money_wallet
+                  beneficiary:
+                    type: individual
+                    firstName: Mary
+                    lastName: Atieno
+                    accountNumber: "254731234567"
+                    mobileMoneyCode: AIRTEL
+                    country: KE
+      responses:
+        "200":
+          description: Fincra accepted the payout. Track the final status with a webhook or by fetching the payout.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    $ref: "#/components/schemas/PayoutCreated"
+              example:
+                success: true
+                message: Payout initiated successfully.
+                data:
+                  id: 1024
+                  reference: a1b2c3d4e5f6
+                  customerReference: payout-0001
+                  status: processing
+                  isDocumentRequired: false
+                  documentsRequired: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: The request failed validation, or the reference was already used.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Cannot continue, Duplicate Customer Reference Passed
+                errorType: DUPLICATE_CUSTOMER_REFERENCE
+    get:
+      operationId: listPayouts
+      summary: List payouts
+      description: Returns your payouts, newest first, one page at a time.
+      tags: [Payouts]
+      parameters:
+        - name: business
+          in: query
+          required: true
+          description: Your Business ID.
+          schema:
+            type: string
+            minLength: 24
+            maxLength: 24
+        - name: page
+          in: query
+          description: The page number to return, starting at 1.
+          schema:
+            type: integer
+            default: 1
+        - name: perPage
+          in: query
+          description: How many payouts to return on each page.
+          schema:
+            type: integer
+            default: 10
+        - name: cursor
+          in: query
+          description: The `nextCursor` from the previous page, to get the next page.
+          schema:
+            type: integer
+        - name: status
+          in: query
+          description: Only return payouts with these statuses.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/PayoutStatus"
+        - name: sourceCurrency
+          in: query
+          description: Only return payouts sent from this currency.
+          schema:
+            type: string
+        - name: destinationCurrency
+          in: query
+          description: Only return payouts sent in this currency.
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          description: Only return payouts created on or after this date.
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          description: Only return payouts created on or before this date.
+          schema:
+            type: string
+            format: date
+        - name: merchantReference
+          in: query
+          description: Only return the payout with this `customerReference`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of payouts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: A short description of the result.
+                  data:
+                    type: object
+                    description: The page of payouts.
+                    properties:
+                      results:
+                        type: array
+                        description: The payouts on this page.
+                        items:
+                          type: object
+                      total:
+                        type: integer
+                        description: How many payouts match your filters in total.
+                      nextCursor:
+                        type: [integer, "null"]
+                        description: Send this as `cursor` to get the next page. `null` on the last page.
+              example:
+                success: true
+                message: Payouts fetched successfully
+                data:
+                  results: []
+                  total: 0
+                  nextCursor: null
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /disbursements/payouts/reference/{reference}:
+    get:
+      operationId: getPayoutByReference
+      summary: Get a payout
+      description: Returns a payout by the reference Fincra gave it.
+      tags: [Payouts]
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The payout reference Fincra returned when you created the payout.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The payout.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PayoutNotFound"
+  /disbursements/payouts/customer-reference/{customerReference}:
+    get:
+      operationId: getPayoutByCustomerReference
+      summary: Get a payout by your reference
+      description: >
+        Returns a payout by the `customerReference` you sent. Use it after a
+        timeout or a duplicate reference error to find the original payout.
+      tags: [Payouts]
+      parameters:
+        - name: customerReference
+          in: path
+          required: true
+          description: The `customerReference` you sent when you created the payout.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The payout.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/PayoutNotFound"
+  /disbursements/payouts/export:
+    post:
+      operationId: exportPayouts
+      summary: Export payouts
+      description: |
+        Creates a CSV, Excel or PDF file of your payouts and returns a link to download it. Use it for reconciliation and reporting. If you send no dates, the file covers the last 7 days.
+
+        | Payouts that match | What Fincra does |
+        | --- | --- |
+        | Up to 5,000 | Returns the file's `url` in the response |
+        | More than 5,000 | Prepares the file in the background and emails a download link to your account email. The response only confirms the export is queued |
+        | More than 500,000 | Doesn't create a file. Narrow the dates or filters and try again |
+
+        The file has one row per payout, with these columns: `id`, `transactionDate` (West Africa Time), `reference`, `customerReference`, `amountPaid`, `amountReceived`, `sourceCurrency`, `destinationCurrency`, `sourceFee`, `destinationFee`, `beneficiaryName`, `beneficiaryAccountNumber`, `beneficiaryType`, `bankCode`, `paymentDestination`, `paymentScheme`, `status`, `balanceBefore`, `balanceAfter`, `walletId`, `traceId`, `description`, `valuedAt`, `message`, `requiresApproval`, `approvalStatus`, `additionalInfo`, `initiatedBy`, `stampDutySourceAmount` and `stampDutyDestinationAmount`.
+      tags: [Payouts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business, format]
+              properties:
+                business:
+                  type: string
+                  description: Your Business ID.
+                  example: YOUR_BUSINESS_ID
+                format:
+                  type: string
+                  enum: [csv, excel, pdf]
+                  description: The file format. `excel` creates an .xlsx file.
+                  example: csv
+                dateFrom:
+                  type: string
+                  format: date
+                  description: Include payouts created on or after this date, in YYYY-MM-DD format. Defaults to 7 days ago.
+                  example: "2026-10-01"
+                dateTo:
+                  type: string
+                  format: date
+                  description: Include payouts created on or before this date, in YYYY-MM-DD format. Defaults to today.
+                  example: "2026-10-09"
+                valuedDateFrom:
+                  type: string
+                  format: date
+                  description: Include payouts valued on or after this date, in YYYY-MM-DD format.
+                valuedDateTo:
+                  type: string
+                  format: date
+                  description: Include payouts valued on or before this date, in YYYY-MM-DD format.
+                status:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PayoutStatus"
+                  description: Include only payouts in these statuses.
+                sourceCurrency:
+                  type: string
+                  description: Include only payouts debited in this currency, such as `NGN`.
+                destinationCurrency:
+                  type: string
+                  description: Include only payouts received in this currency, such as `KES`.
+                amountSent:
+                  type: number
+                  description: Include only payouts for exactly this source amount.
+                amountReceived:
+                  type: number
+                  description: Include only payouts where the beneficiary received exactly this amount.
+                merchantReference:
+                  type: string
+                  description: Include only the payout with this `customerReference`.
+                searchQuery:
+                  type: string
+                  description: Include only payouts whose beneficiary account number, `reference` or `customerReference` exactly matches this value.
+      responses:
+        "200":
+          description: >
+            Fincra created the file, or queued it for email when more than
+            5,000 payouts match. Check `url`: it is only present when the file
+            is ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  data:
+                    type: object
+                    required: [message]
+                    properties:
+                      message:
+                        type: string
+                        description: >
+                          `Payouts exported successfully` when the file is ready,
+                          or a message saying the export is queued or too large.
+                      name:
+                        type: string
+                        description: The file name. Only present when the file is ready.
+                      url:
+                        type: string
+                        format: uri
+                        description: The link to download the file. Only present when the file is ready.
+              examples:
+                "File ready":
+                  summary: File ready
+                  value:
+                    success: true
+                    data:
+                      message: Payouts exported successfully
+                      name: payout_reports0.7220675179149356.csv
+                      url: https://reviewtestbucket.s3.amazonaws.com/payout_reports0.7220675179149356.csv
+                "Queued for email":
+                  summary: Queued for email
+                  value:
+                    success: true
+                    data:
+                      message: Export queued. Kindly check your email for more details
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No payouts match your dates and filters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Cannot export empty data
+                errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: A field is missing or in the wrong format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Error occurred during payload validation. format is required
+                errorType: VALIDATION_FAILED
+  /disbursements/payouts/wallets:
+    post:
+      operationId: payoutToWallet
+      summary: Transfer to a Fincra wallet
+      description: Sends money from your balance to another Fincra wallet, using its wallet number.
+      tags: [Payouts]
+      parameters:
+        - $ref: "#/components/parameters/Signature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business, beneficiaryWalletNumber, amount, customerReference]
+              properties:
+                business:
+                  type: string
+                  minLength: 24
+                  maxLength: 24
+                  description: Your Business ID.
+                beneficiaryWalletNumber:
+                  type: integer
+                  minimum: 0
+                  description: The wallet number of the Fincra wallet you're sending to.
+                amount:
+                  type: number
+                  minimum: 0
+                  description: The amount to send, in the currency's major unit.
+                description:
+                  type: string
+                  description: A note about the transfer.
+                customerReference:
+                  type: string
+                  description: Your unique reference for this transfer. Fincra accepts each reference once.
+            example:
+              business: 64f1c2a9e4b0a1b2c3d4e5f6
+              beneficiaryWalletNumber: 1000123456
+              amount: 50000
+              description: Wallet transfer
+              customerReference: wallet-0001
+      responses:
+        "200":
+          description: Fincra accepted the transfer.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: The request failed validation, or the reference was already used.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /disbursements/payouts/documents-upload:
+    post:
+      operationId: uploadPayoutDocument
+      summary: Upload a payout document
+      description: >
+        Uploads a supporting document for a payout that needs one. When a
+        payout's `isDocumentRequired` is `true`, Fincra holds it until you
+        upload every document type in its `documentsRequired`, one document
+        per request. When the last one arrives, the payout moves to
+        `processing`.
+      tags: [Payouts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [reference, type, name, file]
+              properties:
+                reference:
+                  type: string
+                  description: Fincra's `reference` for the payout, not your `customerReference`.
+                  example: a1b2c3d4e5f6
+                type:
+                  $ref: "#/components/schemas/PayoutDocumentType"
+                name:
+                  type: string
+                  description: A name for the document, such as the invoice number.
+                  example: Invoice INV-1024
+                file:
+                  type: string
+                  format: binary
+                  description: The document, as a PDF, JPG, JPEG or PNG file of up to 10 MB.
+      responses:
+        "200":
+          description: Fincra attached the document to the payout.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: Always `true` when Fincra attached the document.
+                  message:
+                    type: string
+                    description: Always `Transaction document uploaded successfully`.
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        description: Fincra's numeric ID for the payout.
+                      reference:
+                        type: string
+                        description: Fincra's reference for the payout.
+                      customerReference:
+                        type: string
+                        description: Your reference for the payout.
+                      status:
+                        $ref: "#/components/schemas/PayoutStatus"
+                      isDocumentUploaded:
+                        type: boolean
+                        description: >
+                          `true` when you have uploaded every document in
+                          `documentsRequired` and the payout has moved to
+                          `processing`. `false` while documents are still
+                          missing.
+              examples:
+                "Last document uploaded":
+                  summary: Last document uploaded
+                  value:
+                    success: true
+                    message: Transaction document uploaded successfully
+                    data:
+                      id: 1024
+                      reference: a1b2c3d4e5f6
+                      customerReference: payout-0001
+                      status: processing
+                      isDocumentUploaded: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: >
+            The file is larger than 10 MB. This response is plain text, not
+            JSON: `File size limit exceeded.`
+        "422":
+          description: >
+            Fincra couldn't attach the document. Every failure here has
+            `errorType` set to `UNPROCESSABLE_ENTITY`, except a missing or
+            invalid field, which has `VALIDATION_FAILED`. Read `error` to see
+            what went wrong.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                "Payout not found":
+                  summary: Payout not found
+                  value:
+                    success: false
+                    error: Payout reference not found
+                    errorType: UNPROCESSABLE_ENTITY
+                "Document not required":
+                  summary: Document not required
+                  value:
+                    success: false
+                    error: Document not required for this payout
+                    errorType: UNPROCESSABLE_ENTITY
+                "Wrong document type":
+                  summary: Wrong document type
+                  value:
+                    success: false
+                    error: "Document type 'invoice' is not required for this payout. Required types: bill_of_lading, packing_list"
+                    errorType: UNPROCESSABLE_ENTITY
+                "Type already uploaded":
+                  summary: Type already uploaded
+                  value:
+                    success: false
+                    error: Document of type 'invoice' has already been uploaded for this payout
+                    errorType: UNPROCESSABLE_ENTITY
+                "All documents already uploaded":
+                  summary: All documents already uploaded
+                  value:
+                    success: false
+                    error: Document already uploaded for this payout
+                    errorType: UNPROCESSABLE_ENTITY
+                "File type not accepted":
+                  summary: File type not accepted
+                  value:
+                    success: false
+                    error: Error occured during file upload, please try again.
+                    errorType: UNPROCESSABLE_ENTITY
+                "Missing field":
+                  summary: Missing field
+                  value:
+                    success: false
+                    error: Error occurred during payload validation. type is required
+                    errorType: VALIDATION_FAILED
+                    errors:
+                      - Error occurred during payload validation. type is required
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for the environment you're calling.
+  parameters:
+    Signature:
+      name: signature
+      in: header
+      required: false
+      description: >
+        Optional request signature. If you send it, Fincra checks it and
+        rejects the request when it doesn't match: an HMAC SHA-512 hex digest
+        of the JSON request body, made with your webhook key.
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                description: Always `Unauthorized`.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: Unauthorized
+            request_id: 5519f326100b3e2529a55b7e32bf0a64
+    PayoutNotFound:
+      description: No payout with that reference belongs to your business.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error: Payout not found
+            errorType: RESOURCE_NOT_FOUND
+  schemas:
+    PayoutDocumentType:
+      type: string
+      description: The document type. It must be one of the types in the payout's `documentsRequired`.
+      example: invoice
+      enum: [invoice, bill_of_lading, airway_bill, packing_list, delivery_note, service_contract, demand_notice, demand_notice_or_invoice, purchase_agreement, construction_contract, vendor_contract, source_bank_statement, advertising_contract_award_letter, currency_exchange_agreement, payment_instruction, investment_agreement, board_resolution, form_a, mutual_funds_subscription_mandate, loan_contract, demand_notice_or_payment_instruction, agreement, merchant_agreement, sale_exit_agreement, evidence_of_initial_investment, rental_agreement, mortgage_contract, intellectual_property_registration, intellectual_property_lease_sale_contract, evidence_of_relationship_to_beneficiary, admission_letter, medical_report, payment_service_agreement, payroll_schedule, user_profile, annual_financial_statement, tax_demand_notice, insurance_contract, customer_profile, executed_claim_offer, donation_request]
+    PayoutStatus:
+      type: string
+      enum: [initiated, processing, successful, failed, change_requested]
+      description: >
+        `initiated` and `processing` are in progress. `successful` and
+        `failed` are final. `change_requested` means Fincra needs you to change
+        something before the payout can continue.
+    PayoutCreated:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Fincra's numeric ID for the payout.
+        reference:
+          type: string
+          description: Fincra's reference for the payout. Use it to fetch the payout.
+        customerReference:
+          type: string
+          description: The reference you sent.
+        status:
+          $ref: "#/components/schemas/PayoutStatus"
+        isDocumentRequired:
+          type: boolean
+          description: Whether Fincra needs a supporting document before the payout can continue.
+        documentsRequired:
+          type: array
+          items:
+            $ref: "#/components/schemas/PayoutDocumentType"
+          description: The document types Fincra needs. Empty when none are needed. Send each one with Upload a payout document.
+    PayoutResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: "`true` when the request was successful."
+        message:
+          type: string
+          description: Always `Payout fetched successfully`.
+        data:
+          type: object
+          description: The payout.
+    PayoutBase:
+      type: object
+      required: [business, sourceCurrency, destinationCurrency, amount, customerReference]
+      properties:
+        business:
+          type: string
+          minLength: 24
+          maxLength: 24
+          description: Your Business ID.
+        sourceCurrency:
+          type: string
+          description: The currency of the balance Fincra debits, such as `NGN`.
+        destinationCurrency:
+          type: string
+          description: The currency the beneficiary receives, such as `KES`.
+        amount:
+          type: number
+          description: >
+            The amount to send, in the source currency's major unit. Must be a
+            whole number when the source currency is RWF, UGX, XAF or XOF.
+        description:
+          type: string
+          description: A note about the payout.
+        customerReference:
+          type: string
+          description: Your unique reference for this payout. Fincra accepts each reference once.
+        quoteReference:
+          type: string
+          description: The reference of a rate quote. Required when `sourceCurrency` and `destinationCurrency` differ. Get a quote first.
+        feeBearer:
+          type: string
+          enum: [business, customer]
+          description: Who pays the fee for this payout.
+        sender:
+          $ref: "#/components/schemas/Sender"
+        purposeOfFund:
+          type: string
+          enum: [family_or_living_expense, charity_donation, payment_for_services, travel_expenses, personal_asset_allocation, payment_for_goods, capital_transfer, investment, employee_payroll, goods_trade, services_trade, return_of_export_trade, goods_purchase, services_payment, software_purchase, construction_services, transportation_services]
+          description: Why you're sending the money.
+        relationshipWithBeneficiary:
+          type: string
+          enum: [self, parents, child, siblings, other_relatives, spouse, ex_spouse, vendor, supplier, employee, friends, business_partner, customer, agent, creditor, debtor, subsidiary_company, branch_office, holding_company, franchisee]
+          description: How the sender is related to the beneficiary.
+    BankAccountPayout:
+      title: Bank account
+      allOf:
+        - $ref: "#/components/schemas/PayoutBase"
+        - type: object
+          required: [paymentDestination, beneficiary]
+          properties:
+            paymentDestination:
+              type: string
+              enum: [bank_account]
+              description: Send to a bank account.
+            paymentScheme:
+              type: string
+              enum: [sepa, sepa_instant, chaps, fps, swift, ach, fed_wire, cnaps, eft, interac]
+              description: The payment rail for international bank payouts, such as `sepa` for EUR. See the Requirements page for each currency.
+            beneficiary:
+              $ref: "#/components/schemas/BankAccountBeneficiary"
+            customerName:
+              type: string
+              description: The name of your customer the payout is for. Required when `destinationCurrency` is `USD`.
+            files:
+              oneOf:
+                - type: string
+                - type: array
+                  items:
+                    type: string
+              description: A supporting document URL, or a list of them, such as an invoice. Required when `destinationCurrency` is `USD`.
+            additionalInfo:
+              type: string
+              description: Extra details for the payout. Used when `destinationCurrency` is `USD`.
+            correspondent:
+              type: object
+              description: The correspondent bank. Used when `destinationCurrency` is `USD`.
+              properties:
+                bankName:
+                  type: string
+                  description: The correspondent bank's name.
+                bankSwiftCode:
+                  type: string
+                  description: The correspondent bank's SWIFT code.
+            intermediary:
+              type: object
+              description: The intermediary bank. Used when `destinationCurrency` is `USD`.
+              properties:
+                bankName:
+                  type: string
+                  description: The intermediary bank's name.
+                bankAddress:
+                  type: string
+                  description: The intermediary bank's address.
+    MobileMoneyPayout:
+      title: Mobile money
+      allOf:
+        - $ref: "#/components/schemas/PayoutBase"
+        - type: object
+          required: [paymentDestination, beneficiary]
+          properties:
+            paymentDestination:
+              type: string
+              enum: [mobile_money_wallet]
+              description: Send to a mobile money wallet.
+            beneficiary:
+              $ref: "#/components/schemas/MobileMoneyBeneficiary"
+    BankAccountBeneficiary:
+      type: object
+      description: >
+        The person or business receiving the payout. Payouts in USD and GBP
+        must go to a `corporate` beneficiary.
+      required: [type, accountHolderName, accountNumber]
+      properties:
+        type:
+          type: string
+          enum: [individual, corporate]
+          description: Whether the beneficiary is a person or a business.
+        accountHolderName:
+          type: string
+          description: The name on the bank account.
+        accountNumber:
+          type: string
+          description: >
+            The bank account number or IBAN. NGN accounts use the 10-digit
+            NUBAN. Interac payouts use `interacEmail` instead.
+        firstName:
+          type: string
+          description: The beneficiary's first name. Required when `type` is `individual`.
+        lastName:
+          type: string
+          description: The beneficiary's last name.
+        bankCode:
+          type: string
+          description: The beneficiary's bank code, such as `305`. Send `bankCode` or `bankSwiftCode`.
+        bankSwiftCode:
+          type: string
+          description: The beneficiary bank's SWIFT code. Required when `destinationCurrency` is `CNY` or `CNH`.
+        bankName:
+          type: string
+          description: The beneficiary's bank name. Required when `destinationCurrency` is `CNY` or `CNH`.
+        sortCode:
+          type: string
+          description: The UK sort code, for GBP payouts.
+        country:
+          type: string
+          description: The beneficiary's country, as a two-letter ISO 3166-1 code. Required for GHS and ZAR.
+        email:
+          type: string
+          format: email
+          description: The beneficiary's email address.
+        phone:
+          type: string
+          description: The beneficiary's phone number.
+        interacEmail:
+          type: string
+          format: email
+          description: The email address the beneficiary uses for Interac. Used for CAD Interac payouts.
+        address:
+          type: object
+          description: >
+            The beneficiary's address. For USD, CNY and CNH, `country`, `zip`,
+            `city` and `street` are required.
+          properties:
+            country:
+              type: string
+              description: Two-letter ISO 3166-1 country code.
+            state:
+              type: string
+              description: The state or region.
+            city:
+              type: string
+              description: The city.
+            zip:
+              type: string
+              description: The postal code.
+            street:
+              type: string
+              description: The street address.
+        registrationNumber:
+          type: string
+          description: The company registration number. Used when `type` is `corporate`.
+        incorporationCountry:
+          type: string
+          description: The country the company is registered in. Used when `type` is `corporate`.
+    MobileMoneyBeneficiary:
+      type: object
+      description: The person or business receiving the payout in their mobile money wallet.
+      required: [type, accountNumber, mobileMoneyCode, country]
+      properties:
+        type:
+          type: string
+          enum: [individual, corporate]
+          description: Whether the beneficiary is a person or a business.
+        accountNumber:
+          type: string
+          description: The mobile money phone number, with the country code, such as `254731234567`. Fincra checks it matches `country`.
+        mobileMoneyCode:
+          type: string
+          description: The mobile money operator code, such as `AIRTEL`.
+        country:
+          type: string
+          description: The beneficiary's country, as a two-letter ISO 3166-1 code.
+        firstName:
+          type: string
+          description: The beneficiary's first name. Required when `type` is `individual`.
+        lastName:
+          type: string
+          description: The beneficiary's last name. Required when `type` is `individual`.
+        accountHolderName:
+          type: string
+          description: The name on the wallet. Required when `type` is `corporate`.
+        email:
+          type: string
+          format: email
+          description: The beneficiary's email address.
+    Sender:
+      type: object
+      description: The person or business sending the money, when the corridor needs sender details.
+      properties:
+        name:
+          type: string
+          description: The sender's full name.
+        type:
+          type: string
+          enum: [individual, corporate]
+          description: Whether the sender is a person or a business.
+        email:
+          type: string
+          format: email
+          description: The sender's email address.
+        phone:
+          type: string
+          description: The sender's phone number.
+        address:
+          type: string
+          description: The sender's address.
+        birthDate:
+          type: string
+          description: The sender's date of birth, in YYYY-MM-DD format.
+        nationality:
+          type: string
+          description: The sender's nationality.
+        idType:
+          type: string
+          enum: [national_id, international_passport, drivers_license, business_registration_number]
+          description: The type of ID document.
+        idNumber:
+          type: string
+          maxLength: 30
+          description: The ID document number.
+        countryOfOrigin:
+          type: string
+          description: The sender's country of origin. Required when `type` is `individual`.
+        countryOfIncorporation:
+          type: string
+          description: The country the sending company is registered in. Required when `type` is `corporate`.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.

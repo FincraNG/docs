@@ -15,7 +15,7 @@ Remittance is one of the most common use cases for Fincra Payouts. Whether you'r
     Before initiating a transfer, confirm the recipient's account details are valid. See [Verify a Beneficiary Account](/verification/verify-a-beneficiary-account).
   </Step>
   <Step title="Generate a quote for cross-currency transfers">
-    If the sender's currency differs from the recipient's, call the Generate Quote endpoint to lock in an exchange rate. The quote is valid for **30 seconds** — build your UI to show a countdown and prompt confirmation before expiry.
+    If the sender's currency differs from the recipient's, call the Generate Quote endpoint to lock in an exchange rate. The quote is valid for **30 seconds**, build your UI to show a countdown and prompt confirmation before expiry.
   </Step>
   <Step title="Save the recipient as a beneficiary">
     Store the recipient's details as a [beneficiary](/payouts/create-beneficiaries). This lets your customer send to the same person again without re-entering their details.
@@ -27,10 +27,6 @@ Remittance is one of the most common use cases for Fincra Payouts. Whether you'r
     Listen for the `payout.successful` or `payout.failed` webhook and update your customer on the transfer outcome in real time.
   </Step>
 </Steps>
-
-<Note>
-  **Diagram needed:** End-to-end remittance flow — sender initiates → (cross-currency branch: quote generated → rate confirmed) → payout triggered → Fincra processes on local rails → recipient receives → webhook fires.
-</Note>
 
 ## Supported corridors
 
@@ -51,13 +47,13 @@ For the full country and method breakdown, see [Payout Coverage](/payouts/payout
 
 <CardGroup cols={2}>
   <Card title="Lock rates fast" icon="clock">
-    Cross-currency quotes expire in **30 seconds**. Generate the quote immediately before your customer confirms — not when they first see the rate.
+    Cross-currency quotes expire in **30 seconds**. Generate the quote immediately before your customer confirms, not when they first see the rate.
   </Card>
   <Card title="Verify before sending" icon="circle-check">
     Run account verification before initiating a payout to catch invalid account numbers early. Saves failed payouts and customer frustration.
   </Card>
   <Card title="African rails are instant" icon="bolt">
-    Payouts to African bank accounts and mobile money wallets settle instantly. International transfers vary by payment scheme — see [settlement speeds](/payouts/how-payouts-work#payment-schemes).
+    Payouts to African bank accounts and mobile money wallets settle instantly. International transfers vary by payment scheme, see [settlement speeds](/payouts/how-payouts-work#payment-schemes).
   </Card>
   <Card title="Track with customerReference" icon="tag">
     Pass your internal transfer ID as `customerReference` to link each Fincra payout to a record in your system.

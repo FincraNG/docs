@@ -8,10 +8,6 @@ Fincra's Direct Debit supports 23 Nigerian banks through the NIBSS Direct Debit 
 
 ## Bank directory
 
-<Note>
-  **Design team:** Consider styling this as a visual grid with bank logos instead of a plain table — similar to payment method grids on Stripe/Adyen docs. Each card would show the bank logo, name, and code.
-</Note>
-
 | # | Bank | Bank code |
 |---|---|---|
 | 1 | Access Bank | `044` |
@@ -58,8 +54,8 @@ When creating a mandate, pass the bank code in the `customer.bankCode` field:
 
 ## Tips
 
-- **Validate before creating** — Use [Account Verification](/verification/verify-a-beneficiary-account) to confirm the customer's account number and name before creating a mandate. This prevents failed mandates due to incorrect details.
-- **Store bank codes** — If your application has a bank selection UI, use the codes in the table above. These are NIBSS-assigned codes and are stable.
+- **Validate before creating**, Use [Account Verification](/verification/verify-a-beneficiary-account) to confirm the customer's account number and name before creating a mandate. This prevents failed mandates due to incorrect details.
+- **Store bank codes**, If your application has a bank selection UI, use the codes in the table above. These are NIBSS-assigned codes and are stable.
 
 ## What's next
 

@@ -1,0 +1,50 @@
+---
+title: "FAQs"
+description: "Common questions about accepting payments with Fincra."
+keywords: ["payments FAQ", "checkout", "settlement", "refund", "webhook", "fees"]
+---
+
+## Accepting payments
+
+<AccordionGroup>
+  <Accordion title="Which integration should I use?">
+    Use Checkout for the fastest start: Fincra hosts the payment page and handles card data. Use payment links when you don't want to write code. Use Direct charge only if you need full control of the payment form; it needs separate approval and, for cards, PCI DSS compliance.
+  </Accordion>
+  <Accordion title="Which payment methods can my customers use?">
+    It depends on the currency: cards, bank transfer, mobile money and digital wallets such as PalmPay. See [Coverage](/coverage).
+  </Accordion>
+  <Accordion title="Should I trust the redirect after payment?">
+    No. Always confirm the result with the webhook or by verifying the payment from your server. The redirect only tells you the customer came back.
+  </Accordion>
+  <Accordion title="What do the payment statuses mean?">
+    `pending` means the customer hasn't finished paying. `successful` means the payment is confirmed. `failed` means it was declined, expired or cancelled.
+  </Accordion>
+</AccordionGroup>
+
+## Money and fees
+
+<AccordionGroup>
+  <Accordion title="When does the money reach my wallet?">
+    Bank transfer, mobile money and PalmPay settle instantly. Cards and EFT settle the next business day. Weekends and public holidays can take longer. See [Settlements](/payments/settlements).
+  </Accordion>
+  <Accordion title="Who pays the fee, me or my customer?">
+    You choose with `feeBearer`. With `business`, the fee comes out of what you receive. With `customer`, it's added to what your customer pays. The webhook's `amountToSettle` shows what you'll get.
+  </Accordion>
+  <Accordion title="Which currency do payments settle in?">
+    The currency of the payment. An NGN payment settles into your NGN wallet and a KES payment into your KES wallet.
+  </Accordion>
+</AccordionGroup>
+
+## After the payment
+
+<AccordionGroup>
+  <Accordion title="How do I refund a customer?">
+    From the dashboard: open **Payments**, then **Transactions**, select the payment and choose **Refund**. You can also use the [Refunds API](/api/payments/refunds/initiate-a-refund).
+  </Accordion>
+  <Accordion title="What happens when a customer disputes a card payment?">
+    Fincra opens a chargeback and you accept it or reject it with proof. If you don't respond in time, it's accepted for you. See [Chargebacks](/api/payments/chargebacks/list-chargebacks).
+  </Accordion>
+  <Accordion title="What if a customer pays too much by bank transfer?">
+    Contact [support@fincra.com](mailto:support@fincra.com) and include the payment reference.
+  </Accordion>
+</AccordionGroup>

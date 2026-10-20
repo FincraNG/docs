@@ -1,0 +1,21 @@
+---
+title: "Payments API"
+description: "Create Checkout payments, manage payment links and direct charges, then track transactions, refunds and chargebacks."
+keywords: ["payments API", "Checkout", "payment links", "direct charges", "collections", "refunds", "chargebacks"]
+---
+
+Use this reference to accept a payment and track what happens after the customer pays. The API groups the merchant's payment journey together even though the public paths begin with `/checkout` or `/collections`.
+
+| What you need to do | API resource |
+| --- | --- |
+| Open Embedded Checkout or send a customer to Hosted Checkout | Create a Checkout payment with `POST /checkout/payments`. Both experiences use a Checkout payment; the customer-facing display differs. |
+| Share a reusable link | Create a payment link. A new Checkout payment is created when a customer submits the link's form. |
+| Build your own payment interface | Create a direct charge. Your business needs separate `direct_charge` access. |
+| Confirm a customer's payment | Look up the Checkout payment by your reference, or get or verify a direct charge. Check the final status rather than relying on the browser return. |
+| Reconcile money received | Use Transactions to list or retrieve collections. A collection records incoming money from Checkout and other collection methods, including virtual accounts. |
+| Return money | Use Refunds for an eligible successful collection. The refund has its own reference and status. |
+| Inspect a chargeback | Use Chargebacks to find a case and its related collection. A chargeback is different from a merchant-initiated refund. |
+
+Checkout payment creation uses the business's `x-pub-key`. The merchant management routes in Checkout use `api-key` and `x-business-id`. Collections, Refunds and Chargebacks use `api-key`; their list routes also take the Business ID as `business`. Use the credential requirements on each endpoint page rather than sending a secret key from a browser.
+
+For a direct charge, **Get a charge by Fincra reference** and **Get a charge by your reference** can validate a pending charge before returning it. **Verify a charge** is the explicit status-check endpoint. The internal reconciliation and provider callback routes are not merchant APIs and are not listed here.

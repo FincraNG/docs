@@ -5,7 +5,7 @@ description: "Update or delete saved beneficiary records."
 
 ## Update a beneficiary
 
-Update a beneficiary's details at any time — for example, if a recipient changes their bank account, switches banks, or updates their name.
+Update a beneficiary's details at any time, for example, if a recipient changes their bank account, switches banks, or updates their name.
 
 ```bash
 curl --request PUT \
@@ -47,8 +47,8 @@ curl --request DELETE \
 
 | Scenario | Action |
 |---|---|
-| Recipient changed their bank account number | **Update** — change the account number and re-verify |
-| Recipient moved to a different bank | **Update** — change the bank code (get the new code from [List Banks](/payouts/create-beneficiaries#list-supported-banks-and-mobile-money-providers)) |
-| Recipient's name changed | **Update** — edit the name field |
-| Recipient is no longer active | **Delete** — keep your beneficiary list clean |
+| Recipient changed their bank account number | **Update**, change the account number and re-verify |
+| Recipient moved to a different bank | **Update**, change the bank code (get the new code from [List Banks](/payouts/create-beneficiaries#list-supported-banks-and-mobile-money-providers)) |
+| Recipient's name changed | **Update**, edit the name field |
+| Recipient is no longer active | **Delete**, keep your beneficiary list clean |
 | Recipient switching from bank account to mobile money | **Delete** the old record, **Create** a new one with the correct method |

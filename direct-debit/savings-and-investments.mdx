@@ -4,15 +4,15 @@ sidebarTitle: "Savings & Investments"
 description: "Automate recurring contributions to savings and investment products with scheduled direct debits."
 ---
 
-Savings and investment platforms depend on consistent contributions from customers. When customers have to manually transfer funds each period, contribution rates drop and savings goals are missed. Direct debit automates the process — funds are pulled from the customer's account on schedule, keeping savings plans on track.
+Savings and investment platforms depend on consistent contributions from customers. When customers have to manually transfer funds each period, contribution rates drop and savings goals are missed. Direct debit automates the process, funds are pulled from the customer's account on schedule, keeping savings plans on track.
 
 ## How it works
 
-1. **Customer enrolls** — The customer signs up for a savings or investment plan and sets their contribution amount.
-2. **Create a mandate** — Call the [Create Mandate API](/direct-debit/create-a-mandate) with the customer's bank details. Set the `amount` to the contribution amount and the date range to match the plan duration.
-3. **Customer activates** — The customer completes the ₦50 token payment to authorize the mandate.
-4. **Collect contributions** — Set up your system to call [Initiate Debit](/direct-debit/collect-a-payment) at each contribution date.
-5. **Credit the customer's plan** — On receiving the `direct_debit.success` webhook, credit the customer's savings or investment account in your system.
+1. **Customer enrolls**, The customer signs up for a savings or investment plan and sets their contribution amount.
+2. **Create a mandate**, Call the [Create Mandate API](/direct-debit/create-a-mandate) with the customer's bank details. Set the `amount` to the contribution amount and the date range to match the plan duration.
+3. **Customer activates**, The customer completes the ₦50 token payment to authorize the mandate.
+4. **Collect contributions**, Set up your system to call [Initiate Debit](/direct-debit/collect-a-payment) at each contribution date.
+5. **Credit the customer's plan**, On receiving the `direct_debit.success` webhook, credit the customer's savings or investment account in your system.
 
 ## Example
 
@@ -20,7 +20,7 @@ Savings and investment platforms depend on consistent contributions from custome
 Savings plan:
 - Product: Fixed savings (12-month plan)
 - Monthly contribution: ₦20,000
-- Duration: January – December 2026
+- Duration: January  to  December 2026
 
 Mandate setup:
 - amount: 20000
@@ -35,10 +35,10 @@ Collection schedule:
 
 ## Why this matters
 
-- **Consistency** — Automated debits ensure customers contribute regularly without relying on willpower or reminders.
-- **Higher completion rates** — Savings plans with automated collection have significantly better completion rates than manual transfer plans.
-- **Customer trust** — Customers set it and forget it. The platform handles the rest.
-- **Operational simplicity** — No manual reconciliation of incoming transfers. Each debit maps to a specific customer and plan.
+- **Consistency**, Automated debits ensure customers contribute regularly without relying on willpower or reminders.
+- **Higher completion rates**, Savings plans with automated collection have significantly better completion rates than manual transfer plans.
+- **Customer trust**, Customers set it and forget it. The platform handles the rest.
+- **Operational simplicity**, No manual reconciliation of incoming transfers. Each debit maps to a specific customer and plan.
 
 <Card title="Create a Mandate" icon="file-signature" href="/direct-debit/create-a-mandate">
   Follow the step-by-step guide to set up automated savings collection.

@@ -1,0 +1,694 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Sandbox simulation"
+  version: "1.0"
+  description: >
+    Sandbox-only endpoints that make things happen which, in production, only
+    your customers or Fincra can trigger: money arriving in a virtual account,
+    a customer paying a bank transfer checkout, and test money in a wallet.
+    Captured from fincra-collections, checkout-core and fincra-wallets. During
+    the code freeze this file lives in the docs repository.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+security:
+  - apiKey: []
+tags:
+  - name: Sandbox simulation
+    description: Sandbox-only endpoints for testing collections, checkout and balances.
+paths:
+  /collections/transfer/simulate:
+    post:
+      operationId: simulateVirtualAccountCollection
+      summary: Simulate a virtual account collection
+      description: |
+        Simulates a customer sending money to one of your sandbox virtual accounts. Fincra processes it exactly as a real collection: it credits your wallet, records the collection and sends the collection webhook to your webhook URL if you have webhooks turned on.
+
+        The `payee` must be a virtual account you already have in that `currency`. Identify it by its account number, or by its Interac email for a CAD Interac account. For a pool account, such as a ZAR pool account, use the pool account's number as `payee.accountNumber` and the customer reference your customer pays with as `reference`.
+
+        Choose the outcome with the amount:
+
+        | Amount | Outcome | Webhook event |
+        | --- | --- | --- |
+        | `999` | The collection fails and Fincra credits nothing | `collection.failed` |
+        | 10,000 or more, in a currency Fincra reviews, such as EUR or CAD | The collection stays `pending` for review and Fincra credits nothing yet. NGN, GHS and KES collections aren't held | `collection.additional-info-requested` |
+        | Anything else | The collection succeeds and Fincra credits your wallet with the amount minus its fee | `collection.successful` |
+
+        This endpoint only works in sandbox.
+      tags: [Sandbox simulation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, currency, payer, payee]
+              properties:
+                amount:
+                  type: number
+                  description: The amount the customer sends, in the currency's major unit. Send `999` to simulate a failed collection.
+                  example: 1000
+                currency:
+                  type: string
+                  description: The currency of the virtual account, such as `NGN`, `KES`, `GHS`, `ZAR`, `EUR` or `CAD`.
+                  example: NGN
+                payer:
+                  type: object
+                  description: The customer sending the money. Send `accountNumber` or `interacEmail`, not both.
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                      description: The sender's name.
+                      example: Tumaini Moyo
+                    accountNumber:
+                      type: string
+                      description: The sender's account number.
+                      example: "0123456789"
+                    interacEmail:
+                      type: string
+                      format: email
+                      description: The sender's Interac email, for a CAD Interac collection.
+                    bankName:
+                      type: string
+                      description: The sender's bank.
+                      example: Guaranty Trust Bank
+                    bankCode:
+                      type: string
+                      description: The sender's bank code.
+                      example: "058"
+                payee:
+                  type: object
+                  description: Your virtual account that receives the money. Send `accountNumber` or `interacEmail`, not both.
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                      description: The account name.
+                      example: Tumaini Enterprises
+                    accountNumber:
+                      type: string
+                      description: Your virtual account's number, IBAN or pool account number.
+                      example: "3242131619514450"
+                    interacEmail:
+                      type: string
+                      format: email
+                      description: Your CAD Interac account's email.
+                reference:
+                  type: string
+                  description: >
+                    The customer's payment reference. Fincra returns it as
+                    `metadata.customerId`. For a pool account, it is the
+                    reference that tells Fincra which customer paid.
+                  example: sim-ngn-0001
+                narration:
+                  type: string
+                  description: The transfer's narration. Fincra returns it as `description`.
+                  example: NGN collection simulation
+            examples:
+              "NGN":
+                summary: NGN
+                value:
+                  amount: 1000
+                  currency: NGN
+                  payer:
+                    name: Tumaini Moyo
+                    accountNumber: "0123456789"
+                    bankCode: "058"
+                    bankName: Guaranty Trust Bank
+                  payee:
+                    name: Tumaini Enterprises
+                    accountNumber: "3242131619514450"
+                  reference: sim-ngn-0001
+                  narration: NGN collection simulation
+              "NGN, failed":
+                summary: NGN, failed
+                value:
+                  amount: 999
+                  currency: NGN
+                  payer:
+                    name: Tumaini Moyo
+                    accountNumber: "0123456789"
+                    bankCode: "058"
+                    bankName: Guaranty Trust Bank
+                  payee:
+                    name: Tumaini Enterprises
+                    accountNumber: "3242131619514450"
+                  reference: sim-ngn-0002
+              "KES":
+                summary: KES
+                value:
+                  amount: 5000
+                  currency: KES
+                  payer:
+                    name: Tumaini Moyo
+                    accountNumber: "0712345678"
+                    bankName: Test Bank
+                  payee:
+                    name: Tumaini Enterprises
+                    accountNumber: "27569278594"
+                  reference: sim-kes-0001
+              "GHS":
+                summary: GHS
+                value:
+                  amount: 500
+                  currency: GHS
+                  payer:
+                    name: Tumaini Moyo
+                    accountNumber: "0123456789"
+                    bankName: GCB Bank
+                    bankCode: "030100"
+                  payee:
+                    name: Tumaini Enterprises
+                    accountNumber: "2033763727549409"
+                  reference: sim-ghs-0001
+              "ZAR pool account":
+                summary: ZAR pool account
+                value:
+                  amount: 1500
+                  currency: ZAR
+                  payer:
+                    name: Tumaini Moyo
+                    accountNumber: "1234567890"
+                    bankName: Test Bank
+                  payee:
+                    name: Tumaini Enterprises
+                    accountNumber: "23000559178"
+                  reference: FINC91574314ZAR
+                  narration: FINC91574314ZAR
+              "EUR":
+                summary: EUR
+                value:
+                  amount: 200
+                  currency: EUR
+                  payer:
+                    name: Tumaini Moyo
+                    accountNumber: DE89370400440532013000
+                    bankName: Test Bank
+                  payee:
+                    name: Tumaini Enterprises
+                    accountNumber: GBXXCLXX334381238824XX
+                  reference: sim-eur-0001
+              "EUR, held for review":
+                summary: EUR, held for review
+                value:
+                  amount: 10000
+                  currency: EUR
+                  payer:
+                    name: Tumaini Moyo
+                    accountNumber: DE89370400440532013000
+                    bankName: Test Bank
+                  payee:
+                    name: Tumaini Enterprises
+                    accountNumber: GBXXCLXX334381238824XX
+                  reference: sim-eur-0002
+              "CAD Interac":
+                summary: CAD Interac
+                value:
+                  amount: 1000
+                  currency: CAD
+                  payer:
+                    name: Tumaini Moyo
+                    interacEmail: tumaini@example.com
+                  payee:
+                    name: Tumaini Enterprises
+                    interacEmail: tumaini.enterprises@test.fincra.ca
+                  reference: sim-cad-0001
+      responses:
+        "200":
+          description: >
+            Fincra processed the simulated collection. `data` is the same object
+            Fincra sends in the collection webhook. Check `data.status`: a
+            failed collection still returns HTTP `200`. A collection held for
+            review returns empty fields.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when Fincra processed the simulation."
+                  message:
+                    type: string
+                    description: Always `Collection processed successfully`, whatever the collection's status.
+                  data:
+                    $ref: "#/components/schemas/SimulatedCollection"
+              examples:
+                "Successful":
+                  summary: Successful
+                  value:
+                    success: true
+                    message: Collection processed successfully
+                    data:
+                      _id: ""
+                      business: YOUR_BUSINESS_ID
+                      virtualAccount: 6ab4ee963eed8c38fc8b2a75
+                      virtualAccountType: additional
+                      sessionId: 5101ebaa-1c43-4184-a01f-dd81154173d5
+                      senderAccountName: Tumaini Moyo
+                      senderAccountNumber: "0123456789"
+                      senderBankName: Guaranty Trust Bank
+                      senderBankDetails:
+                        bankName: Guaranty Trust Bank
+                        bankCode: "058"
+                        swiftCode: null
+                        bic: null
+                      recipientAccountName: Tumaini Enterprises
+                      recipientAccountNumber: "3242131619514450"
+                      recipientBankName: GLOBUS BANK
+                      sourceCurrency: NGN
+                      destinationCurrency: NGN
+                      sourceAmount: 1000
+                      destinationAmount: 1000
+                      description: NGN collection simulation
+                      amountReceived: 986
+                      fee: 13.999999999999998
+                      customerName: Tumaini Moyo
+                      settlementDestination: wallet
+                      status: successful
+                      initiatedAt: "2026-10-09T19:31:55.916Z"
+                      createdAt: "2026-10-09T19:31:55.918Z"
+                      updatedAt: "2026-10-09T19:31:55.918Z"
+                      reference: 2449fba3-3345-490a-8653-8ad4e8f752a6
+                      merchantReference: tumaini-ngn-va
+                      metadata:
+                        customerId: sim-ngn-0001
+                "Failed":
+                  summary: Failed
+                  value:
+                    success: true
+                    message: Collection processed successfully
+                    data:
+                      _id: ""
+                      business: YOUR_BUSINESS_ID
+                      virtualAccount: 6ab4ee963eed8c38fc8b2a75
+                      virtualAccountType: additional
+                      sessionId: e124a0b8-8c08-4598-886b-a9b615a806aa
+                      senderAccountName: Tumaini Moyo
+                      senderAccountNumber: "0123456789"
+                      senderBankName: Guaranty Trust Bank
+                      recipientAccountName: Tumaini Enterprises
+                      recipientAccountNumber: "3242131619514450"
+                      recipientBankName: GLOBUS BANK
+                      sourceCurrency: NGN
+                      destinationCurrency: NGN
+                      sourceAmount: 999
+                      destinationAmount: 999
+                      amountReceived: 985.01
+                      fee: 13.985999999999999
+                      settlementDestination: wallet
+                      status: failed
+                      reference: af72d24a-17eb-41b1-81a7-38e94b00018b
+                      merchantReference: tumaini-ngn-va
+                      metadata:
+                        customerId: sim-ngn-0002
+                "Held for review":
+                  summary: Held for review
+                  value:
+                    success: true
+                    message: Collection processed successfully
+                    data:
+                      _id: ""
+                      business: ""
+                      senderBankName: null
+                      senderBankDetails:
+                        bankName: null
+                        swiftCode: null
+                        bic: null
+                      sourceCurrency: ""
+                      description: ""
+                      customerName: ""
+                      reference: ""
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: You don't have a virtual account with that number or Interac email in that currency.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Virtual account not found
+                errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: >
+            A field is missing or in the wrong format, or `payer` or `payee` has
+            both or neither of `accountNumber` and `interacEmail`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Error occurred during payload validation. amount is required
+                errorType: VALIDATION_FAILED
+  /checkout-core/webhooks/charges/bank-transfer:
+    post:
+      operationId: simulateBankTransferCheckout
+      summary: Simulate a bank transfer checkout payment
+      description: |
+        Simulates your customer paying a bank transfer checkout. When a customer chooses bank transfer at checkout, Fincra shows them an account number to pay into. Send that account number here with the amount, and Fincra completes the payment as if the transfer had arrived: the payment's status changes and Fincra sends the payment webhook.
+
+        Send the exact amount the checkout asked for. A different amount is a mispayment: unless your business accepts mispayments, Fincra reverses it. A transfer to an expired account, or a second transfer with the same `session_id`, is also reversed.
+
+        Fincra accepts the request and processes it in the background, so the response is always HTTP `201`, even when no payment matches the account number. Check the payment's status or wait for its webhook to see the result.
+
+        This endpoint is for sandbox testing only.
+      tags: [Sandbox simulation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_number, amount, currency, channel_name, payer_account_number, payer_account_name]
+              properties:
+                account_number:
+                  type: string
+                  description: The account number the checkout showed your customer for the bank transfer.
+                  example: "9600314830"
+                amount:
+                  type: number
+                  description: The amount your customer transferred, in the currency's major unit. Send the amount the checkout asked for.
+                  example: 5000
+                currency:
+                  type: string
+                  description: The payment's currency, such as `NGN`.
+                  example: NGN
+                session_id:
+                  type: string
+                  description: A unique ID for this transfer. Use a new value each time. Reusing one simulates a duplicate transfer, which Fincra reverses.
+                  example: sim-0001
+                date:
+                  type: string
+                  format: date-time
+                  description: When the transfer happened.
+                  example: "2026-10-09T19:40:00Z"
+                channel_name:
+                  type: string
+                  description: Send `providus`.
+                  example: providus
+                payer_account_number:
+                  type: string
+                  description: Your customer's account number.
+                  example: "0123456789"
+                payer_account_name:
+                  type: string
+                  description: Your customer's account name.
+                  example: Tumaini Moyo
+                payer_bank_code:
+                  type: string
+                  description: Your customer's bank code.
+                  example: "058"
+                bank_name:
+                  type: string
+                  description: Your customer's bank.
+                  example: GTBank
+      responses:
+        "201":
+          description: Fincra accepted the simulated transfer and will process it in the background.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    description: Always `true`.
+                  message:
+                    type: string
+                    description: Always `Webhook received for virtual account collection`.
+                  data:
+                    type: boolean
+                    description: Always `true`.
+              example:
+                status: true
+                message: Webhook received for virtual account collection
+                data: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /wallets/fund:
+    post:
+      operationId: fundSandboxWallet
+      summary: Fund a sandbox wallet
+      description: |
+        Adds test money to one of your sandbox wallets, so you can test payouts, conversions and fees. The amount goes straight into the available and ledger balances.
+
+        This endpoint only exists in sandbox. In production it returns `401`.
+      tags: [Sandbox simulation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [business, currency, amount]
+              properties:
+                business:
+                  type: string
+                  description: Your sandbox Business ID.
+                  example: YOUR_BUSINESS_ID
+                currency:
+                  type: string
+                  description: The currency of the wallet to fund, such as `NGN`. You must already have a wallet in it.
+                  example: NGN
+                amount:
+                  type: number
+                  minimum: 1
+                  description: The amount to add, in the currency's major unit.
+                  example: 1000000
+      responses:
+        "200":
+          description: Fincra funded the wallet. `data` shows the wallet's balances before and after.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: "`<currency> Wallet funded successfully`."
+                  data:
+                    type: object
+                    description: The wallet after funding.
+                    properties:
+                      id:
+                        type: integer
+                        description: The wallet's `id`.
+                      currency:
+                        type: string
+                        description: The wallet's currency.
+                      previous_available_balance:
+                        type: number
+                        description: The available balance before funding.
+                      available_balance:
+                        type: number
+                        description: The available balance after funding.
+                      previous_ledger_balance:
+                        type: number
+                        description: The ledger balance before funding.
+                      ledger_balance:
+                        type: number
+                        description: The ledger balance after funding.
+                      locked_balance:
+                        type: number
+                        description: The locked balance. Funding doesn't change it.
+                      wallet_number:
+                        type: integer
+                        description: The wallet's number.
+                      status:
+                        type: string
+                        description: The wallet's status.
+              example:
+                success: true
+                message: NGN Wallet funded successfully
+                data:
+                  id: 207151
+                  currency: NGN
+                  status: enabled
+                  wallet_number: 1000001144240001
+                  previous_available_balance: 1099595.95
+                  available_balance: 1100595.95
+                  previous_ledger_balance: 1647700.25
+                  ledger_balance: 1648700.25
+                  previous_locked_balance: 548104.3
+                  locked_balance: 548104.3
+                  updated_at: "2026-10-09T19:10:53.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: You don't have a wallet in that currency.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Wallet not found
+                errorType: RESOURCE_NOT_FOUND
+        "422":
+          description: A field is missing, or `amount` is less than 1.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error: Error occurred during payload validation. amount must be larger than or equal to 1
+                errorType: VALIDATION_FAILED
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your sandbox secret key.
+  responses:
+    Unauthorized:
+      description: The key is missing, wrong or from the other environment.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message:
+                type: string
+                description: Why the request was rejected.
+              request_id:
+                type: string
+                description: Include this when you contact support.
+          example:
+            message: No API key found in request
+            request_id: 7ad56c6548527b7360f05b6985357e60
+  schemas:
+    SimulatedCollection:
+      type: object
+      description: The collection, as Fincra sends it in the collection webhook.
+      properties:
+        _id:
+          type: string
+          description: Empty in the simulation response.
+        business:
+          type: string
+          description: Your Business ID.
+        status:
+          type: string
+          enum: [successful, failed, pending]
+          description: The collection's status. `pending` means Fincra is reviewing it.
+        virtualAccount:
+          type: string
+          description: Fincra's ID for the virtual account that received the money.
+        virtualAccountType:
+          type: string
+          description: "`main` or `additional`."
+        sessionId:
+          type: string
+          description: The transfer's session ID.
+        reference:
+          type: string
+          description: Fincra's reference for the collection. It matches the `reference` in your wallet transactions.
+        merchantReference:
+          type: [string, "null"]
+          description: The virtual account's own reference, which you set when you created it.
+        metadata:
+          type: object
+          description: Extra details. `customerId` is the `reference` you sent.
+          properties:
+            customerId:
+              type: string
+              description: The `reference` you sent.
+        sourceCurrency:
+          type: string
+          description: The currency the customer sent.
+        destinationCurrency:
+          type: string
+          description: The currency Fincra credited.
+        sourceAmount:
+          type: number
+          description: The amount the customer sent.
+        destinationAmount:
+          type: number
+          description: The amount in `destinationCurrency`.
+        fee:
+          type: number
+          description: Fincra's fee for the collection.
+        amountReceived:
+          type: number
+          description: The amount Fincra credits to your wallet, after the fee.
+        settlementDestination:
+          type: string
+          description: Where Fincra settles the money, such as `wallet`.
+        senderAccountName:
+          type: string
+          description: The customer's account name.
+        senderAccountNumber:
+          type: string
+          description: The customer's account number, or Interac email.
+        senderBankName:
+          type: [string, "null"]
+          description: The customer's bank.
+        senderBankDetails:
+          type: object
+          description: The customer's bank details.
+          properties:
+            bankName:
+              type: [string, "null"]
+              description: The bank's name.
+            bankCode:
+              type: [string, "null"]
+              description: The bank's code.
+            swiftCode:
+              type: [string, "null"]
+              description: The bank's SWIFT code.
+            bic:
+              type: [string, "null"]
+              description: The bank's BIC.
+        recipientAccountName:
+          type: string
+          description: Your virtual account's name.
+        recipientAccountNumber:
+          type: string
+          description: Your virtual account's number.
+        recipientBankName:
+          type: string
+          description: Your virtual account's bank.
+        customerName:
+          type: string
+          description: The customer's name.
+        description:
+          type: string
+          description: The `narration` you sent.
+        initiatedAt:
+          type: string
+          format: date-time
+          description: When the transfer started, in UTC.
+        createdAt:
+          type: string
+          format: date-time
+          description: When Fincra recorded the collection, in UTC.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the collection last changed, in UTC.
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Always `false` for errors.
+        error:
+          type: string
+          description: What went wrong, in plain words.
+        errorType:
+          type: string
+          description: A stable code for the error. Use it in your code.
+        errors:
+          description: More detail about the error, when there is any.

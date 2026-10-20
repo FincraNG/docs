@@ -3,7 +3,7 @@ title: "Track a Payout"
 description: "Retrieve the status of a payout by Fincra reference or your own customer reference."
 ---
 
-After initiating a payout, use the Track endpoints to check its status or retrieve its full details. Fincra provides two lookup methods — by Fincra's reference or by your own `customerReference`.
+After initiating a payout, use the Track endpoints to check its status or retrieve its full details. Fincra provides two lookup methods, by Fincra's reference or by your own `customerReference`.
 
 ## Payout statuses
 
@@ -11,10 +11,10 @@ After initiating a payout, use the Track endpoints to check its status or retrie
 |---|---|
 | `processing` | Fincra has received the request and is processing the transfer |
 | `successful` | The payout reached the recipient |
-| `failed` | The payout could not be completed — retrieve the payout to see the failure reason |
+| `failed` | The payout could not be completed, retrieve the payout to see the failure reason |
 
 <Note>
-  Use [webhooks](/webhooks/overview) as your primary signal for payout outcomes. Fincra fires `payout.successful` or `payout.failed` as soon as the transfer concludes — no polling needed. Use these GET endpoints for reconciliation, investigations, or handling missed webhooks.
+  Use [webhooks](/developer-tools/webhooks/overview) as your primary signal for payout outcomes. Fincra fires `payout.successful` or `payout.failed` as soon as the transfer concludes, no polling needed. Use these GET endpoints for reconciliation, investigations, or handling missed webhooks.
 </Note>
 
 ## Get by Fincra reference
@@ -51,19 +51,19 @@ curl --request GET \
 |---|---|
 | You stored Fincra's reference from the initiation response | `GET /reference/{reference}` |
 | You only have your own internal reference | `GET /customer-reference/{customerReference}` |
-| Investigating a webhook — the webhook payload includes both | Either |
+| Investigating a webhook, the webhook payload includes both | Either |
 
-This is why storing both the Fincra `reference` and your `customerReference` in your system matters — it gives you two retrieval paths.
+This is why storing both the Fincra `reference` and your `customerReference` in your system matters, it gives you two retrieval paths.
 
 ## Webhooks vs polling
 
 | Approach | When to use |
 |---|---|
-| **Webhooks** | Primary — `payout.successful` / `payout.failed` events fire on completion |
+| **Webhooks** | Primary, `payout.successful` / `payout.failed` events fire on completion |
 | **Get by reference** | Reconcile a specific payout, investigate a failure, or recover from a missed webhook |
-| **List payouts** | Batch reconciliation or exporting payout history — see [Reporting](/payouts/reporting) |
+| **List payouts** | Batch reconciliation or exporting payout history, see [Reporting](/payouts/reporting) |
 
-To set up webhooks, see [Configure Webhooks](/webhooks/configure).
+To set up webhooks, see [Configure Webhooks](/developer-tools/webhooks/configure).
 
 ## Handling failures
 
@@ -71,4 +71,4 @@ If a payout fails:
 
 1. Retrieve the payout using either GET endpoint and read the failure reason
 2. Correct the issue (invalid account number, expired quote, insufficient balance)
-3. Initiate a **new** payout with a **new** `customerReference` — never reuse the reference from a failed payout
+3. Initiate a **new** payout with a **new** `customerReference`, never reuse the reference from a failed payout

@@ -1,162 +1,200 @@
-/*
- * Fincra docs — Stripe-grade theme layer
- * ---------------------------------------
- * Mintlify auto-loads a top-level `style.css`. This file carries only what
- * docs.json cannot reach: Stripe-like density, code/table styling, and a
- * deliberate heading scale in both light and dark mode.
- *
- * Grounded in the Fincra brand tokens (Identity Guide, 2026 rebrand):
- *   Ambition Violet  #7449FF   primary accent
- *   Deep Current     #211261   deep brand ground / dark surfaces
- *   Fog              #FFFCEB    warm light tint (use sparingly, callouts only)
- *   Type: Soehne, Work Sans fallback (Work Sans loaded via docs.json fonts)
- *
- * NOTE: Mintlify's rendered class names evolve. Selectors below target stable
- * hooks (CSS variables + semantic elements) first; where a class is used, it is
- * commented so it can be re-pointed against the live DOM if Mintlify renames it.
- */
-
-:root {
-  --fnc-violet: #7449FF;
-  --fnc-violet-600: #5B33E0;
-  --fnc-deep: #211261;
-  --fnc-fog: #FFFCEB;
-
-  --fnc-ink: #1A1330;
-  --fnc-muted: #6B6480;
-  --fnc-line: #E7E3F1;
-  --fnc-code-bg: #F5F3FB;
-
-  /* Density: smaller nav font + tighter line-height than the default theme */
-  --fnc-nav-size: 0.855rem;
-  --fnc-nav-line: 1.45;
-}
-
-/* ---------------------------------------------------------------------------
- * 1. Typography scale — restrained, Stripe-like hierarchy
- * ------------------------------------------------------------------------- */
-body {
-  font-feature-settings: "cv05", "ss01";
-  letter-spacing: -0.003em;
-}
-
-h1 { font-weight: 680; letter-spacing: -0.02em; line-height: 1.1; }
-h2 { font-weight: 660; letter-spacing: -0.015em; margin-top: 2.4rem; }
-h3 { font-weight: 640; letter-spacing: -0.01em; }
-h1, h2, h3 { text-wrap: balance; }
-
-/* Body copy sits near 70ch and breathes; do not let prose run full-bleed. */
-.prose p, .prose li { line-height: 1.68; }
-
-/* ---------------------------------------------------------------------------
- * 2. Sidebar / left nav density (Stripe packs more links, quieter type)
- * ------------------------------------------------------------------------- */
-#sidebar a,
-nav[aria-label="Sidebar"] a,
-.sidebar a {
-  font-size: var(--fnc-nav-size);
-  line-height: var(--fnc-nav-line);
-  padding-top: 0.28rem;
-  padding-bottom: 0.28rem;
-}
-
-/* Group headers: uppercase, spaced, muted — a Stripe signature */
-#sidebar .group-title,
-nav[aria-label="Sidebar"] p {
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fnc-muted);
-  font-weight: 650;
-}
-
-/* Active item: violet text + hairline rail, not a heavy pill */
-#sidebar a[aria-current="page"],
-.sidebar a[aria-current="page"] {
-  color: var(--fnc-violet-600);
-  font-weight: 600;
-  box-shadow: inset 2px 0 0 var(--fnc-violet);
-}
-
-/* ---------------------------------------------------------------------------
- * 3. Code blocks — quiet chrome, violet-tinted inline code
- * ------------------------------------------------------------------------- */
-:not(pre) > code {
-  background: var(--fnc-code-bg);
-  color: var(--fnc-violet-600);
-  border: 1px solid var(--fnc-line);
+/* Cards: no border, soft shadow and 4px corners, matching the Plaid benchmark. */
+.card {
+  border: none;
   border-radius: 4px;
-  padding: 0.08em 0.36em;
-  font-size: 0.86em;
+  box-shadow: 0 8px 16px rgba(18, 18, 18, 0.08);
 }
 
-pre {
-  border: 1px solid var(--fnc-line);
-  border-radius: 10px;
-  font-size: 0.86rem;
-  line-height: 1.6;
+/* Shadows disappear on a dark background, so dark mode uses a faint outline. */
+html.dark .card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
 }
 
-/* Language/copy header on code blocks: hairline separated */
-pre + div, .code-block-title {
-  border-bottom: 1px solid var(--fnc-line);
+.card > [data-component-part="card-content-container"] {
+  padding: 24px;
 }
 
-/* ---------------------------------------------------------------------------
- * 4. Tables — dense, tabular numerals, row hover (used heavily for params)
- * ------------------------------------------------------------------------- */
-table {
-  font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
+.card [data-component-part="card-title"] {
+  font-weight: 700;
 }
-thead th {
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--fnc-muted);
-  border-bottom: 1px solid var(--fnc-line);
+
+/* Monochrome icons. */
+.card [data-component-part="card-icon"] svg {
+  background-color: #111111;
 }
-tbody tr { border-bottom: 1px solid var(--fnc-line); }
-tbody tr:hover { background: rgba(116, 73, 255, 0.045); }
-td, th { padding: 0.6rem 0.85rem; }
 
-/* ---------------------------------------------------------------------------
- * 5. Accents — links, callouts. One accent (violet); Fog only for callouts.
- * ------------------------------------------------------------------------- */
-a { text-underline-offset: 2px; }
-.prose a { color: var(--fnc-violet-600); }
-
-/* Callout semantics (see conventions.mdx): Note = FYI (violet),
-   Warning = money/irreversible (amber/red), Info = environment (slate).
-   Mintlify renders these as .callout-note / .callout-warning / .callout-info. */
-.callout-note   { border-left-color: var(--fnc-violet); background: var(--fnc-fog); }
-.callout-warning{ border-left-color: #C13525; }
-.callout-info   { border-left-color: #211261; }
-
-/* ---------------------------------------------------------------------------
- * 6. Dark mode — deliberate, not an inversion. Deep Current grounds surfaces.
- * ------------------------------------------------------------------------- */
-.dark {
-  --fnc-ink: #ECE8FB;
-  --fnc-muted: #A99AE0;
-  --fnc-line: #34275F;
-  --fnc-code-bg: #1B1340;
+html.dark .card [data-component-part="card-icon"] svg {
+  background-color: #FFFFFF;
 }
-.dark body { background: #150C33; }
-.dark #sidebar a[aria-current="page"],
-.dark .sidebar a[aria-current="page"] {
-  color: #B7A6FF;
-  box-shadow: inset 2px 0 0 #9B7DFF;
+
+/* Dividers after Products: Developer Tools and API Reference form one block, Changelog, Support and Glossary another.
+   Same line and spacing as Mintlify's group dividers (12px either side, plus the 8px group margin). */
+.sidebar-group:has(> li[id="/developer-tools/overview"]),
+.sidebar-group:has(> li[id="/changelog"]) {
+  display: flow-root;
+  margin-top: 0;
+  margin-bottom: 0;
 }
-.dark :not(pre) > code { color: #B7A6FF; background: var(--fnc-code-bg); }
-.dark .callout-note { background: rgba(116, 73, 255, 0.10); }
 
-/* ---------------------------------------------------------------------------
- * 7. Restraint — remove decoration that fights the Stripe read
- * ------------------------------------------------------------------------- */
-/* No oversized hero gradients inside docs pages. */
-.prose img { border-radius: 8px; }
+.sidebar-group:has(> li[id="/developer-tools/overview"])::before,
+.sidebar-group:has(> li[id="/changelog"])::before {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 12px 4px 12px;
+  background-color: rgb(238, 242, 240);
+}
 
-@media (prefers-reduced-motion: reduce) {
-  * { scroll-behavior: auto; }
+.sidebar-group:has(> li[id="/changelog"])::before {
+  margin-top: 20px;
+}
+
+html.dark .sidebar-group:has(> li[id="/developer-tools/overview"])::before,
+html.dark .sidebar-group:has(> li[id="/changelog"])::before {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Top bar button without the arrow. */
+#topbar-cta-button svg {
+  display: none;
+}
+
+#topbar-cta-button a {
+  padding-right: 0.75rem;
+}
+
+/* The Documentation and API reference tabs drive separate sidebars. Hide the tab row: the top bar links switch between them. */
+#navbar div:has(> .nav-tabs) {
+  display: none;
+}
+
+/* Show "API Reference" in the documentation and "Documentation" in the API reference. */
+html:not([data-current-path^="/api/"]):not([data-current-path^="/developer-tools/"]):not([data-current-path^="/virtual-accounts/"]):not([data-current-path^="/payments/"]):not([data-current-path^="/payouts/"]):not([data-current-path^="/fx-and-conversion/"]):not([data-current-path^="/direct-debit/"]):not([data-current-path^="/issuing/"]):not([data-current-path^="/verification/"]) li.navbar-link:has(> a[href="/"]) {
+  display: none;
+}
+
+html[data-current-path^="/api/"] li.navbar-link:has(> a[href="/api/introduction"]) {
+  display: none;
+}
+
+/* Developer tools and product sections have their own sidebar: offer a way back to the Documentation, like the API reference. */
+html[data-current-path^="/developer-tools/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/virtual-accounts/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/payments/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/payouts/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/fx-and-conversion/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/direct-debit/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/issuing/"] li.navbar-link:has(> a[href="/"]),
+html[data-current-path^="/verification/"] li.navbar-link:has(> a[href="/"]) {
+  display: list-item;
+}
+
+/* API Reference introduction: base URL table in a bordered box, after the Airwallex benchmark. */
+.base-url-table table,
+.boxed-table table {
+  margin: 0;
+  width: 100%;
+  border: 1px solid rgb(232, 234, 237);
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+}
+
+.base-url-table th,
+.boxed-table th {
+  background: rgb(246, 247, 249);
+}
+
+.base-url-table th,
+.base-url-table td,
+.boxed-table th,
+.boxed-table td {
+  padding: 12px 16px;
+}
+
+html.dark .base-url-table table,
+.boxed-table table {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+html.dark .base-url-table th,
+.boxed-table th {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Internal section shortcuts open in the same tab (same-tab-links.js), so hide the external-link arrow. */
+a[target="_blank"][href^="/"] svg {
+  display: none;
+}
+
+/* Page titles: smaller, matching the Airwallex benchmark (24px, one line on most pages). */
+#page-title {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+
+/* Section headings sit below the title, as on Airwallex (20px). */
+#content.mdx-content h2 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+/* Sidebar links: 13px Inter, which reads like Airwallex's 14px Circular. */
+#navigation-items .sidebar-group a {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+/* Tables: light row lines, no outer border, top-aligned cells, as on Airwallex. */
+#content.mdx-content table {
+  border-collapse: collapse;
+}
+#content.mdx-content th {
+  font-weight: 500;
+  padding: 10px;
+  vertical-align: middle;
+}
+#content.mdx-content td {
+  padding: 10px;
+  vertical-align: top;
+}
+#content.mdx-content tr {
+  border-bottom: 1px solid rgb(232, 234, 237);
+}
+html.dark #content.mdx-content tr {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+#content.mdx-content table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Divider under a page title: keep it close to the text that follows. */
+#content.mdx-content > hr:first-child {
+  margin-bottom: 1.5rem;
+}
+
+/* Product links in the main sidebar: let the label use the full width instead of sharing it with the external-link icon */
+#navigation-items a[target="_blank"][href^="/"] .h-\[1lh\] {
+  display: none;
+}
+
+/* Section sidebars: back link to the main docs and the section name as the sidebar title */
+#navigation-items .fincra-back {
+  display: block;
+  padding-left: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  color: rgb(107 114 128);
+}
+#navigation-items .fincra-back:hover {
+  color: rgb(var(--primary-light));
+}
+#navigation-items .fincra-section-title {
+  color: rgb(var(--primary-light));
+  font-size: 0.875rem;
 }

@@ -1,0 +1,96 @@
+---
+title: "Send your first API request"
+description: "Send an authenticated request to confirm your key works."
+keywords: ["first request", "authentication", "api-key", "sandbox", "curl"]
+---
+
+By the end of this page, you will have sent an authenticated request to Fincra sandbox and received an HTTP `200` response. The request only reads data, so it moves no money.
+
+## Before you start
+
+You need a sandbox secret key. If you don't have one, [create a sandbox account](/quickstart/create-a-sandbox-account) first.
+
+## Send the request
+
+Send your secret key in the `api-key` header. This request returns the business your key belongs to.
+
+<CodeGroup>
+
+```bash cURL
+curl https://sandboxapi.fincra.com/profile/business/me \
+  -H "api-key: {{SECRET_KEY}}" \
+  -H "accept: application/json"
+```
+
+```javascript Node.js
+// Run with Node.js 20.6 or later: node --env-file=.env index.js
+const { FINCRA_SECRET_KEY } = process.env;
+
+const response = await fetch(
+  "https://sandboxapi.fincra.com/profile/business/me",
+  {
+    headers: {
+      // Fincra reads your secret key from the api-key header, not from Authorization.
+      "api-key": FINCRA_SECRET_KEY,
+      accept: "application/json",
+    },
+  }
+);
+
+const body = await response.json();
+
+if (!response.ok) {
+  console.error(`Request failed with HTTP ${response.status}:`, body);
+  process.exit(1);
+}
+
+console.log(`HTTP ${response.status}: ${body.message}`);
+```
+
+</CodeGroup>
+
+Replace the following:
+
+- `{{SECRET_KEY}}`: your sandbox secret key, from **My Account** > **API Keys & Webhooks**
+
+## Check the result
+
+When your key works, Fincra returns HTTP `200` with your business details. This response is shortened:
+
+```json
+{
+  "success": true,
+  "message": "Parent business fetched successfully",
+  "data": {
+    "_id": "64f1c2a9e4b0a1b2c3d4e5f6",
+    "name": "Tumaini Enterprises",
+    "email": "tumaini@example.com",
+    "country": "NG",
+    "status": "enabled",
+    "createdAt": "2026-10-09T10:00:00.000Z"
+  }
+}
+```
+
+The Node.js example prints:
+
+```text
+HTTP 200: Parent business fetched successfully
+```
+
+If your key is missing or wrong, Fincra returns HTTP `401`:
+
+```json
+{
+  "message": "Unauthorized",
+  "request_id": "5519f326100b3e2529a55b7e32bf0a64"
+}
+```
+
+Check that you copied the whole key and that you are using a sandbox key with the sandbox base URL. If you contact support, include the `request_id`.
+
+## Next step
+
+<Card title="Products" href="/products">
+  Choose the product you want to integrate.
+</Card>

@@ -1,0 +1,25 @@
+---
+title: "Temporary accounts"
+description: "Create a single-use account for one payment, then let it expire."
+---
+
+A temporary account collects one payment and then expires. Create one for each order or invoice, show it to your customer and Fincra matches the transfer to that payment for you.
+
+## When to use one
+
+- **Online checkout**: show a fresh account number at the payment step.
+- **Invoices**: put a unique account on each invoice so payments reconcile themselves.
+- **One-off payments**: collect a fee or deposit without opening a permanent account.
+
+## How it works
+
+1. Call [Create a temporary virtual account](/api/virtual-accounts/create-a-temporary-virtual-account) with the amount, your `merchantReference` and when the account expires.
+2. Show the account number, bank name, amount and expiry time to your customer.
+3. Your customer sends the exact amount before the account expires.
+4. Fincra credits your wallet and sends you a collection webhook.
+
+Temporary accounts are available in NGN.
+
+<Warning>
+After an account expires, it no longer accepts payments. Tell your customer the expiry time clearly.
+</Warning>

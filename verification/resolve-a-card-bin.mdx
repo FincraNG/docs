@@ -4,7 +4,7 @@ sidebarTitle: "Resolve a Card BIN"
 description: "Look up card metadata using the first 6-8 digits of a card number."
 ---
 
-A Bank Identification Number (BIN) is the first 6-8 digits of a card number. Use this endpoint to look up card metadata — including the card scheme, issuing country, card type, and issuing bank.
+A Bank Identification Number (BIN) is the first 6-8 digits of a card number. Use this endpoint to look up card metadata, including the card scheme, issuing country, card type, and issuing bank.
 
 | Attribute | Details |
 |---|---|
@@ -14,9 +14,9 @@ A Bank Identification Number (BIN) is the first 6-8 digits of a card number. Use
 
 ## When to use this
 
-- **Fraud screening** — Verify the card's issuing country matches the customer's location before processing a payment.
-- **Routing** — Determine the card scheme (Visa, Mastercard, AfriGo, etc.) to route the transaction to the right processor.
-- **UI enhancement** — Display the card brand and type to the customer during checkout.
+- **Fraud screening**, Verify the card's issuing country matches the customer's location before processing a payment.
+- **Routing**, Determine the card scheme (Visa, Mastercard, AfriGo, etc.) to route the transaction to the right processor.
+- **UI enhancement**, Display the card brand and type to the customer during checkout.
 
 ## Request
 
@@ -40,7 +40,7 @@ GET /checkout/resolve/bin/539941
 | `country.code` | ISO country code of the issuing country |
 | `country.name` | Full country name |
 | `bank.name` | Name of the issuing bank (may be `null`) |
-| `type` | Card type — `debit` or `credit` |
+| `type` | Card type, `debit` or `credit` |
 | `lengths` | Array of valid card number lengths for this BIN |
 
 <Note>

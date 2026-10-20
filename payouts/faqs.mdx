@@ -1,0 +1,50 @@
+---
+title: "FAQs"
+description: "Common questions about sending payouts with Fincra."
+keywords: ["payouts FAQ", "quote", "customer reference", "failed payout", "beneficiary"]
+---
+
+## Sending payouts
+
+<AccordionGroup>
+  <Accordion title="Where can I send money?">
+    Bank accounts and mobile money wallets in 13 destinations across Africa, the US, the UK and the eurozone. See [Payout coverage](/payouts/payout-coverage).
+  </Accordion>
+  <Accordion title="Do I need a quote for every payout?">
+    Only when the currencies differ, such as NGN to GHS. [Create a quote](/api/quotes/create-a-quote) and send its reference as `quoteReference`. A payout in the same currency, such as GHS to GHS, needs no quote.
+  </Accordion>
+  <Accordion title="How long is a quote valid?">
+    30 seconds. If it expires before you send the payout, create a new quote.
+  </Accordion>
+  <Accordion title="Can I pay individuals in USD or GBP?">
+    No. USD and GBP payouts are to businesses only. EUR, CAD and the African currencies accept individuals and businesses. See [Requirements](/payouts/requirements).
+  </Accordion>
+  <Accordion title="Should I check the account before paying?">
+    Yes. A payout doesn't check the account or the name. Use [Resolve Account](/api/verification/resolve-account) first and compare the name with the one your customer gave you.
+  </Accordion>
+</AccordionGroup>
+
+## Statuses and retries
+
+<AccordionGroup>
+  <Accordion title="What do the payout statuses mean?">
+    `processing` means Fincra and the receiving bank or wallet are still working on it. `successful` means the money was sent. `failed` means it didn't go through; the webhook says why.
+  </Accordion>
+  <Accordion title="Can I retry a payout?">
+    Only when its status is `failed`. Never resend a `processing` payout. If you don't get a webhook, check the payout's status before you do anything.
+  </Accordion>
+  <Accordion title="How do I avoid paying someone twice?">
+    Send a unique `customerReference` with every payout. Fincra rejects a second payout with the same reference, so a retry can't create a duplicate.
+  </Accordion>
+</AccordionGroup>
+
+## Amounts
+
+<AccordionGroup>
+  <Accordion title="Can I send decimal amounts?">
+    For most currencies, yes, up to 2 decimal places. Send RWF, UGX, XAF and XOF as whole numbers.
+  </Accordion>
+  <Accordion title="Which wallets can I pay out from?">
+    Any of your wallets in a supported currency. If the destination currency is different, add a quote. See [Requirements](/payouts/requirements).
+  </Accordion>
+</AccordionGroup>

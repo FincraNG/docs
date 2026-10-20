@@ -1,92 +1,26 @@
 ---
 title: "Payments"
 sidebarTitle: "Overview"
-description: "Accept payments from your customers across Africa with cards, bank transfers, mobile money, and more."
+description: "Accept payments by card, bank transfer, mobile money and digital wallets."
 ---
 
-### Get started with Fincra Payments
+Accept payments from your customers in one integration. Fincra handles the payment method, credits your wallet and tells you when each payment succeeds.
 
-Integrate one or more of our payment solutions to start accepting payments from your customers across Africa. Pick the approach that fits your use case. Learn more on **Choose your payment solution**
+## Ways to accept payments
 
-### Payment Options
+- **Checkout**: send your customer to a Fincra-hosted payment page. It shows the payment methods available to them.
+- **Payment links**: create a link and share it by email, chat or social media. No code needed on your side.
+- **Direct charges**: charge a card, bank transfer or mobile money wallet from your own payment page.
 
-Choose how you want to accept payments from your customers.
+## After a payment
 
-{" "}
+Every payment becomes a collection, Fincra's record of money you received. Use it to confirm the payment, issue a refund or respond to a chargeback.
 
 <CardGroup cols={2}>
-  <Card title="Checkout" icon="credit-card" href="/payments/checkout">
-    Redirect your customers to a secure, pre-built payment page. Fastest way to
-    start accepting payments.
+  <Card title="Collections" icon="receipt" href="/api/collections/list-collections">
+    Find and check the payments you received.
   </Card>
-  <Card title="Payment Links" icon="link" href="/payments/payment-links">
-    Create and share payment links with your customers — no code required.
-  </Card>
-  <Card title="Direct Charge API" icon="code" href="/payments/direct-charge">
-    Build a fully custom payment experience with complete control over the UI.
-  </Card>
-  <Card
-    title="Virtual Accounts"
-    icon="building-columns"
-    href="/payments/virtual-accounts"
-  >
-    Generate dedicated accounts for your customers to pay into via bank
-    transfer.
-  </Card>
-</CardGroup>
-
-### Payment Methods
-
-Accept payments with the methods your customers already use and trust.
-
-{" "}
-
-<CardGroup cols={3}>
-  <Card title="Cards" icon="credit-card" href="/payments/methods/cards">
-    Accept Visa, Mastercard, and Verve card payments.
-  </Card>
-  <Card
-    title="Bank Transfer"
-    icon="building-columns"
-    href="/payments/methods/bank-transfer"
-  >
-    Let customers pay directly from their bank account.
-  </Card>
-  <Card
-    title="Mobile Money"
-    icon="mobile"
-    href="/payments/methods/mobile-money"
-  >
-    Accept payments via mobile money wallets across Africa.
-  </Card>
-  <Card
-    title="PayAttitude (USSD)"
-    icon="hashtag"
-    href="/payments/methods/payattitude"
-  >
-    Accept payments from customers without internet access.
-  </Card>
-  <Card title="EFT" icon="money-bill-transfer" href="/payments/methods/eft">
-    Accept electronic fund transfers from your customers.
-  </Card>
-</CardGroup>
-
-### Explore Related Products
-
-Go beyond accepting payments.
-
-{" "}
-
-<CardGroup cols={3}>
-  <Card title="Payouts" icon="paper-plane" href="/payouts">
-    Send money locally and internationally to bank accounts, mobile wallets, and
-    more.
-  </Card>
-  <Card title="Direct Debit" icon="rotate" href="/direct-debit">
-    Set up mandates to automatically collect recurring payments from your
-    customers.
-  </Card>
-  <Card title="Conversions" icon="arrow-right-arrow-left" href="/conversions">
-    Convert funds between currencies directly in your Fincra account.
+  <Card title="Webhooks" icon="webhook" href="/api/webhooks">
+    Get told the moment a payment succeeds or fails.
   </Card>
 </CardGroup>

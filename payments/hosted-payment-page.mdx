@@ -4,7 +4,7 @@ sidebarTitle: "Hosted Payment Page"
 description: "Redirect customers to a secure, pre-built payment page hosted by Fincra."
 ---
 
-The Hosted Payment Page is the fastest way to start accepting payments. Your server makes one API call to generate a checkout link, and you redirect your customer to it. Fincra handles the entire payment UI — your customer completes their payment and is redirected back to your site when done.
+The Hosted Payment Page is the fastest way to start accepting payments. Your server makes one API call to generate a checkout link, and you redirect your customer to it. Fincra handles the entire payment UI, your customer completes their payment and is redirected back to your site when done.
 
 **Best for:** Businesses that want to get up and running quickly without building a custom payment UI.
 
@@ -187,7 +187,7 @@ Available values per currency:
 
 | Currency | Available values                                      |
 | -------- | ----------------------------------------------------- |
-| NGN      | `card`, `bank_transfer`, `payattitude`, `palmpay`     |
+| NGN      | `card`, `bank_transfer`, `palmpay`                    |
 | KES      | `mobile_money`                                        |
 | GHS      | `mobile_money`                                        |
 | UGX      | `mobile_money`                                        |
@@ -200,7 +200,7 @@ Available values per currency:
 
 ## 2. Redirect your customer
 
-After you receive the `link` in the response, redirect your customer to it. Fincra handles the full payment experience from here — method selection, authentication, and confirmation.
+After you receive the `link` in the response, redirect your customer to it. Fincra handles the full payment experience from here, method selection, authentication, and confirmation.
 
 If no `redirectUrl` was provided, the customer sees a confirmation message on Fincra's page after payment and is not redirected.
 
@@ -247,7 +247,7 @@ Check the `status` field in the response before delivering your product or servi
 
 ## 4. Handle the webhook
 
-Fincra sends a `charge.successful` webhook to your configured webhook URL when a payment completes. Always use the webhook as your primary confirmation signal — it fires even when the customer closes their browser before being redirected.
+Fincra sends a `charge.successful` webhook to your configured webhook URL when a payment completes. Always use the webhook as your primary confirmation signal, it fires even when the customer closes their browser before being redirected.
 
 ```json
 {
@@ -289,7 +289,7 @@ Fincra sends a `charge.successful` webhook to your configured webhook URL when a
 | `data.feeBearer`       | Who bore the fee. `business` or `customer`.                  |
 | `data.customer`        | Customer details passed when creating the payment.           |
 
-For full webhook setup and signature verification, see [Webhooks](/webhooks/overview).
+For full webhook setup and signature verification, see [Webhooks](/developer-tools/webhooks/overview).
 
 ## Sandbox testing
 
@@ -299,7 +299,7 @@ Use your sandbox API keys and the sandbox base URL to test payments without real
 https://sandboxapi.fincra.com/checkout-core/payments
 ```
 
-The checkout link returned will point to the sandbox checkout environment. Use Fincra's [test card and account numbers](/sandbox/testing) to simulate different payment outcomes.
+The checkout link returned will point to the sandbox checkout environment. Use Fincra's [test card and account numbers](/developer-tools/sandbox) to simulate different payment outcomes.
 
 ## Next steps
 
@@ -310,7 +310,7 @@ The checkout link returned will point to the sandbox checkout environment. Use F
   <Card title="Payment Methods" icon="credit-card" href="/payments/cards">
     Learn what's supported per currency and country.
   </Card>
-  <Card title="Webhooks" icon="bell" href="/webhooks/overview">
+  <Card title="Webhooks" icon="bell" href="/developer-tools/webhooks/overview">
     Set up and verify webhook notifications.
   </Card>
   <Card title="Verify a Payment" icon="circle-check" href="/payments/verify-a-payment">

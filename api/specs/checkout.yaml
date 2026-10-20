@@ -1,0 +1,934 @@
+openapi: 3.1.0
+info:
+  title: "Fincra API: Payments"
+  version: "1.0"
+  description: >
+    Merchant-facing Checkout payments, payment links and direct charges.
+    Paths and validation are based on checkout-core. A Checkout payment is the
+    session used by both Embedded Checkout and Hosted Checkout; a payment link
+    creates a new payment when the customer submits its form. Direct Charge is
+    a separate product and requires its own access.
+servers:
+  - url: https://sandboxapi.fincra.com
+    description: Sandbox
+  - url: https://api.fincra.com
+    description: Production
+security:
+  - apiKey: []
+    businessId: []
+tags:
+  - name: Checkout payments
+  - name: Payment links
+  - name: Direct charges
+paths:
+  /checkout/payments:
+    post:
+      operationId: createCheckoutPayment
+      summary: Create a Checkout payment
+      tags: [Checkout payments]
+      security:
+        - publicKey: []
+      description: >
+        Creates one hosted payment session and returns its /pay link. The same
+        payment resource underpins the embedded modal and redirect integration.
+        Payment links also call this route after the customer enters details.
+        The currency must be enabled for the business and each requested method
+        must be available for that currency.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayment"
+            example:
+              amount: 5000
+              currency: NGN
+              customer:
+                name: Tumaini Moyo
+                email: tumaini@example.com
+              reference: tumaini-order-1001
+              paymentMethods: [card, bank_transfer, opay]
+              redirectUrl: https://example.com/payment-complete
+      responses:
+        "201":
+          description: Checkout payment created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatePaymentResponse"
+              example:
+                status: true
+                message: Hosted link generated
+                data:
+                  link: https://checkout.fincra.com/pay/fcr-p-example
+                  reference: tumaini-order-1001
+                  payCode: fcr-p-example
+    get:
+      operationId: listCheckoutPayments
+      summary: List Checkout payments
+      tags: [Checkout payments]
+      description: Returns the Checkout payments belonging to the authenticated business.
+      responses:
+        "200":
+          $ref: "#/components/responses/PaymentList"
+  /checkout/payments/merchant-reference/{merchantReference}:
+    get:
+      operationId: getCheckoutPaymentByMerchantReference
+      summary: Get a Checkout payment by your reference
+      tags: [Checkout payments]
+      description: >
+        Retrieves the payment for your reference and business. Check its status
+        and amountReceived; a redirect to your site does not prove payment succeeded.
+        An overpayment or underpayment is shown in varianceType.
+      parameters:
+        - $ref: "#/components/parameters/MerchantReference"
+      responses:
+        "200":
+          description: Payment details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+              example:
+                status: true
+                message: Payment details fetched
+                data:
+                  reference: fcr-p-example
+                  merchantReference: tumaini-order-1001
+                  amount: 5000
+                  amountExpected: 5000
+                  amountReceived: 5000
+                  currency: NGN
+                  status: success
+                  varianceType: fixed
+                  message: null
+                  actionRequired: null
+  /checkout/payments/available-methods:
+    get:
+      operationId: getCheckoutPaymentMethods
+      summary: Get available Checkout methods
+      tags: [Checkout payments]
+      security: []
+      description: >
+        Returns the methods configured in Checkout for the currency. A method
+        still depends on business access and channel configuration at payment time.
+        Supply currency; without it, the route returns the full historical
+        ChargeType enum, including methods unavailable for new payments.
+      parameters:
+        - $ref: "#/components/parameters/CurrencyQuery"
+      responses:
+        "200":
+          description: Available payment method names.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+              example:
+                status: true
+                message: Available payment methods fetched
+                data: [card, bank_transfer, palmpay, opay]
+  /checkout/payments/supported-conversion-currencies:
+    get:
+      operationId: getCheckoutConversionCurrencies
+      summary: Get Checkout conversion currencies
+      tags: [Checkout payments]
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CurrencyQuery"
+      responses:
+        "200":
+          description: Supported checkout conversion currencies.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+  /checkout/payment-links:
+    post:
+      operationId: createPaymentLink
+      summary: Create a payment link
+      tags: [Payment links]
+      description: >
+        Creates a reusable link. Opening the link does not create a payment;
+        the customer's submitted details create a new Checkout payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentLink"
+            example:
+              name: Consulting fee
+              description: Payment to Tumaini Enterprises
+              currency: NGN
+              amount: 5000
+              isAmountFixed: true
+              settlementDestination: wallet
+      responses:
+        "201":
+          description: Payment link created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentLinkResponse"
+    get:
+      operationId: listPaymentLinks
+      summary: List payment links
+      tags: [Payment links]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: currency
+          in: query
+          schema: { type: string }
+        - name: disabled
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Payment links belonging to the business.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentLinkListResponse"
+  /checkout/payment-links/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PaymentLinkId"
+    get:
+      operationId: getPaymentLink
+      summary: Get a payment link
+      tags: [Payment links]
+      responses:
+        "200":
+          description: Payment link details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentLinkResponse"
+    patch:
+      operationId: updatePaymentLink
+      summary: Update a payment link
+      tags: [Payment links]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePaymentLink"
+      responses:
+        "200":
+          description: Updated payment link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+    delete:
+      operationId: deletePaymentLink
+      summary: Delete a payment link
+      tags: [Payment links]
+      responses:
+        "200":
+          description: Payment link deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+  /checkout/payment-links/{id}/disable:
+    patch:
+      operationId: disablePaymentLink
+      summary: Disable a payment link
+      tags: [Payment links]
+      parameters:
+        - $ref: "#/components/parameters/PaymentLinkId"
+      responses:
+        "200":
+          description: Payment link disabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+  /checkout/payment-links/{id}/enable:
+    patch:
+      operationId: enablePaymentLink
+      summary: Enable a payment link
+      tags: [Payment links]
+      parameters:
+        - $ref: "#/components/parameters/PaymentLinkId"
+      responses:
+        "200":
+          description: Payment link enabled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+  /checkout/payment-links/{id}/shorten:
+    get:
+      operationId: shortenPaymentLink
+      summary: Shorten a payment link
+      tags: [Payment links]
+      description: >
+        Creates and stores a short URL for the payment link. Despite using GET,
+        this route calls the URL shortener and updates the link record.
+      parameters:
+        - $ref: "#/components/parameters/PaymentLinkId"
+      responses:
+        "200":
+          description: Short URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+  /checkout/payment-links/validate-custom-url/{customUrl}:
+    get:
+      operationId: validatePaymentLinkCustomUrl
+      summary: Check a payment link custom URL
+      tags: [Payment links]
+      parameters:
+        - name: customUrl
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-zA-Z0-9-_]+$" }
+      responses:
+        "200":
+          description: Whether the custom URL is available.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+  /checkout/charges:
+    post:
+      operationId: createDirectCharge
+      summary: Create a direct charge
+      tags: [Direct charges]
+      description: >
+        Creates and attempts a charge without a hosted Checkout payment.
+        Requires direct_charge access. A successful request can return a pending
+        charge with a next authorization step; verify the final status before
+        fulfilling the order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCharge"
+            example:
+              type: mobile_money
+              amount: 5000
+              currency: GHS
+              reference: tumaini-order-1002
+              customer:
+                name: Tumaini Moyo
+                email: tumaini@example.com
+              phone: "233541234567"
+              operator: MTN
+      responses:
+        "201":
+          description: Charge created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargeResponse"
+  /checkout/charges/initiate:
+    post:
+      operationId: initiateDirectCharge
+      summary: Initiate a direct charge
+      tags: [Direct charges]
+      description: >
+        Creates an initiated charge without attempting the payment method.
+        Use Create a direct charge when you want to start the payment at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiateCharge"
+      responses:
+        "201":
+          description: Charge ID and reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InitiateChargeResponse"
+  /checkout/charges/reference/{reference}:
+    get:
+      operationId: getDirectChargeByReference
+      summary: Get a charge by Fincra reference
+      tags: [Direct charges]
+      description: >
+        Returns a charge belonging to your business. If it is pending,
+        processing or its webhook has not been sent, Checkout validates its
+        latest status before replying. Requeries can have processing effects;
+        do not treat this as a read-only database lookup.
+      parameters:
+        - $ref: "#/components/parameters/ChargeReference"
+      responses:
+        "200":
+          $ref: "#/components/responses/Charge"
+  /checkout/charges/merchant-reference/{merchantReference}:
+    get:
+      operationId: getDirectChargeByMerchantReference
+      summary: Get a charge by your reference
+      tags: [Direct charges]
+      description: >
+        Returns your charge and validates its latest status when it is not
+        terminal or the webhook has not been sent.
+      parameters:
+        - $ref: "#/components/parameters/MerchantReference"
+      responses:
+        "200":
+          $ref: "#/components/responses/Charge"
+  /checkout/charges/{id}/verify:
+    get:
+      operationId: verifyDirectCharge
+      summary: Verify a charge
+      tags: [Direct charges]
+      description: >
+        Verifies a charge by ID after checking that it belongs to your business.
+        statusCheck defaults to true.
+      parameters:
+        - $ref: "#/components/parameters/ChargeId"
+        - name: statusCheck
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          $ref: "#/components/responses/Charge"
+  /checkout/charges/{id}/authorize:
+    post:
+      operationId: authorizeDirectCharge
+      summary: Authorize a charge
+      tags: [Direct charges]
+      description: Send the authentication detail requested in the charge's authorization response.
+      parameters:
+        - $ref: "#/components/parameters/ChargeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeCharge"
+      responses:
+        "201":
+          description: Charge authorization result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargeResponse"
+  /checkout/charges/merchant-reference/{merchantReference}/authorize:
+    post:
+      operationId: authorizeDirectChargeByMerchantReference
+      summary: Authorize a charge by your reference
+      tags: [Direct charges]
+      parameters:
+        - $ref: "#/components/parameters/MerchantReference"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeCharge"
+      responses:
+        "201":
+          description: Charge authorization result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargeResponse"
+  /checkout/charges/{id}/capture:
+    post:
+      operationId: captureDirectCardCharge
+      summary: Capture an authorised card charge
+      tags: [Direct charges]
+      description: Captures a card charge that was authorised for delayed capture.
+      parameters:
+        - $ref: "#/components/parameters/ChargeId"
+      responses:
+        "201":
+          description: Charge after capture.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargeResponse"
+  /checkout/charges/{id}/resend-otp:
+    post:
+      operationId: resendDirectChargeOtp
+      summary: Resend a charge OTP
+      tags: [Direct charges]
+      description: |
+        Sends the customer a new one-time password for a card or mobile money charge that is waiting for authorisation. Use it when the customer didn't receive the first OTP or it expired.
+
+        This endpoint doesn't need your API key.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ChargeId"
+      responses:
+        "201":
+          description: Fincra sent a new OTP.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: What happened, in plain words.
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        description: What happened, in plain words.
+        "400":
+          description: The charge isn't a card or mobile money charge.
+          content:
+            application/json:
+              example:
+                success: false
+                error: Charge type not supported
+                errorType: BAD_REQUEST
+  /checkout/data/mobile-money-operators:
+    get:
+      operationId: listMobileMoneyOperators
+      summary: List mobile money operators
+      tags: [Direct charges]
+      description: |
+        Returns the mobile money operators you can charge, with a display name and logo for each. Send `currency` to get the operators for one currency. Without it, Fincra returns every currency's operators, grouped by currency.
+
+        This endpoint doesn't need your API key.
+      security: []
+      parameters:
+        - name: currency
+          in: query
+          required: false
+          description: The currency to return operators for, such as `KES` or `GHS`.
+          schema:
+            type: string
+            example: KES
+        - name: businessId
+          in: query
+          required: false
+          description: Your Business ID. Send it to leave out operators that aren't available to your business.
+          schema:
+            type: string
+            example: YOUR_BUSINESS_ID
+      responses:
+        "200":
+          description: The operators.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: "`true` when the request was successful."
+                  message:
+                    type: string
+                    description: Always `Mobile money operators fetched`.
+                  data:
+                    description: A list of operators when you send `currency`. Otherwise an object with a list for each currency.
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: The operator's display name.
+                        value:
+                          type: string
+                          description: The value to send as the operator in a mobile money charge.
+                        icon:
+                          type: string
+                          description: A link to the operator's logo.
+              example:
+                success: true
+                message: Mobile money operators fetched
+                data:
+                  - name: M-PESA
+                    value: MPESA
+                    icon: https://example.com/mpesa.png
+                  - name: Airtel
+                    value: AIRTEL
+                    icon: https://example.com/airtel.png
+        "404":
+          description: No mobile money operators are available for that currency.
+          content:
+            application/json:
+              example:
+                success: false
+                error: No mobile money operators currently available
+                errorType: RESOURCE_NOT_FOUND
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: api-key
+      description: Your secret key for this environment.
+    businessId:
+      type: apiKey
+      in: header
+      name: x-business-id
+      description: The Business ID paired with your secret key.
+    publicKey:
+      type: apiKey
+      in: header
+      name: x-pub-key
+      description: The public key for the business creating a Checkout payment.
+  parameters:
+    MerchantReference:
+      name: merchantReference
+      in: path
+      required: true
+      description: Your unique payment or charge reference.
+      schema: { type: string }
+    ChargeReference:
+      name: reference
+      in: path
+      required: true
+      description: Fincra's charge reference.
+      schema: { type: string }
+    ChargeId:
+      name: id
+      in: path
+      required: true
+      description: Numeric charge ID.
+      schema: { type: integer }
+    PaymentLinkId:
+      name: id
+      in: path
+      required: true
+      description: Numeric payment link ID.
+      schema: { type: integer }
+    CurrencyQuery:
+      name: currency
+      in: query
+      description: ISO currency code, such as NGN or GHS. Recommended for a currency-specific result.
+      schema: { type: string }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, default: 1 }
+    PerPage:
+      name: perPage
+      in: query
+      schema: { type: integer, default: 10 }
+  responses:
+    PaymentList:
+      description: Checkout payments belonging to the business.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PaymentListResponse"
+    Charge:
+      description: Charge details and current status.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ChargeResponse"
+  schemas:
+    InitiateChargeResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            id: { type: integer }
+            reference: { type: string }
+    PaymentLinkResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/PaymentLink"
+    PaymentLinkListResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            results:
+              type: array
+              items:
+                $ref: "#/components/schemas/PaymentLink"
+            total: { type: integer }
+            page: { type: integer }
+            perPage: { type: integer }
+    CreatePaymentResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          type: object
+          required: [link, payCode]
+          properties:
+            link: { type: string, format: uri, description: Hosted checkout URL. }
+            reference: { type: string, description: Your reference, when supplied. }
+            payCode: { type: string, description: Fincra payment reference. }
+    PaymentResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Payment"
+    PaymentListResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+    ChargeResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/Charge"
+    CheckoutResponse:
+      type: object
+      required: [status, message, data]
+      properties:
+        status: { type: boolean }
+        message: { type: string }
+        data:
+          description: Operation-specific payment, charge, link or list data.
+    Payment:
+      type: object
+      properties:
+        id: { type: integer }
+        reference: { type: string, description: Fincra payment reference. }
+        merchantReference: { type: string, description: Your payment reference. }
+        paymentLinkId: { type: integer }
+        amount: { type: number }
+        amountExpected: { type: number }
+        amountReceived: { type: number }
+        currency: { type: string }
+        status:
+          type: string
+          enum: [initiated, pending, processing, failed, success, expired, reversal-initiated, awaiting-reversal, reversed, rejected, awaiting-capture]
+        varianceType:
+          type: [string, "null"]
+          enum: [fixed, overpayment, underpayment, null]
+        message: { type: [string, "null"] }
+        actionRequired: { type: [string, "null"] }
+        paymentMethods:
+          type: array
+          items: { type: string }
+        defaultPaymentMethod: { type: string }
+        customer:
+          $ref: "#/components/schemas/Customer"
+    PaymentLink:
+      type: object
+      properties:
+        id: { type: integer }
+        businessId: { type: string }
+        reference: { type: string }
+        name: { type: string }
+        description: { type: string }
+        amount: { type: number }
+        isAmountFixed: { type: boolean }
+        currency: { type: string }
+        settlementDestination: { type: string }
+        feeBearer: { type: string, enum: [business, customer] }
+        customUrl: { type: [string, "null"] }
+        shortUrl: { type: [string, "null"] }
+        redirectUrl: { type: [string, "null"] }
+        disabled: { type: boolean }
+    Charge:
+      type: object
+      properties:
+        id: { type: integer }
+        reference: { type: string, description: Your charge reference in the response. }
+        merchantReference: { type: string }
+        amount: { type: number }
+        amountExpected: { type: number }
+        amountReceived: { type: number }
+        currency: { type: string }
+        type: { type: string, description: Payment method. }
+        status:
+          type: string
+          enum: [initiated, pending, processing, failed, success, expired, reversal-initiated, awaiting-reversal, reversed, rejected, awaiting-capture]
+        varianceType:
+          type: [string, "null"]
+          enum: [fixed, overpayment, underpayment, null]
+        authorization:
+          type: object
+          properties:
+            mode: { type: [string, "null"] }
+            redirect: { type: [string, "null"], format: uri }
+            withCallback: { type: boolean }
+            metadata: { type: object, additionalProperties: true }
+        virtualAccount:
+          type: object
+          description: Returned for a bank transfer charge when an account was allocated.
+          additionalProperties: true
+        message: { type: [string, "null"] }
+        actionRequired: { type: [string, "null"] }
+    Customer:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          description: Customer's full name, with a first and last name.
+        email: { type: string, format: email }
+        phoneNumber: { type: string }
+    CreatePayment:
+      type: object
+      required: [amount, currency, customer]
+      properties:
+        amount: { type: number, minimum: 1 }
+        currency: { type: string }
+        customer:
+          $ref: "#/components/schemas/Customer"
+        reference: { type: string, description: Your unique reference for this payment. }
+        redirectUrl: { type: string, format: uri }
+        paymentMethods:
+          type: array
+          items: { type: string }
+          description: Every method must be available for the currency.
+        defaultPaymentMethod: { type: string }
+        feeBearer: { type: string, enum: [business, customer] }
+        settlementDestination: { type: string }
+        settlementTime: { type: string }
+        paymentLinkId:
+          type: integer
+          description: Set by the payment-link flow when the customer submits its form.
+        metadata: { type: object, additionalProperties: true }
+    CreatePaymentLink:
+      type: object
+      required: [name, description, currency, settlementDestination]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        currency: { type: string }
+        amount:
+          type: number
+          minimum: 1
+          description: Optional; omit for a customer-entered amount.
+        settlementDestination: { type: string }
+        feeBearer: { type: string, enum: [business, customer] }
+        isAmountFixed: { type: boolean, default: false }
+        redirectUrl: { type: string, format: uri }
+        successMessage: { type: string }
+        collectPhoneNumbers: { type: boolean }
+        customUrl:
+          type: string
+          pattern: "^[a-zA-Z0-9-_]+$"
+    UpdatePaymentLink:
+      description: Supply only the fields you want to change.
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        currency: { type: string }
+        amount: { type: number, minimum: 1 }
+        settlementDestination: { type: string }
+        feeBearer: { type: string, enum: [business, customer] }
+        isAmountFixed: { type: boolean }
+        redirectUrl: { type: string, format: uri }
+        successMessage: { type: string }
+        collectPhoneNumbers: { type: boolean }
+        customUrl: { type: string, pattern: "^[a-zA-Z0-9-_]+$" }
+    CreateCharge:
+      type: object
+      required: [type, amount, currency, reference, customer]
+      description: >
+        Card requires card and callbackUrl. Mobile money requires phone and,
+        except for EGP, operator. Pay-with-wallet requires phone and wallet.
+        EFT requires bank when bank selection applies to the currency.
+      properties:
+        type:
+          type: string
+          description: Payment method available for the currency.
+          enum: [card, bank_transfer, mobile_money, eft, palmpay, opay, pay_with_wallet]
+        amount: { type: number, minimum: 1 }
+        currency: { type: string }
+        reference: { type: string, description: Your unique charge reference. }
+        customer:
+          $ref: "#/components/schemas/Customer"
+        description: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        card:
+          $ref: "#/components/schemas/Card"
+        phone: { type: string }
+        operator: { type: string }
+        wallet: { type: string }
+        bank: { type: string }
+        accountNumber:
+          type: string
+          pattern: "^\\d{10}$"
+          description: Optional for bank transfer charges.
+        webhookUrl: { type: string, format: uri }
+        callbackUrl: { type: string, format: uri }
+        feeBearer: { type: string, enum: [business, customer] }
+        settlementDestination: { type: string }
+        settlementTime: { type: string }
+        captureMode: { type: string, enum: [instant, manual, scheduled] }
+        captureDate: { type: string, format: date-time }
+    InitiateCharge:
+      type: object
+      required: [type, reference, customer]
+      properties:
+        type: { type: string }
+        reference: { type: string }
+        customer:
+          $ref: "#/components/schemas/Customer"
+        amount: { type: number, minimum: 1 }
+        currency: { type: string }
+        webhookUrl: { type: string, format: uri }
+        settlementDestination: { type: string }
+        settlementTime: { type: string }
+        captureMode: { type: string }
+        captureDate: { type: string, format: date-time }
+    Card:
+      type: object
+      required: [card_number, expiry_month, expiry_year, cvv]
+      properties:
+        card_number: { type: string, pattern: "^[0-9]{12,19}$" }
+        card_holder: { type: string }
+        expiry_month: { type: string, pattern: "^(0[1-9]|1[0-2])$" }
+        expiry_year: { type: string, pattern: "^([0-9]{2}|[0-9]{4})$" }
+        cvv: { type: string, pattern: "^[0-9]{3,4}$" }
+    AuthorizeCharge:
+      type: object
+      description: Supply the field requested by the charge's authorization mode.
+      properties:
+        pin: { type: string, minLength: 4, maxLength: 4 }
+        otp: { type: string }
+        phone: { type: string }
+        birthday: { type: string, format: date-time }
+        authCode: { type: string }
+        openId: { type: string }
+        accountIdentifier: { type: string }
+        password: { type: string }
+        avs:
+          type: object
+          properties:
+            city: { type: string }
+            address: { type: string }
+            state: { type: string }
+            country: { type: string }
+            zip_code: { type: string }

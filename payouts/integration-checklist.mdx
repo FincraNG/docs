@@ -3,21 +3,17 @@ title: "Integration Checklist"
 description: "Test your payout integration in sandbox and go live with confidence."
 ---
 
-Use this checklist to validate your payout integration before switching to production. Fincra's sandbox fully simulates the production environment — webhooks fire, statuses transition, and the complete payout lifecycle runs end-to-end.
+Use this checklist to validate your payout integration before switching to production. Fincra's sandbox fully simulates the production environment, webhooks fire, statuses transition, and the complete payout lifecycle runs end-to-end.
 
 ## Sandbox environment
 
 - **Base URL:** `https://sandboxapi.fincra.com`
-- **API keys:** Generate from the Fincra sandbox dashboard — separate from your production keys
+- **API keys:** Generate from the Fincra sandbox dashboard, separate from your production keys
 - **Webhooks:** Configure a sandbox webhook endpoint in your dashboard developer settings
 
 ## Test data
 
-Use the following test values when initiating payouts in sandbox:
-
-<Info>
-  Sandbox test account numbers, bank codes, and mobile money numbers will be documented here. Share these with Taofiq to fill in.
-</Info>
+Use the test accounts on the [Sandbox](/developer-tools/sandbox#payouts) page.
 
 ---
 
@@ -33,7 +29,7 @@ Use the following test values when initiating payouts in sandbox:
     All requests in sandbox should go to `https://sandboxapi.fincra.com`. Confirm no hardcoded production URLs exist in your integration.
   </Step>
   <Step title="Confirm your business ID">
-    Retrieve your sandbox business ID from the dashboard — you'll pass this as the `business` field in every payout request.
+    Retrieve your sandbox business ID from the dashboard, you'll pass this as the `business` field in every payout request.
   </Step>
 </Steps>
 
@@ -44,7 +40,7 @@ Use the following test values when initiating payouts in sandbox:
     Set up a webhook URL in your sandbox dashboard developer settings. Use a tool like [Webhook.site](https://webhook.site) or [ngrok](https://ngrok.com) if you don't have a publicly accessible endpoint yet.
   </Step>
   <Step title="Verify webhook signature validation">
-    Confirm your server validates the webhook signature on every incoming event. See [Verify Webhooks](/webhooks/verify).
+    Confirm your server validates the webhook signature on every incoming event. See [Verify Webhooks](/developer-tools/webhooks/verify).
   </Step>
   <Step title="Handle payout.successful">
     Trigger a successful payout and confirm your webhook handler receives and processes `payout.successful` correctly.
@@ -68,10 +64,10 @@ Test each payout type relevant to your integration:
   <Step title="Cross-currency payout">
     Generate a quote, accept it within 30 seconds, and initiate a payout with the `quoteReference`. Confirm the FX conversion is applied and the payout processes correctly.
 
-    Also test the **expired quote path** — wait for the quote to expire and confirm your integration handles the error gracefully and re-generates a new quote.
+    Also test the **expired quote path**, wait for the quote to expire and confirm your integration handles the error gracefully and re-generates a new quote.
   </Step>
   <Step title="Wallet transfer">
-    Initiate a wallet transfer to a sandbox wallet number. Confirm the response returns `status: successful` immediately — no `processing` state.
+    Initiate a wallet transfer to a sandbox wallet number. Confirm the response returns `status: successful` immediately, no `processing` state.
   </Step>
 </Steps>
 
@@ -82,7 +78,7 @@ Test each payout type relevant to your integration:
     Attempt a payout with an amount exceeding your sandbox wallet balance. Confirm your integration handles the error response and surfaces a clear message.
   </Step>
   <Step title="Test invalid account details">
-    Submit a payout with an invalid account number or bank code. Confirm the error is caught and handled — do not surface raw API errors to your end users.
+    Submit a payout with an invalid account number or bank code. Confirm the error is caught and handled, do not surface raw API errors to your end users.
   </Step>
   <Step title="Test duplicate customerReference">
     Submit two payouts with the same `customerReference`. Confirm only the first is processed and your integration handles the duplicate rejection correctly.
@@ -124,7 +120,7 @@ Test each payout type relevant to your integration:
 
 ## Go live checklist
 
-Going live requires only two changes — your API key and base URL. No additional activation is required for payouts.
+Going live requires only two changes, your API key and base URL. No additional activation is required for payouts.
 
 <Steps>
   <Step title="Switch to production API key">
@@ -139,13 +135,13 @@ Going live requires only two changes — your API key and base URL. No additiona
     ```
   </Step>
   <Step title="Configure production webhooks">
-    Set up your production webhook endpoint in the live dashboard developer settings. Use your production server URL — not localhost or a testing tool.
+    Set up your production webhook endpoint in the live dashboard developer settings. Use your production server URL, not localhost or a testing tool.
   </Step>
   <Step title="Run a real test transfer">
     Initiate a small-value live payout to a known account you control. Confirm the payout reaches the recipient, the webhook fires, and your system records the outcome correctly.
   </Step>
   <Step title="Monitor your first live payouts">
-    Watch the first batch of live payouts closely — check webhook delivery, confirm status transitions, and verify reconciliation is working as expected before scaling volume.
+    Watch the first batch of live payouts closely, check webhook delivery, confirm status transitions, and verify reconciliation is working as expected before scaling volume.
   </Step>
 </Steps>
 

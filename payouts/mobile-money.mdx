@@ -1,0 +1,29 @@
+---
+title: "Mobile money"
+description: "Send payouts to mobile money wallets across Africa."
+keywords: ["mobile money", "payout", "M-Pesa", "MTN", "Airtel", "Orange Money"]
+---
+
+Send money from your Fincra wallet to a mobile money wallet. Set `paymentDestination` to `mobile_money_wallet`.
+
+## Supported countries and currencies
+
+| Country | Currency |
+|---|---|
+| Ghana | GHS |
+| Kenya | KES |
+| Uganda | UGX |
+| Zambia | ZMW |
+| Tanzania | TZS |
+| Cameroon | XAF |
+| Senegal | XOF |
+| Egypt | EGP |
+
+## What you need
+
+- The beneficiary's name and mobile number, with the country code.
+- The `mobileMoneyCode` for their mobile money operator.
+
+## Send a mobile money payout
+
+Follow [Initiate a transfer](/payouts/initiate-transfer) with `paymentDestination` set to `mobile_money_wallet`. Use `phone` and `mobileMoneyCode` in the beneficiary instead of `bankCode`. Fincra sends a webhook when the payout succeeds or fails.

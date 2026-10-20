@@ -1,7 +1,7 @@
 ---
 title: "Ghana"
 sidebarTitle: "Ghana"
-description: "Payout coverage for Ghana — bank account and mobile money payouts in GHS."
+description: "Payout coverage for Ghana, bank account and mobile money payouts in GHS."
 ---
 
 ## Overview
@@ -19,13 +19,13 @@ Ghana supports payouts to both bank accounts and mobile money wallets in GHS.
 Send GHS to any Ghanaian bank account via local clearing rails.
 
 - **Payment destination:** `bank_account`
-- **No payment scheme required** — Fincra routes automatically.
-- **Bank SWIFT code required** — Ghana uses `bankSwiftCode` instead of `bankCode` for bank identification.
+- **No payment scheme required**, Fincra routes automatically.
+- **Bank SWIFT code required**, Ghana uses `bankSwiftCode` instead of `bankCode` for bank identification.
 
 ## Mobile money payouts
 
 Send GHS to mobile money wallets in Ghana.
 
 - **Payment destination:** `mobile_money_wallet`
-- **Mobile money code required** — Pass the `mobileMoneyCode` for the recipient's provider. Retrieve available providers from the List Banks endpoint.
-- **Phone number format** — Use country code + number without the `+` symbol (e.g., `233241234567`).
+- **Mobile money code required**, Pass the `mobileMoneyCode` for the recipient's provider. Retrieve available providers from the List Banks endpoint.
+- **Phone number format**, Use country code + number without the `+` symbol (e.g., `233241234567`).

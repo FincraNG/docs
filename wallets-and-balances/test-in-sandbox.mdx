@@ -1,0 +1,94 @@
+---
+title: "Test in sandbox"
+description: "Add test money to a sandbox wallet so you can test payouts, conversions and fees."
+keywords: ["sandbox", "fund wallet", "test money", "top up", "balance"]
+---
+
+New sandbox wallets start empty. Before you test a payout, conversion or anything with a fee, add test money to the wallet you'll pay from. Sandbox money isn't real and never leaves sandbox.
+
+## Fund a sandbox wallet
+
+Send the currency and amount to Fund a sandbox wallet. The amount goes straight into the wallet's available and ledger balances.
+
+<CodeGroup>
+
+```bash cURL
+curl --request POST https://sandboxapi.fincra.com/wallets/fund \
+  --header "api-key: {{SECRET_KEY}}" \
+  --header "Content-Type: application/json" \
+  --data '{
+    "business": "{{BUSINESS_ID}}",
+    "currency": "NGN",
+    "amount": 1000000
+  }'
+```
+
+```javascript Node.js
+// Run with Node.js 20.6 or later: node --env-file=.env index.js
+const { FINCRA_SECRET_KEY, FINCRA_BUSINESS_ID } = process.env;
+
+const response = await fetch("https://sandboxapi.fincra.com/wallets/fund", {
+  method: "POST",
+  headers: {
+    "api-key": FINCRA_SECRET_KEY,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    business: FINCRA_BUSINESS_ID,
+    currency: "NGN",
+    amount: 1000000,
+  }),
+});
+
+const body = await response.json();
+console.log(`HTTP ${response.status}: ${body.message ?? body.error}`);
+```
+
+```python Python
+import os
+
+import requests
+
+response = requests.post(
+    "https://sandboxapi.fincra.com/wallets/fund",
+    headers={"api-key": os.environ["FINCRA_SECRET_KEY"]},
+    json={
+        "business": os.environ["FINCRA_BUSINESS_ID"],
+        "currency": "NGN",
+        "amount": 1000000,
+    },
+)
+
+body = response.json()
+print(f"HTTP {response.status_code}: {body.get('message') or body.get('error')}")
+```
+
+</CodeGroup>
+
+Replace the following:
+
+- `{{SECRET_KEY}}`: your sandbox secret key, from **My Account** > **API Keys & Webhooks**
+- `{{BUSINESS_ID}}`: your sandbox Business ID, which [Get business details](/api/business/get-business-details) returns as `_id`
+
+When it works, Fincra returns HTTP `200` and the message `NGN Wallet funded successfully`. The response's `data` shows `previous_available_balance` and `available_balance`, so you can see the money arrive.
+
+## Check the balance
+
+Call [List wallets](/api/wallets-and-balances/list-wallets) with `currency` to see the new balance:
+
+```bash
+curl "https://sandboxapi.fincra.com/wallets?businessID={{BUSINESS_ID}}&currency=NGN" \
+  --header "api-key: {{SECRET_KEY}}"
+```
+
+The funding also appears in [List wallet transactions](/api/wallets-and-balances/list-wallet-transactions) as a `credit` with the method `Manual Top up`.
+
+## Receive a test collection
+
+To test the full flow of money arriving, including fees and the collection webhook, simulate a customer paying into one of your virtual accounts with [Simulate a virtual account collection](/api/sandbox-simulation/simulate-a-virtual-account-collection). Fincra credits the wallet with the amount minus its fee, just as it does in production.
+
+## What to know
+
+- You can only fund a wallet you already have. If you send a currency you have no wallet in, Fincra returns `404 Wallet not found`.
+- The smallest amount is 1, in the currency's major unit.
+- Funding only works in sandbox. In production, the endpoint returns `401`. See [How money comes in](/wallets-and-balances/overview#how-money-comes-in) for how to fund a production wallet.

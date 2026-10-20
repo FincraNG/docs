@@ -1,0 +1,52 @@
+---
+title: "Error Codes"
+sidebarTitle: "Error Codes"
+description: "Common error codes and troubleshooting steps for currency conversion."
+---
+
+When an API request fails, Fincra returns an error response with an `errorType` that identifies the issue, and an `error` message with more detail. Use this page to understand what went wrong and how to resolve it.
+
+## Error response format
+
+```json
+{
+    "success": false,
+    "error": "A human-readable description of the error.",
+    "errorType": "ERROR_CODE"
+}
+```
+
+| Field | Description |
+|---|---|
+| `success` | Always `false` for error responses. |
+| `error` | A human-readable message describing the issue. |
+| `errorType` | A machine-readable error code. Use this to handle errors programmatically. |
+
+## Quote errors
+
+These errors occur when calling `POST /quotes/generate`.
+
+| Error code | Description | Next steps |
+|---|---|---|
+| `INVALID_CURRENCY_PAIR` | The currency pair you requested is not supported. For example, `CAD` to `NGN` is not an available corridor. | Check the [Supported Currency Pairs](/fx-and-conversion/supported-currency-pairs) page and use a valid source and destination currency combination. |
+| `VALIDATION_FAILED` | A required field is missing or a field value is invalid. For example, using `NG` instead of the full ISO currency code `NGN`. | Check the `error` message for the specific field that failed. Ensure all required fields (`sourceCurrency`, `destinationCurrency`, `amount`, `action`, `transactionType`, `business`) are present and use valid [ISO 4217](https://en.wikipedia.org/wiki/ISO_4217) currency codes. |
+| `SERVICE_UNAVAILABLE` | The amount provided is invalid. For example, the amount is `0` or a negative number. | Ensure the `amount` is a positive number greater than zero. |
+
+## Conversion errors
+
+These errors occur when calling `POST /conversions/initiate`.
+
+| Error code | Description | Next steps |
+|---|---|---|
+| `QUOTE_EXPIRED` | The quote reference does not exist or has expired. Quotes are valid for 30 seconds after generation. | Generate a new quote by calling `POST /quotes/generate` and use the new `reference` as your `quoteReference`. |
+| `NO_ENOUGH_MONEY_IN_WALLET` | Your source currency wallet does not have sufficient funds to cover the conversion amount. | Fund your wallet with enough to cover the `amountToCharge` returned in the quote response, then generate a new quote and retry. |
+| `VALIDATION_FAILED` | A required field is missing from the request body. | Check the `error` message to identify which field is missing. Ensure `business`, `quoteReference`, and `customerReference` are all present in the request body. |
+
+## Verification and listing errors
+
+These errors occur when calling `GET /conversions/reference/{reference}` or `GET /conversions`.
+
+| Error code | Description | Next steps |
+|---|---|---|
+| `CONVERSION_NOT_FOUND` | No conversion was found for the provided reference. | Verify the conversion `reference` is correct. Use the `reference` returned when the conversion was initiated, not the `quoteReference` or `customerReference`. |
+| `VALIDATION_FAILED` | The `business` query parameter is invalid. For example, the business ID is not the expected length. | Check that your business ID is correct. You can find it in your [Fincra dashboard](https://dashboard.fincra.com). |
