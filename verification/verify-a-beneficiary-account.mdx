@@ -1,31 +1,35 @@
 ---
 title: "Resolve Account"
-description: "Verify bank accounts and mobile money wallets before sending payouts."
+description: "Check an account exists and get the name on it before you pay out."
 ---
 
-Fincra provides real-time account verification so you can confirm beneficiary details before initiating a payout. By verifying bank
-accounts and mobile money wallets upfront, you reduce failed transactions, prevent misdirected funds, and mitigate fraud.
+Resolve an account to get the name on it before you send money. Compare that name with the one your customer gave you, and stop the payout if they don't match. A payout doesn't run this check for you.
 
-## Supported countries
+## What you can resolve
 
-| Country | Account Type | Description |
-|---|---|---|
-| Nigeria | Bank Account (NUBAN) | Verify Nigerian bank account numbers |
-| Ghana | Mobile Money | Verify Ghanaian mobile money wallets |
+You choose the account type with `type`, then send the details for that type. The currency tells Fincra which country's rails to check.
 
-<Note>
-  For country-specific request payloads and response examples, see the [Nigeria](/verification/nigeria) and [Ghana](/verification/ghana) pages.
-</Note>
+| Account type | `type` | Currencies | Identify it with |
+|---|---|---|---|
+| Bank account | `nuban` for NGN, `bank_account` for others | NGN, GHS, KES, ZAR | Account number and bank code. GHS uses the bank's SWIFT code. ZAR uses a PayShap ID |
+| Mobile money | `mobile_money` | GHS, KES | Phone number and operator code |
+| IBAN | `iban` | Any IBAN country | The IBAN |
+| Interac | `interac_etransfer` | CAD | The email registered with Interac |
+
+The response gives you the account holder's name. For Interac, it also tells you whether Autodeposit is on.
 
 ## How it works
 
-1. **Collect beneficiary details**, Gather the account number, bank code, and account type from your customer or payout recipient.
-2. **Call the verification endpoint**, Send a `POST` request to `/core/accounts/resolve` with the beneficiary details.
-3. **Check the response**, Fincra returns the account holder's name and verification status.
-4. **Proceed or reject**, If the details match, proceed with the payout. If not, flag the transaction before sending funds to the wrong recipient.
+1. **Collect the details.** Get the account number, bank or operator code, or IBAN from your customer.
+2. **Resolve the account.** Call [Resolve Account](/api/verification/resolve-account) with the details.
+3. **Compare the name.** If it matches, continue. If not, ask your customer to check their details before any money moves.
 
-## When to use this
+## When to use it
 
-- **Before creating a payout**, Verify the beneficiary's account details are valid before initiating a transfer.
-- **During onboarding**, Validate account details when a customer or vendor adds their bank information.
-- **Reconciliation**, Confirm account ownership when resolving payment disputes.
+- **Before a payout**, so money doesn't go to the wrong account.
+- **When someone adds a bank account**, such as a vendor or customer saving payout details.
+- **When saving a beneficiary**, because Fincra saves beneficiaries exactly as you send them.
+
+## Test it
+
+Use the test accounts on the [Sandbox](/developer-tools/sandbox#resolve-account) page. Each one resolves to a known name or fails on purpose.

@@ -505,12 +505,10 @@
         "tab": "Verification",
         "groups": [
           {
-            "group": "Verification",
+            "group": "Identity Verification",
             "pages": [
               "verification/overview",
-              "verification/verify-a-beneficiary-account",
-              "verification/nigeria",
-              "verification/ghana"
+              "verification/verify-a-beneficiary-account"
             ]
           },
           {
