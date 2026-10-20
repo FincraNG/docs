@@ -19,7 +19,7 @@ paths:
   /core/accounts/resolve:
     post:
       operationId: verifyBeneficiaryAccount
-      summary: Verify a beneficiary account
+      summary: Resolve Account
       description: |
         Checks that a beneficiary's account exists before you send a payout to it. Create a payout doesn't run this check or compare the beneficiary's name, so verify the account first to catch a wrong account before any money moves.
 
