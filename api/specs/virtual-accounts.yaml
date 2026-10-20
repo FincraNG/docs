@@ -20,16 +20,9 @@ paths:
       operationId: requestVirtualAccount
       summary: Request a permanent virtual account
       description: |
-        Requests a permanent account that keeps receiving transfers until it's closed. Money sent to it arrives in your wallet in the same currency, minus Fincra's fee.
+        Request an account that keeps receiving transfers until it's closed. Money sent to it arrives in your wallet in the same currency. Pick the tab for the account you want, then send its fields.
 
-        | Currency | Individual | Corporate | What you send |
-        | --- | --- | --- | --- |
-        | NGN | Yes | Yes | The account holder's name and BVN. Fincra creates the account straight away |
-        | USD | No | Yes | Full company details, documents and beneficial owners. Fincra reviews the request |
-
-        An individual account is in a person's name, for example one of your customers. A corporate account is in a business's name. NGN accounts are approved in the response. A USD request is reviewed first, and you can only have one USD account: requesting another returns the one you have.
-
-        Send `merchantReference` to tag the account with your own ID, such as your customer's ID. Each reference can be used once.
+        Local accounts (NGN, GHS, KES and TZS) are created straight away. Foreign currency accounts are reviewed first, and must be enabled for your business. USD and GBP accounts are for businesses only.
       tags: [Virtual Accounts]
       requestBody:
         required: true
@@ -37,9 +30,10 @@ paths:
           application/json:
             schema:
               oneOf:
-                - $ref: "#/components/schemas/NgnIndividualRequest"
-                - $ref: "#/components/schemas/NgnCorporateRequest"
-                - $ref: "#/components/schemas/UsdCorporateRequest"
+                - $ref: "#/components/schemas/LocalIndividualRequest"
+                - $ref: "#/components/schemas/LocalCorporateRequest"
+                - $ref: "#/components/schemas/FcyIndividualRequest"
+                - $ref: "#/components/schemas/FcyCorporateRequest"
             examples:
               "NGN, individual":
                 summary: NGN, individual
@@ -60,8 +54,85 @@ paths:
                   KYCInformation:
                     businessName: Tumaini Enterprises
                     bvn: "22222222222"
-              "USD, corporate (minimum)":
-                summary: USD, corporate (minimum)
+              "GHS, individual":
+                summary: GHS, individual
+                value:
+                  currency: GHS
+                  accountType: individual
+                  KYCInformation:
+                    firstName: Kwame
+                    lastName: Mensah
+                    email: kwame@example.com
+              "GHS, corporate":
+                summary: GHS, corporate
+                value:
+                  currency: GHS
+                  accountType: corporate
+                  KYCInformation:
+                    businessName: Tumaini Enterprises
+                    email: ops@example.com
+              "KES, individual":
+                summary: KES, individual
+                value:
+                  currency: KES
+                  accountType: individual
+                  KYCInformation:
+                    firstName: Peter
+                    lastName: Mwangi
+              "KES, corporate":
+                summary: KES, corporate
+                value:
+                  currency: KES
+                  accountType: corporate
+                  KYCInformation:
+                    businessName: Tumaini Enterprises
+                    primaryBusiness: finance
+                    businessRegistrationCountry: KE
+                    incorporationCountryCode: KE
+              "TZS, individual":
+                summary: TZS, individual
+                value:
+                  currency: TZS
+                  accountType: individual
+                  KYCInformation:
+                    firstName: Asha
+                    lastName: Juma
+              "TZS, corporate":
+                summary: TZS, corporate
+                value:
+                  currency: TZS
+                  accountType: corporate
+              "EUR, individual":
+                summary: EUR, individual
+                value:
+                  currency: EUR
+                  accountType: individual
+                  utilityBill: https://example.com/documents/utility-bill.pdf
+                  meansOfId: https://example.com/documents/passport.pdf
+                  KYCInformation:
+                    firstName: Amara
+                    lastName: Okafor
+                    birthDate: "1990-01-01"
+                    nationality: NG
+                    occupation: Software engineer
+                    accountDesignation: personal
+                    incomeBand: "10000-50000"
+                    address:
+                      countryOfResidence: NG
+                      number: "12"
+                      street: Admiralty Way
+                      city: Lekki
+                      state: Lagos
+                      zip: "100001"
+                    document:
+                      type: passport
+                      number: A12345678
+                      issuedCountryCode: NG
+                      issuedBy: Nigeria Immigration Service
+                      issuedDate: "2020-01-01"
+                      expirationDate: "2030-01-01"
+              "USD, corporate":
+                summary: USD, corporate
                 value:
                   currency: USD
                   accountType: corporate
@@ -511,15 +582,16 @@ components:
         zip:
           type: string
           description: The postal code.
-    NgnIndividualRequest:
-      title: NGN, individual
+    LocalIndividualRequest:
+      title: Individual
+      description: A local account in a person's name, in NGN, GHS, KES or TZS.
       type: object
       required: [currency, accountType, KYCInformation]
       properties:
         currency:
           type: string
-          enum: [NGN]
-          description: Always `NGN`.
+          enum: [NGN, GHS, KES, TZS]
+          description: The account's currency.
         accountType:
           type: string
           enum: [individual]
@@ -529,30 +601,31 @@ components:
           description: Your own ID for the account, such as your customer's ID. Each reference can be used once.
         KYCInformation:
           type: object
-          required: [firstName, lastName, bvn]
+          required: [firstName, lastName]
           properties:
             firstName:
               type: string
-              description: The person's first name. It becomes the account name.
+              description: The person's first name. It becomes part of the account name.
             lastName:
               type: string
               description: The person's last name.
             bvn:
               type: string
-              description: The person's 11-digit BVN. In sandbox, use `22222222222`.
+              description: NGN only. The person's 11-digit BVN. Required for NGN.
             email:
               type: string
               format: email
-              description: The person's email address.
-    NgnCorporateRequest:
-      title: NGN, corporate
+              description: The person's email address. Required for GHS.
+    LocalCorporateRequest:
+      title: Business
+      description: A local account in a business's name, in NGN, GHS, KES or TZS.
       type: object
-      required: [currency, accountType, KYCInformation]
+      required: [currency, accountType]
       properties:
         currency:
           type: string
-          enum: [NGN]
-          description: Always `NGN`.
+          enum: [NGN, GHS, KES, TZS]
+          description: The account's currency.
         accountType:
           type: string
           enum: [corporate]
@@ -562,20 +635,110 @@ components:
           description: Your own ID for the account. Each reference can be used once.
         KYCInformation:
           type: object
-          required: [businessName, bvn]
+          description: Required for NGN, GHS and KES. For TZS, you can leave it out.
           properties:
             businessName:
               type: string
-              description: The business's name. It becomes the account name.
+              description: The business's name. It becomes the account name. If you leave it out, Fincra uses your business's name.
             bvn:
               type: string
-              description: The BVN of a director of the business. In sandbox, use `22222222222`.
+              description: NGN only. The BVN of a director of the business. Required for NGN.
             email:
               type: string
               format: email
-              description: The business's email address.
-    UsdCorporateRequest:
-      title: USD, corporate
+              description: The business's email address. Required for GHS.
+            primaryBusiness:
+              type: string
+              description: KES only. What the business mainly does, such as `finance` or `software`. Required for KES.
+            businessRegistrationCountry:
+              type: string
+              description: KES only. Where the business is registered, as a two-letter country code. Required for KES.
+            incorporationCountryCode:
+              type: string
+              description: KES only. Where the business is incorporated, as a two-letter country code. Required for KES.
+    FcyIndividualRequest:
+      title: FCY individual
+      description: >
+        A EUR or CAD account in a person's name. Documents can be URLs to PDF
+        or image files.
+      type: object
+      required: [currency, accountType, utilityBill, meansOfId, KYCInformation]
+      properties:
+        currency:
+          type: string
+          enum: [EUR, CAD]
+          description: The account's currency. USD and GBP accounts are for businesses only.
+        accountType:
+          type: string
+          enum: [individual]
+          description: An account in a person's name.
+        utilityBill:
+          type: string
+          format: uri
+          description: A recent utility bill for the person's address.
+        meansOfId:
+          type: string
+          format: uri
+          description: A copy of the ID document. For a passport, send one file. For any other document, send an array of at least two files, such as the front and back.
+        merchantReference:
+          type: string
+          description: Your own ID for the account. Each reference can be used once.
+        KYCInformation:
+          type: object
+          required: [firstName, lastName, birthDate, nationality, occupation, accountDesignation, incomeBand, address, document]
+          properties:
+            firstName:
+              type: string
+              description: First name.
+            lastName:
+              type: string
+              description: Last name.
+            birthDate:
+              type: string
+              format: date
+              description: Date of birth, in YYYY-MM-DD format. The person must be at least 18.
+            nationality:
+              type: string
+              description: Two-letter country code.
+            occupation:
+              type: string
+              description: The person's job.
+            accountDesignation:
+              type: string
+              description: What the account is for, such as `personal`.
+            incomeBand:
+              type: string
+              description: Yearly income range, such as `10000-50000`. For CAD, send an object with `lower` and `upper`.
+            email:
+              type: string
+              format: email
+              description: Email address.
+            address:
+              $ref: "#/components/schemas/Address"
+            document:
+              $ref: "#/components/schemas/IdDocument"
+            taxCountry:
+              type: string
+              description: CAD only. Where the person pays tax, as a two-letter code. Required for CAD.
+            taxNumber:
+              type: string
+              description: The person's tax number. Required when `taxCountry` is `US`.
+            sourceOfIncome:
+              type: string
+              enum: [salary, business_income, investment, gift, inheritance, real_estate, loan, pension, grant, trust, crypto, other]
+              description: CAD only. Where the person's money comes from. Required for CAD.
+            employmentStatus:
+              type: string
+              enum: [employed, self_employed, unemployed, student, retired, homemaker, freelancer, other]
+              description: CAD only. Required for CAD.
+            monthlyTransactionVolume:
+              type: string
+              description: CAD only. Money expected through the account each month. Required for CAD.
+            monthlyTransactionCount:
+              type: string
+              description: CAD only. Transactions expected each month. Required for CAD.
+    FcyCorporateRequest:
+      title: FCY business
       type: object
       required: [currency, accountType, entityName, purpose, paymentFlowDescription, incorporationDocuments, articleOfIncorporation, beneficialOwnershipCertificate, sourceOfFunds, utilityBill, KYCInformation]
       description: >
@@ -584,12 +747,12 @@ components:
       properties:
         currency:
           type: string
-          enum: [USD]
-          description: Always `USD`.
+          enum: [USD, GBP, EUR, CAD]
+          description: The account's currency.
         accountType:
           type: string
           enum: [corporate]
-          description: USD accounts are only for businesses.
+          description: An account in a business's name.
         entityName:
           type: string
           description: The business's registered name.
@@ -633,7 +796,7 @@ components:
           description: Your own ID for the account. Each reference can be used once.
         KYCInformation:
           type: object
-          required: [email, tradingName, businessRegistrationName, businessRegistrationNumber, businessRegistrationCountry, incorporationCountryCode, incorporationDate, directorsName, taxIdentificationNumber, taxCountry, website, companyType, businessCategory, businessCategoryDescription, primaryBusiness, primaryBusinessDescription, primarySourceOfFunds, regulationStatus, riskRating, annualIncome, estimatedMonthlyTurnover, projectedMonthlyInflow, projectedMonthlyOutflow, projectedMonthlyTransactionCount, projectedTransactionFrequency, tradeInternationally, fundsTransferCorridors, businessPartners, address, ultimateBeneficialOwners]
+          required: [email, tradingName, businessRegistrationName, businessRegistrationNumber, businessRegistrationCountry, incorporationCountryCode, incorporationDate, directorsName, taxIdentificationNumber, taxCountry, website, companyType, businessCategory, businessCategoryDescription, primaryBusiness, primaryBusinessDescription, primarySourceOfFunds, regulationStatus, riskRating, estimatedMonthlyTurnover, projectedMonthlyInflow, projectedMonthlyOutflow, projectedMonthlyTransactionCount, projectedTransactionFrequency, tradeInternationally, fundsTransferCorridors, businessPartners, address, ultimateBeneficialOwners]
           properties:
             email:
               type: string
@@ -703,16 +866,16 @@ components:
               description: Your assessment of the business's risk, such as `low`.
             annualIncome:
               type: string
-              description: Annual income, in USD.
+              description: Annual income. Required for USD and GBP.
             estimatedMonthlyTurnover:
               type: string
-              description: Monthly turnover, in USD.
+              description: Monthly turnover.
             projectedMonthlyInflow:
               type: string
-              description: Money you expect into the account each month, in USD.
+              description: Money you expect into the account each month.
             projectedMonthlyOutflow:
               type: string
-              description: Money you expect out of the account each month, in USD.
+              description: Money you expect out of the account each month.
             projectedMonthlyTransactionCount:
               type: string
               description: How many transactions you expect each month.
@@ -740,6 +903,32 @@ components:
               description: Everyone who owns or controls the business.
               items:
                 $ref: "#/components/schemas/BeneficialOwner"
+    IdDocument:
+      type: object
+      required: [type, number, issuedCountryCode, issuedBy]
+      description: An ID document.
+      properties:
+        type:
+          type: string
+          enum: [passport, driverLicense, idCard, nationalId]
+          description: The document type.
+        number:
+          type: string
+          description: The document number.
+        issuedCountryCode:
+          type: string
+          description: The issuing country, as a two-letter code.
+        issuedBy:
+          type: string
+          description: The issuing authority.
+        issuedDate:
+          type: string
+          format: date
+          description: When it was issued, in YYYY-MM-DD format.
+        expirationDate:
+          type: string
+          format: date
+          description: When it expires, in YYYY-MM-DD format.
     BeneficialOwner:
       type: object
       required: [firstName, lastName, title, emailAddress, phoneNumber, dateOfBirth, nationality, citizenships, taxCountry, percentageOwnership, beneficialOwnerType, politicallyExposedPerson, usResidencyStatus, address, document, meansOfId, bankStatement]
@@ -796,31 +985,7 @@ components:
         address:
           $ref: "#/components/schemas/Address"
         document:
-          type: object
-          required: [type, number, issuedCountryCode, issuedBy, issuedDate, expirationDate]
-          description: Their ID document.
-          properties:
-            type:
-              type: string
-              enum: [passport, driverLicense, idCard, nationalId, other]
-              description: The document type.
-            number:
-              type: string
-              description: The document number.
-            issuedCountryCode:
-              type: string
-              description: The issuing country, as a two-letter code.
-            issuedBy:
-              type: string
-              description: The issuing authority.
-            issuedDate:
-              type: string
-              format: date
-              description: When it was issued, in YYYY-MM-DD format.
-            expirationDate:
-              type: string
-              format: date
-              description: When it expires, in YYYY-MM-DD format.
+          $ref: "#/components/schemas/IdDocument"
         meansOfId:
           type: string
           format: uri
