@@ -25,7 +25,7 @@
       const back = document.createElement("a");
       back.className = "fincra-back";
       back.href = "/";
-      back.textContent = "← All documentation";
+      back.textContent = "← Back to docs";
       firstHeader.parentElement.insertBefore(back, firstHeader);
     }
   };
