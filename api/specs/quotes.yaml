@@ -17,7 +17,7 @@ paths:
   /quotes/generate:
     post:
       operationId: getQuote
-      summary: Get a quote
+      summary: Create a quote
       description: >
         Returns a rate quote for a payout or a conversion between two
         currencies. The quote holds its rate until `expireAt`, which is

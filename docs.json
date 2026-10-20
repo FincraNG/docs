@@ -170,8 +170,7 @@
               "POST /checkout/payments",
               "GET /checkout/payments",
               "GET /checkout/payments/merchant-reference/{merchantReference}",
-              "GET /checkout/payments/available-methods",
-              "GET /checkout/payments/supported-conversion-currencies"
+              "GET /checkout/payments/available-methods"
             ],
             "openapi": {
               "source": "api/specs/checkout.yaml",
@@ -182,13 +181,13 @@
             "group": "Direct charges",
             "pages": [
               "POST /checkout/charges",
-              "GET /checkout/charges/reference/{reference}",
-              "GET /checkout/charges/merchant-reference/{merchantReference}",
-              "GET /checkout/charges/{id}/verify",
               "POST /checkout/charges/{id}/authorize",
               "POST /checkout/charges/merchant-reference/{merchantReference}/authorize",
-              "POST /checkout/charges/{id}/capture",
               "POST /checkout/charges/{id}/resend-otp",
+              "GET /checkout/charges/{id}/verify",
+              "GET /checkout/charges/reference/{reference}",
+              "GET /checkout/charges/merchant-reference/{merchantReference}",
+              "POST /checkout/charges/{id}/capture",
               "GET /checkout/data/mobile-money-operators"
             ],
             "openapi": {
@@ -197,7 +196,7 @@
             }
           },
           {
-            "group": "Transactions",
+            "group": "Collections",
             "openapi": {
               "source": "api/specs/collections.yaml",
               "directory": "api/payments/transactions"
@@ -206,7 +205,6 @@
               "GET /collections",
               "GET /collections/get-all-by-date",
               "POST /collections/export",
-              "GET /collections/channel-reference",
               "GET /collections/{id}",
               "GET /collections/reference/{reference}",
               "GET /collections/merchant-reference/{merchantReference}",
