@@ -353,22 +353,11 @@
             ]
           },
           {
-            "group": "Coverage",
+            "group": "Payout methods",
             "pages": [
               "payouts/payout-coverage",
-              "payouts/nigeria",
-              "payouts/ghana",
-              "payouts/kenya",
-              "payouts/uganda",
-              "payouts/zambia",
-              "payouts/tanzania",
-              "payouts/cameroon",
-              "payouts/senegal",
-              "payouts/south-africa",
-              "payouts/egypt",
-              "payouts/united-states",
-              "payouts/united-kingdom",
-              "payouts/eurozone"
+              "payouts/bank-account",
+              "payouts/mobile-money"
             ]
           },
           {
@@ -378,13 +367,6 @@
               "payouts/wallet-transfers",
               "payouts/track-payouts",
               "payouts/reporting"
-            ]
-          },
-          {
-            "group": "Payout methods",
-            "pages": [
-              "payouts/bank-account",
-              "payouts/mobile-money"
             ]
           },
           {
